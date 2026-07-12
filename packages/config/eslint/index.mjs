@@ -54,18 +54,24 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
-  // React (web) files
+  // React files: hooks rules everywhere.
   {
     files: ['**/*.tsx'],
     plugins: {
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
     },
     languageOptions: {
       globals: { ...globals.browser },
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+    },
+  },
+  // Fast-refresh only matters for the Vite app, not the component library.
+  {
+    files: ['apps/web/**/*.tsx'],
+    plugins: { 'react-refresh': reactRefresh },
+    rules: {
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
