@@ -10,9 +10,21 @@ export interface DbHandle {
   pool: Pool;
 }
 
-/** Create a connection pool + drizzle instance from a connection string. */
-export function createDb(connectionString: string, config: PoolConfig = {}): DbHandle {
+/**
+ * Create a connection pool + drizzle instance from a connection string.
+ *
+ * `onError` handles asynchronous pool errors. node-postgres re-emits backend
+ * failures on idle pooled clients (Postgres restart, `pg_terminate_backend`,
+ * TCP reap) as an `'error'` event; without a listener Node turns it into an
+ * uncaught exception that crashes the process. Always attach one.
+ */
+export function createDb(
+  connectionString: string,
+  config: PoolConfig = {},
+  onError: (err: Error) => void = (err) => console.error('[db] unexpected pool error', err),
+): DbHandle {
   const pool = new Pool({ connectionString, ...config });
+  pool.on('error', onError);
   const db = drizzle(pool, { schema });
   return { db, pool };
 }
