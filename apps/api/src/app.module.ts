@@ -17,6 +17,7 @@ import { ConfigService } from './config/config.service';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -51,6 +52,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     AuthModule,
     AdminModule,
+    OrgModule,
     HealthModule,
   ],
   providers: [
