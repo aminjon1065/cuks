@@ -164,6 +164,16 @@ export class AuthService {
         'Two-factor is already enabled',
       );
     }
+    // Idempotent for pending enrollment: reuse an existing un-confirmed secret
+    // instead of minting a new one, so repeated setup calls (client retries,
+    // React StrictMode, a second tab) can't leave the shown secret out of sync
+    // with the one `confirmTotp` will verify against. A fresh secret is generated
+    // only when none is pending.
+    const row = await this.users.findActiveById(user.id);
+    if (row?.totpSecret) {
+      const secret = this.crypto.decrypt(row.totpSecret);
+      return { secret, otpauthUrl: this.totp.keyUri(user.username, secret) };
+    }
     const secret = this.totp.generateSecret();
     await this.users.setTotp(user.id, this.crypto.encrypt(secret), false);
     this.audit.log({ action: 'auth.totp.setup', actorId: user.id });
