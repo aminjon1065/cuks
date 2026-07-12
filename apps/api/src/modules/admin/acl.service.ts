@@ -50,12 +50,19 @@ export class AclService {
   }
 
   async revoke(id: string, actorId: string): Promise<void> {
-    const deleted = await this.db
-      .delete(resourceAcl)
-      .where(eq(resourceAcl.id, id))
-      .returning({ id: resourceAcl.id });
-    if (deleted.length === 0) throw AppException.notFound('acl.not_found', 'ACL entry not found');
-    this.audit.log({ action: 'acl.revoked', actorId, entityId: id });
+    const [removed] = await this.db.delete(resourceAcl).where(eq(resourceAcl.id, id)).returning();
+    if (!removed) throw AppException.notFound('acl.not_found', 'ACL entry not found');
+    this.audit.log({
+      action: 'acl.revoked',
+      actorId,
+      entityType: removed.resourceType,
+      entityId: removed.resourceId,
+      meta: {
+        subjectType: removed.subjectType,
+        subjectId: removed.subjectId,
+        level: removed.level,
+      },
+    });
   }
 
   async listForResource(resourceType: AclResourceType, resourceId: string): Promise<AclEntryDto[]> {
@@ -118,7 +125,10 @@ export class AclService {
     const unitRows = await this.db
       .selectDistinct({ orgUnitId: positions.orgUnitId })
       .from(userPositions)
-      .innerJoin(positions, eq(positions.id, userPositions.positionId))
+      .innerJoin(
+        positions,
+        and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+      )
       .where(eq(userPositions.userId, userId));
     return {
       roleIds: roleRows.map((r) => r.roleId),

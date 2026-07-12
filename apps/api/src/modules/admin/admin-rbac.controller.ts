@@ -46,7 +46,7 @@ export class AdminRbacController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createRoleSchema)) body: CreateRoleInput,
   ): Promise<RoleDto> {
-    return this.roles.create(body, user.id);
+    return this.roles.create(body, user);
   }
 
   @Patch('roles/:id')
@@ -55,7 +55,7 @@ export class AdminRbacController {
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(updateRoleSchema)) body: UpdateRoleInput,
   ): Promise<RoleDto> {
-    return this.roles.update(id, body, user.id);
+    return this.roles.update(id, body, user);
   }
 
   @Delete('roles/:id')
@@ -64,7 +64,7 @@ export class AdminRbacController {
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
   ): Promise<{ ok: true }> {
-    await this.roles.remove(id, user.id);
+    await this.roles.remove(id, user);
     return { ok: true };
   }
 
@@ -80,7 +80,7 @@ export class AdminRbacController {
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(assignRoleSchema)) body: AssignRoleInput,
   ): Promise<RoleAssignmentDto> {
-    return this.assignments.assign(body, user.id);
+    return this.assignments.assign(body, user);
   }
 
   @Delete('role-assignments/:id')
@@ -89,7 +89,7 @@ export class AdminRbacController {
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
   ): Promise<{ ok: true }> {
-    await this.assignments.revoke(id, user.id);
+    await this.assignments.revoke(id, user);
     return { ok: true };
   }
 }

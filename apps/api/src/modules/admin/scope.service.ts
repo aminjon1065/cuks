@@ -50,15 +50,17 @@ export class ScopeService {
     return { global: false, orgUnitIds };
   }
 
-  /** All org-unit ids in the subtrees rooted at the given units (incl. themselves). */
+  /** All (non-deleted) org-unit ids in the subtrees rooted at the given units. */
   async expandSubtrees(unitIds: string[]): Promise<string[]> {
     if (unitIds.length === 0) return [];
     const roots = await this.db
       .select({ path: orgUnits.path })
       .from(orgUnits)
-      .where(inArray(orgUnits.id, unitIds));
+      .where(and(inArray(orgUnits.id, unitIds), isNull(orgUnits.deletedAt)));
     if (roots.length === 0) return [];
 
+    // `path` is a dot-joined chain of UUIDv7 ids (seed/service), so it contains no
+    // LIKE metacharacters — the `${path}.%` prefix match is safe without escaping.
     const conds: SQL[] = [];
     for (const { path } of roots) {
       conds.push(eq(orgUnits.path, path));
@@ -67,7 +69,7 @@ export class ScopeService {
     const descendants = await this.db
       .select({ id: orgUnits.id })
       .from(orgUnits)
-      .where(or(...conds));
-    return descendants.map((d) => d.id);
+      .where(and(or(...conds), isNull(orgUnits.deletedAt)));
+    return [...new Set(descendants.map((d) => d.id))];
   }
 }
