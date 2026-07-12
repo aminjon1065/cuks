@@ -2,9 +2,11 @@ import { Controller, Get, Res, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import type { LivenessResult, ReadinessResult } from '@cuks/shared';
+import { Public } from '../../common/decorators/public.decorator';
 import { HealthService } from './health.service';
 
 /** Health endpoints — version-neutral, so `/api/health` (not `/api/v1/...`). */
+@Public()
 @ApiTags('health')
 @Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {

@@ -17,6 +17,9 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+  // AES-256-GCM key for field encryption (TOTP secrets). Derived from
+  // SESSION_SECRET when absent; set a dedicated value in production.
+  ENCRYPTION_KEY: z.string().optional(),
 
   // Object storage (MinIO / S3).
   S3_ENDPOINT: z.string().url(),
