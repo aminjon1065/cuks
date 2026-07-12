@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('App', () => {
-  it('renders the bootstrap placeholder', () => {
+  it('renders the design-system showcase', () => {
     render(<App />);
-    expect(screen.getByTestId('app-root')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'ЦУКС' })).toBeInTheDocument();
+    expect(screen.getByTestId('ui-showcase')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Дизайн-система ЦУКС' })).toBeInTheDocument();
   });
 });

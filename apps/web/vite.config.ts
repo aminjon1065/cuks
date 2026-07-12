@@ -6,11 +6,24 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@cuks/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
-      '@cuks/ui': fileURLToPath(new URL('../../packages/ui/src/index.ts', import.meta.url)),
-    },
+    alias: [
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      {
+        find: '@cuks/shared',
+        replacement: fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
+      },
+      // Specific subpath first so it isn't caught by the '@cuks/ui' prefix rule.
+      {
+        find: '@cuks/ui/styles.css',
+        replacement: fileURLToPath(
+          new URL('../../packages/ui/src/styles/index.css', import.meta.url),
+        ),
+      },
+      {
+        find: /^@cuks\/ui$/,
+        replacement: fileURLToPath(new URL('../../packages/ui/src/index.ts', import.meta.url)),
+      },
+    ],
   },
   server: {
     port: 5173,
