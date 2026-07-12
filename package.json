@@ -1,0 +1,38 @@
+{
+  "name": "cuks",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CUKS — digital platform for the Committee of Emergency Situations (КЧС)",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": ">=9"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "e2e": "pnpm --filter @cuks/web e2e",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,yaml,yml,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,yaml,yml,css}\"",
+    "db:generate": "pnpm --filter @cuks/db generate",
+    "db:migrate": "pnpm --filter @cuks/db migrate",
+    "db:seed": "pnpm --filter @cuks/db seed",
+    "infra:up": "docker compose -f infra/docker/compose.dev.yaml up -d",
+    "infra:down": "docker compose -f infra/docker/compose.dev.yaml down",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@cuks/config": "workspace:*",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

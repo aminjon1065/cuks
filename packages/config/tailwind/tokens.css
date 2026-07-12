@@ -1,0 +1,28 @@
+/*
+ * CUKS design tokens (Tailwind CSS v4, CSS-first).
+ * Phase 0 baseline — the full token set lands in phase 0.7 (docs/06-design-system.md).
+ * Light is the default; dark overrides live under the `.dark` class on <html>.
+ */
+@theme {
+  --color-bg: hsl(0 0% 100%);
+  --color-fg: hsl(222 47% 11%);
+  --color-muted: hsl(210 40% 96%);
+  --color-muted-fg: hsl(215 16% 47%);
+  --color-border: hsl(214 32% 91%);
+  --color-primary: hsl(221 83% 53%);
+  --color-primary-fg: hsl(210 40% 98%);
+  --color-danger: hsl(0 72% 51%);
+
+  --radius-md: 0.5rem;
+}
+
+.dark {
+  --color-bg: hsl(222 47% 11%);
+  --color-fg: hsl(210 40% 98%);
+  --color-muted: hsl(217 33% 17%);
+  --color-muted-fg: hsl(215 20% 65%);
+  --color-border: hsl(217 33% 20%);
+  --color-primary: hsl(217 91% 60%);
+  --color-primary-fg: hsl(222 47% 11%);
+  --color-danger: hsl(0 63% 51%);
+}
