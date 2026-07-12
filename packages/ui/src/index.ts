@@ -16,6 +16,8 @@ export * from './components/popover';
 export * from './components/avatar';
 export * from './components/tooltip';
 export * from './components/table';
+export * from './components/dropdown-menu';
+export * from './components/command';
 
 // Composite components
 export * from './components/status-badge';
