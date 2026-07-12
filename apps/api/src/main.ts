@@ -1,5 +1,6 @@
 import './config/load-env';
 import 'reflect-metadata';
+import helmet from '@fastify/helmet';
 import { VersioningType } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
@@ -21,22 +22,51 @@ async function bootstrap(): Promise<void> {
 
   const config = app.get(ConfigService);
 
+  // Security headers (docs/09 §1). Strict CSP + HSTS only in production, where
+  // the API serves JSON only (Swagger is dev-only, see below); the SPA's own CSP
+  // is applied at the edge (Caddy). Frame/nosniff/referrer apply everywhere.
+  await app.register(helmet, {
+    contentSecurityPolicy: config.isProduction
+      ? {
+          directives: {
+            defaultSrc: ["'self'"],
+            connectSrc: ["'self'"],
+            imgSrc: ["'self'", 'data:', 'blob:'],
+            mediaSrc: ["'self'", 'blob:'],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'"],
+          },
+        }
+      : false,
+    hsts: config.isProduction ? { maxAge: 31_536_000, includeSubDomains: true } : false,
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'same-origin' },
+  });
+
   // `/api` prefix; resources are versioned (`/api/v1/*`), health stays neutral.
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: API_VERSION });
 
   app.enableCors({ origin: config.get('APP_ORIGIN'), credentials: true });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('CUKS API')
-    .setDescription('CUKS platform REST API')
-    .setVersion('0.0.0')
-    .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  // Swagger only outside production — avoid publishing the API map to anonymous
+  // users on the internet (docs/09 threat model).
+  if (!config.isProduction) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('CUKS API')
+      .setDescription('CUKS platform REST API')
+      .setVersion('0.0.0')
+      .build();
+    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  }
 
   const port = config.get('PORT');
   const host = config.get('HOST');
   await app.listen({ port, host });
 }
 
-void bootstrap();
+bootstrap().catch((err: unknown) => {
+  // Startup failed (env validation, port in use, …) — log and exit non-zero.
+  console.error('Fatal: API failed to start', err);
+  process.exit(1);
+});

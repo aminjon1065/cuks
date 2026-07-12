@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import { checkDatabase, createDb, type DbHandle } from '@cuks/db';
 import type { DependencyState, HealthState, LivenessResult, ReadinessResult } from '@cuks/shared';
@@ -9,19 +9,25 @@ const PROBE_TIMEOUT_MS = 2000;
 /** Health probes for liveness and dependency readiness (docs/01 §Health). */
 @Injectable()
 export class HealthService implements OnModuleDestroy {
+  private readonly logger = new Logger(HealthService.name);
   private readonly dbHandle: DbHandle;
   private readonly redis: Redis;
   private readonly s3Endpoint: string;
 
   constructor(config: ConfigService) {
-    this.dbHandle = createDb(config.get('DATABASE_URL'), {
-      connectionTimeoutMillis: PROBE_TIMEOUT_MS,
-      max: 4,
-    });
+    // `statement_timeout` aborts a hung probe query server-side so its pooled
+    // connection is released (a client-side race() alone cannot cancel it).
+    this.dbHandle = createDb(
+      config.get('DATABASE_URL'),
+      { connectionTimeoutMillis: PROBE_TIMEOUT_MS, statement_timeout: PROBE_TIMEOUT_MS, max: 4 },
+      (err) => this.logger.error(`postgres pool error: ${err.message}`),
+    );
+    // `commandTimeout` bounds a hung PING; the offline queue lets a single
+    // lazy connect resolve without the connect/ping race of manual connect().
     this.redis = new Redis(config.get('REDIS_URL'), {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
+      commandTimeout: PROBE_TIMEOUT_MS,
       connectTimeout: PROBE_TIMEOUT_MS,
     });
     // Dedicated probe client: connection errors are expected when Redis is down;
@@ -62,10 +68,8 @@ export class HealthService implements OnModuleDestroy {
 
   private async checkRedis(): Promise<DependencyState> {
     try {
-      if (this.redis.status !== 'ready') {
-        await withTimeout(this.redis.connect(), PROBE_TIMEOUT_MS).catch(() => undefined);
-      }
-      const pong = await withTimeout(this.redis.ping(), PROBE_TIMEOUT_MS);
+      // ioredis lazily connects on the first command; `commandTimeout` bounds it.
+      const pong = await withTimeout(this.redis.ping(), PROBE_TIMEOUT_MS + 500);
       return pong === 'PONG' ? 'up' : 'down';
     } catch {
       return 'down';
