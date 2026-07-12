@@ -61,6 +61,27 @@ round-trip, password argon2, auth.login-ветки). **Live (реальные Re
 **Отложено**: полная per-route rate-limit матрица docs/09 (auth done; остальное — [P2] ниже);
 persist аудита в БД — 0.11; `nestjs-zod` не берём (свой zod-пайп для контроля формата ошибок).
 
+**Ревью (adversarial, security-focused).** Прогнан ревью auth против docs/05 §1 + docs/09; 11 находок
+исправлены (2 критичных):
+
+- **[critical]** `trustProxy: true` → клиент мог подделать `X-Forwarded-For` и обойти все per-IP
+  защиты. Теперь `TRUST_PROXY` из env (по умолчанию — не доверять; в prod — число хопов/подсеть).
+- **[critical]** обязательная 2FA для привилегированных ролей не форсилась. Добавлен
+  `TotpEnrollmentGuard` + `@AllowDuringTotpEnrollment`: без включённой 2FA привилегированный
+  пользователь заперт на me/logout/totp-setup/confirm.
+- **[desirable]** user-enumeration: всегда выполняется argon2 (dummy-hash для несуществующего
+  пользователя, тайминг); статус `blocked` раскрывается только после верного пароля.
+- **[desirable]** `recordFailure` теперь `await` (не fire-and-forget); rate-limit вынесен в
+  `ThrottleGuard` на все чувствительные `/auth/*` POST (login/password/totp-confirm/totp-disable).
+- **[desirable]** TOTP replay: `verifyForLogin` хранит последний использованный шаг в Redis, тот
+  же код нельзя применить дважды. Ключ шифрования: `ENCRYPTION_KEY` обязателен в prod (zod-refine).
+- **[minor]** атомарное потребление backup-кода (единый UPDATE ... WHERE used_at IS NULL RETURNING);
+  атомарный prune+evict сессий (Lua); скользящий cookie (re-issue на каждый ответ, interceptor).
+
+Проверено live: подделка XFF не создаёт новых per-IP корзин (lockout сработал на 6-й попытке
+с разными XFF); enrollment-гейт запирает привилегированного пользователя без 2FA на служебных
+маршрутах (me/totp-setup доступны, sessions — 403).
+
 ### 2026-07-12 — Фаза 0: задача 0.3 (ядро БД, миграция, сиды)
 
 **Сделано:**
@@ -213,9 +234,9 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   `requestId` ещё не подключены — сделать с первыми реальными эндпоинтами (фаза 0.4). — apps/api.
 - [P3] CSP из docs/09 §1 задаётся приложением только в prod (для JSON API); CSP самого SPA —
   на уровне Caddy (edge), реализуется в фазе деплоя (7). — apps/api/main.ts, infra/Caddyfile.
-- [P2] Rate-limit по docs/09 §1 реализован только для `/auth/login` (10 rpm/IP). Полная матрица
-  (мутации 120, чтение 600, загрузки 20, поиск 60; per-user) — общий middleware, вводится по мере
-  появления соответствующих эндпоинтов / в hardening (фаза 7). — apps/api.
+- [P2] Rate-limit по docs/09 §1 реализован для всех чувствительных `/auth/*` POST (10 rpm/IP через
+  `@Throttle`/`ThrottleGuard`). Полная матрица (мутации 120, чтение 600, загрузки 20, поиск 60;
+  per-user) — вводится по мере появления эндпоинтов / в hardening (фаза 7). — apps/api.
 - [P2] Стандартный конверт ошибок теперь подключён (глобальный ExceptionFilter) — прежний [P2]
   из ревью 0.1–0.2 закрыт.
 
