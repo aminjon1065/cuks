@@ -53,6 +53,19 @@
 **идемпотентность** (повторный сид не дублирует) и **FK restrict** (удаление роли с назначением
 блокируется) подтверждены на живой БД.
 
+**Ревью (adversarial, multi-agent).** Прогнан ревью схемы/сидов против 04/05/07; 5 находок
+исправлены (миграция `0001`, критичных нет):
+
+- CHECK-констрейнты на enum-поля были только у 3 из 8 колонок → добавлены для `users.locale/theme`,
+  `dictionaries.type`, `resource_acl.resource_type/subject_type` (теперь все 8).
+- `users.username` и `roles.code` — unique-индексы сделаны **частичными** (`WHERE deleted_at IS NULL`),
+  чтобы soft-delete не блокировал повторное использование логина/кода.
+- `org_units.path` — индекс с `text_pattern_ops` (иначе `path LIKE 'предок.%'` для поддерева
+  делал seq-scan при не-C collation).
+
+Поведение проверено на живой БД: CHECK отклоняет неверный enum; повторное использование кода после
+soft-delete проходит. `0000` не редактировался (инвариант миграций) — изменения в `0001`.
+
 **Отложенные core-таблицы 07** (создаются вместе с их потребителем): `notifications`/
 `notification_prefs` → 0.10; `audit_log`/`read_log` → 0.11; `files`/`file_versions` → фаза 1;
 `correspondents` → фаза 3; `comments`, `entity_links`, `saved_filters`, `user_settings`,
