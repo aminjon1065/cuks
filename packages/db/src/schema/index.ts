@@ -1,5 +1,9 @@
 /**
- * Drizzle schema barrel. PG schemas `app`, `gis`, `audit` (docs/04 §DB) and the
- * core tables are introduced in phase 0.3; this keeps the module resolvable.
+ * Drizzle schema barrel. PG schema `app` core tables (docs/07). `gis` and
+ * `audit` schemas, and the module tables, are added in their phases.
  */
-export {};
+export * from './_shared';
+export * from './users';
+export * from './org';
+export * from './rbac';
+export * from './dictionaries';
