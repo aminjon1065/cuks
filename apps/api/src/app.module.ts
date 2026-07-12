@@ -14,6 +14,7 @@ import { SlidingSessionInterceptor } from './common/interceptors/sliding-session
 import { RedisModule } from './common/redis/redis.module';
 import { ConfigModule } from './config/config.module';
 import { ConfigService } from './config/config.service';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
@@ -49,6 +50,7 @@ import { UsersModule } from './modules/users/users.module';
     AuditModule,
     UsersModule,
     AuthModule,
+    AdminModule,
     HealthModule,
   ],
   providers: [
