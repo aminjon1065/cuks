@@ -24,6 +24,7 @@ test-results/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.claude/
 *.log
 
 # Runtime data (docker volumes mounted locally, basemap, etc.)
