@@ -7,8 +7,11 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
+import type { Redis } from 'ioredis';
 import { API_VERSION } from '@cuks/shared';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './common/adapters/redis-io.adapter';
+import { REDIS } from './common/redis/redis.module';
 import { ConfigService } from './config/config.service';
 
 /** Parse TRUST_PROXY: hop count, comma-separated subnets, or trust none by default. */
@@ -70,6 +73,13 @@ async function bootstrap(): Promise<void> {
       .build();
     SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
   }
+
+  // Socket.IO on `/ws` with the Redis adapter (docs/01 §Realtime). Pub/sub run on
+  // their own connections so subscriber mode never disturbs the session client.
+  const redis = app.get<Redis>(REDIS);
+  app.useWebSocketAdapter(
+    new RedisIoAdapter(app, redis.duplicate(), redis.duplicate(), config.get('APP_ORIGIN')),
+  );
 
   const port = config.get('PORT');
   const host = config.get('HOST');
