@@ -27,7 +27,7 @@
 - [x] 0.3 packages/db: drizzle-подключение, схемы core (07-data-model), первая миграция, сиды (админ, роли, орг-скелет, справочники)
 - [x] 0.4 Auth: login/logout/sessions (Redis), CSRF, lockout, argon2, force-change, TOTP, guards, `GET /auth/me` + ability (CASL)
 - [x] 0.5 RBAC: роли/permissions/user_roles со скоупами, resource_acl хелперы, декоратор `@RequirePermission`
-- [ ] 0.6 Орг-структура API: org_units/positions/user_positions CRUD
+- [x] 0.6 Орг-структура API: org_units/positions/user_positions CRUD
 - [ ] 0.7 Дизайн-система: токены (обе темы), Tailwind-пресет, базовые shadcn, собственные компоненты минимум: DataTable, PageHeader, EmptyState, StatusBadge, ConfirmDialog, UserChip/Picker, OrgUnitPicker, FilterBar, SidePanel
 - [ ] 0.8 App Shell: роутер, layout (Sidebar/Topbar), страница логина, темы, i18n-каркас (ru/tg), страница 403/404, Command Palette (каркас: навигация)
 - [ ] 0.9 Socket.IO: gateway, авторизация по cookie, комнаты user:*, redis-adapter; клиентский socket-провайдер
