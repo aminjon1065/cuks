@@ -7,3 +7,4 @@ export * from './users';
 export * from './org';
 export * from './rbac';
 export * from './dictionaries';
+export * from './auth';
