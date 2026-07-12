@@ -44,10 +44,7 @@ export class AuthService {
 
   async login(input: LoginInput, ctx: RequestContext): Promise<LoginResult> {
     const ip = ctx.ip ?? 'unknown';
-
-    if (await this.lockout.isRateLimited(ip)) {
-      throw AppException.tooManyRequests('auth.login.rate_limited', 'Too many requests');
-    }
+    // Per-IP request rate limiting is enforced by ThrottleGuard on the route.
 
     if (await this.lockout.isLocked(input.username, ip)) {
       this.audit.log({ action: 'auth.lockout', ip, meta: { username: input.username } });
@@ -55,18 +52,30 @@ export class AuthService {
     }
 
     const user = await this.users.findActiveByUsername(input.username);
-    const invalid = (): never => {
-      void this.lockout.recordFailure(input.username, ip);
+
+    // Always spend argon2 time (dummy hash for a missing user) so the response
+    // time does not reveal whether the username exists (anti-enumeration).
+    let passwordOk = false;
+    if (user) {
+      passwordOk = await this.passwords.verify(user.passwordHash, input.password);
+    } else {
+      await this.passwords.verifyDummy(input.password);
+    }
+
+    const failLogin = async (actorId: string | null): Promise<AppException> => {
+      await this.lockout.recordFailure(input.username, ip);
       this.audit.log({
         action: 'auth.login.failure',
-        actorId: user?.id ?? null,
+        actorId,
         ip,
         meta: { username: input.username },
       });
-      throw AppException.unauthorized('auth.login.invalid_credentials', 'Invalid credentials');
+      return AppException.unauthorized('auth.login.invalid_credentials', 'Invalid credentials');
     };
 
-    if (!user) return invalid();
+    if (!user || !passwordOk) throw await failLogin(user?.id ?? null);
+
+    // Reveal blocked status only after a correct password (anti-enumeration).
     if (user.status === 'blocked') {
       this.audit.log({
         action: 'auth.login.failure',
@@ -76,14 +85,13 @@ export class AuthService {
       });
       throw AppException.forbidden('auth.login.blocked', 'Account is blocked');
     }
-    if (!(await this.passwords.verify(user.passwordHash, input.password))) return invalid();
 
     if (user.totpEnabled) {
       if (!input.totp) {
         throw AppException.unauthorized('auth.login.totp_required', 'Two-factor code required');
       }
       if (!(await this.verifyTotp(user, input.totp))) {
-        void this.lockout.recordFailure(input.username, ip);
+        await this.lockout.recordFailure(input.username, ip);
         this.audit.log({
           action: 'auth.login.failure',
           actorId: user.id,
@@ -235,7 +243,7 @@ export class AuthService {
 
   private async verifyTotp(user: UserRow, code: string): Promise<boolean> {
     if (isSixDigits(code) && user.totpSecret) {
-      return this.totp.verify(code, this.crypto.decrypt(user.totpSecret));
+      return this.totp.verifyForLogin(user.id, code, this.crypto.decrypt(user.totpSecret));
     }
     return this.totp.consumeBackupCode(user.id, code);
   }

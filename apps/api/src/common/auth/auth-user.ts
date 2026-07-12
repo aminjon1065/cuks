@@ -22,4 +22,6 @@ export interface AuthenticatedRequest extends FastifyRequest {
   authUser?: AuthUser;
   /** CSRF token from the current session, set by the SessionGuard for the CsrfGuard. */
   sessionCsrf?: string;
+  /** Whether the session is a "remember me" session (for the sliding cookie TTL). */
+  sessionRemember?: boolean;
 }

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './common/audit/audit.module';
 import { DbModule } from './common/db/db.module';
@@ -8,6 +8,9 @@ import { CsrfGuard } from './common/guards/csrf.guard';
 import { PasswordChangeGuard } from './common/guards/password-change.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { SessionGuard } from './common/guards/session.guard';
+import { ThrottleGuard } from './common/guards/throttle.guard';
+import { TotpEnrollmentGuard } from './common/guards/totp-enrollment.guard';
+import { SlidingSessionInterceptor } from './common/interceptors/sliding-session.interceptor';
 import { RedisModule } from './common/redis/redis.module';
 import { ConfigModule } from './config/config.module';
 import { ConfigService } from './config/config.service';
@@ -50,11 +53,15 @@ import { UsersModule } from './modules/users/users.module';
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
-    // Guard order matters: authenticate → force password change → CSRF → permission.
+    // Guard order matters: rate-limit → authenticate → force password change →
+    // force 2FA enrollment → CSRF → permission.
+    { provide: APP_GUARD, useClass: ThrottleGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_GUARD, useClass: PasswordChangeGuard },
+    { provide: APP_GUARD, useClass: TotpEnrollmentGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
+    { provide: APP_INTERCEPTOR, useClass: SlidingSessionInterceptor },
   ],
 })
 export class AppModule {}

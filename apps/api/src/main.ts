@@ -11,10 +11,17 @@ import { API_VERSION } from '@cuks/shared';
 import { AppModule } from './app.module';
 import { ConfigService } from './config/config.service';
 
+/** Parse TRUST_PROXY: hop count, comma-separated subnets, or trust none by default. */
+function parseTrustProxy(raw: string | undefined): boolean | number | string {
+  if (!raw) return false;
+  if (raw === 'true') return true;
+  return /^\d+$/.test(raw) ? Number(raw) : raw;
+}
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ trustProxy: true }),
+    new FastifyAdapter({ trustProxy: parseTrustProxy(process.env.TRUST_PROXY) }),
     { bufferLogs: true },
   );
 

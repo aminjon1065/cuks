@@ -120,21 +120,31 @@ export class SessionService {
     return result;
   }
 
-  /** Drop expired members, then evict the oldest sessions beyond the per-user cap. */
-  private async enforceLimit(userId: string): Promise<void> {
-    const ids = await this.redis.zrange(this.userKey(userId), 0, -1);
-    const stale: string[] = [];
-    for (const id of ids) {
-      if ((await this.redis.exists(this.sessionKey(id))) === 0) stale.push(id);
-    }
-    if (stale.length > 0) await this.redis.zrem(this.userKey(userId), ...stale);
+  // Atomic prune-then-evict so concurrent logins can't over-evict or exceed the
+  // cap (KEYS[1]=user zset, ARGV[1]=session prefix, ARGV[2]=max).
+  private static readonly ENFORCE_LIMIT_LUA = `
+    local ids = redis.call('ZRANGE', KEYS[1], 0, -1)
+    for _, id in ipairs(ids) do
+      if redis.call('EXISTS', ARGV[1] .. id) == 0 then
+        redis.call('ZREM', KEYS[1], id)
+      end
+    end
+    local count = redis.call('ZCARD', KEYS[1])
+    while count > tonumber(ARGV[2]) do
+      local popped = redis.call('ZPOPMIN', KEYS[1])
+      if popped[1] then redis.call('DEL', ARGV[1] .. popped[1]) end
+      count = count - 1
+    end
+    return count`;
 
-    let live = ids.length - stale.length;
-    while (live > MAX_SESSIONS_PER_USER) {
-      const [oldest] = await this.redis.zpopmin(this.userKey(userId));
-      if (!oldest) break;
-      await this.redis.del(this.sessionKey(oldest));
-      live -= 1;
-    }
+  /** Atomically drop expired members and evict the oldest beyond the per-user cap. */
+  private async enforceLimit(userId: string): Promise<void> {
+    await this.redis.eval(
+      SessionService.ENFORCE_LIMIT_LUA,
+      1,
+      this.userKey(userId),
+      'session:',
+      String(MAX_SESSIONS_PER_USER),
+    );
   }
 }

@@ -1,19 +1,25 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull } from 'drizzle-orm';
+import type Redis from 'ioredis';
 import { type Database, totpBackupCodes } from '@cuks/db';
 import { TOTP_BACKUP_CODES_COUNT } from '@cuks/shared';
 import { authenticator } from 'otplib';
 import { DB } from '../../common/db/db.module';
+import { REDIS } from '../../common/redis/redis.module';
 
 const ISSUER = 'CUKS';
+const TOTP_STEP_SECONDS = 30;
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
 /** TOTP (RFC 6238) via otplib + one-time backup codes (docs/05 §1). */
 @Injectable()
 export class TotpService {
-  constructor(@Inject(DB) private readonly db: Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    @Inject(REDIS) private readonly redis: Redis,
+  ) {}
 
   generateSecret(): string {
     return authenticator.generateSecret();
@@ -23,12 +29,36 @@ export class TotpService {
     return authenticator.keyuri(username, ISSUER, secret);
   }
 
+  /** Stateless verify (used to enable/disable 2FA under an authenticated session). */
   verify(token: string, secret: string): boolean {
     try {
       return authenticator.verify({ token, secret });
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Replay-protected verify for login: a TOTP code is valid for a whole ~30s step,
+   * so the same code must not be accepted twice. Records the last accepted step
+   * per user in Redis and rejects a step already consumed (RFC 6238 §5.2).
+   */
+  async verifyForLogin(userId: string, token: string, secret: string): Promise<boolean> {
+    let delta: number | null;
+    try {
+      delta = authenticator.checkDelta(token, secret);
+    } catch {
+      return false;
+    }
+    if (delta === null) return false;
+
+    const step = Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS) + delta;
+    const key = `totp:laststep:${userId}`;
+    const last = await this.redis.get(key);
+    if (last !== null && step <= Number(last)) return false; // replay
+
+    await this.redis.set(key, String(step), 'EX', TOTP_STEP_SECONDS * 3);
+    return true;
   }
 
   /** Replace the user's backup codes; returns the plaintext codes to show once. */
@@ -43,12 +73,12 @@ export class TotpService {
     return codes;
   }
 
-  /** Consume an unused backup code; returns true if it matched. */
+  /** Atomically consume an unused backup code; returns true if it matched. */
   async consumeBackupCode(userId: string, code: string): Promise<boolean> {
     const hash = sha256(code.trim());
-    const [row] = await this.db
-      .select({ id: totpBackupCodes.id })
-      .from(totpBackupCodes)
+    const consumed = await this.db
+      .update(totpBackupCodes)
+      .set({ usedAt: new Date() })
       .where(
         and(
           eq(totpBackupCodes.userId, userId),
@@ -56,13 +86,8 @@ export class TotpService {
           isNull(totpBackupCodes.usedAt),
         ),
       )
-      .limit(1);
-    if (!row) return false;
-    await this.db
-      .update(totpBackupCodes)
-      .set({ usedAt: new Date() })
-      .where(eq(totpBackupCodes.id, row.id));
-    return true;
+      .returning({ id: totpBackupCodes.id });
+    return consumed.length > 0;
   }
 
   async clearBackupCodes(userId: string): Promise<void> {

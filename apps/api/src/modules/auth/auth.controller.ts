@@ -13,8 +13,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
-  CSRF_COOKIE,
-  SESSION_COOKIE,
+  AUTH_LOGIN_RATE_PER_MINUTE,
   changePasswordSchema,
   loginSchema,
   totpCodeSchema,
@@ -25,13 +24,16 @@ import {
   type TotpCodeInput,
 } from '@cuks/shared';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { clearSessionCookies, setSessionCookies } from '../../common/auth/session-cookies';
 import { ConfigService } from '../../config/config.service';
 import { AllowDuringPasswordChange } from '../../common/decorators/allow-password-change.decorator';
+import { AllowDuringTotpEnrollment } from '../../common/decorators/allow-totp-enrollment.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipSessionRefresh } from '../../common/decorators/skip-session-refresh.decorator';
+import { Throttle } from '../../common/decorators/throttle.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AuthService } from './auth.service';
-import type { CreatedSession } from './session.service';
 
 @ApiTags('auth')
 @Controller({ path: 'auth', version: VERSION_NEUTRAL })
@@ -42,6 +44,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle(AUTH_LOGIN_RATE_PER_MINUTE)
   @Post('login')
   @HttpCode(200)
   async login(
@@ -53,11 +56,18 @@ export class AuthController {
       ip: request.ip,
       userAgent: request.headers['user-agent'] ?? null,
     });
-    this.setCookies(reply, result.session);
+    setSessionCookies(reply, {
+      sessionId: result.session.sessionId,
+      csrfToken: result.session.csrfToken,
+      ttlSeconds: result.session.ttlSeconds,
+      secure: this.config.isProduction,
+    });
     return { mustChangePassword: result.mustChangePassword };
   }
 
   @AllowDuringPasswordChange()
+  @AllowDuringTotpEnrollment()
+  @SkipSessionRefresh()
   @Post('logout')
   @HttpCode(200)
   async logout(
@@ -65,10 +75,11 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<{ ok: true }> {
     await this.auth.logout(user);
-    this.clearCookies(reply);
+    clearSessionCookies(reply);
     return { ok: true };
   }
 
+  @SkipSessionRefresh()
   @Post('logout-all')
   @HttpCode(200)
   async logoutAll(
@@ -76,34 +87,39 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<{ ok: true }> {
     await this.auth.logoutAll(user);
-    this.clearCookies(reply);
+    clearSessionCookies(reply);
     return { ok: true };
   }
 
   @AllowDuringPasswordChange()
+  @AllowDuringTotpEnrollment()
   @Get('me')
   me(@CurrentUser() user: AuthUser): Promise<MeResponse> {
     return this.auth.buildMe(user);
   }
 
   @AllowDuringPasswordChange()
+  @AllowDuringTotpEnrollment()
+  @Throttle(AUTH_LOGIN_RATE_PER_MINUTE)
   @Post('password')
   @HttpCode(200)
   async changePassword(
     @CurrentUser() user: AuthUser,
-    @Body(new ZodValidationPipe(changePasswordSchema))
-    body: ChangePasswordInput,
+    @Body(new ZodValidationPipe(changePasswordSchema)) body: ChangePasswordInput,
   ): Promise<{ ok: true }> {
     await this.auth.changePassword(user, body);
     return { ok: true };
   }
 
+  @AllowDuringTotpEnrollment()
   @Post('totp/setup')
   @HttpCode(200)
   setupTotp(@CurrentUser() user: AuthUser): Promise<{ secret: string; otpauthUrl: string }> {
     return this.auth.setupTotp(user);
   }
 
+  @AllowDuringTotpEnrollment()
+  @Throttle(AUTH_LOGIN_RATE_PER_MINUTE)
   @Post('totp/confirm')
   @HttpCode(200)
   confirmTotp(
@@ -113,6 +129,7 @@ export class AuthController {
     return this.auth.confirmTotp(user, body.code);
   }
 
+  @Throttle(AUTH_LOGIN_RATE_PER_MINUTE)
   @Post('totp/disable')
   @HttpCode(200)
   async disableTotp(
@@ -136,29 +153,5 @@ export class AuthController {
   ): Promise<{ ok: true }> {
     await this.auth.revokeSession(user, id);
     return { ok: true };
-  }
-
-  private setCookies(reply: FastifyReply, session: CreatedSession): void {
-    const secure = this.config.isProduction;
-    void reply.setCookie(SESSION_COOKIE, session.sessionId, {
-      httpOnly: true,
-      secure,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: session.ttlSeconds,
-    });
-    // Readable by JS so the SPA can echo it in the X-CSRF-Token header (double submit).
-    void reply.setCookie(CSRF_COOKIE, session.csrfToken, {
-      httpOnly: false,
-      secure,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: session.ttlSeconds,
-    });
-  }
-
-  private clearCookies(reply: FastifyReply): void {
-    void reply.clearCookie(SESSION_COOKIE, { path: '/' });
-    void reply.clearCookie(CSRF_COOKIE, { path: '/' });
   }
 }

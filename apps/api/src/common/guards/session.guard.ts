@@ -60,6 +60,7 @@ export class SessionGuard implements CanActivate {
       sessionId,
     };
     request.sessionCsrf = session.csrfToken;
+    request.sessionRemember = session.remember;
     return true;
   }
 }

@@ -6,38 +6,54 @@ import { z } from 'zod';
  * phases (LiveKit, SMTP, GeoServer, Martin, CA) are optional so the platform
  * boots during phase 0 without them.
  */
-export const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  HOST: z.string().default('0.0.0.0'),
-  APP_ORIGIN: z.string().url().default('http://localhost:5173'),
-  TZ: z.string().default('Asia/Dushanbe'),
+export const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(3000),
+    HOST: z.string().default('0.0.0.0'),
+    APP_ORIGIN: z.string().url().default('http://localhost:5173'),
+    TZ: z.string().default('Asia/Dushanbe'),
+    // Fastify trustProxy: number of proxy hops to trust (e.g. "1" behind Caddy) or
+    // a comma-separated IP/subnet list. Unset = trust none (request.ip = socket IP).
+    // Trusting all proxies would let clients spoof X-Forwarded-For (docs/09 §1).
+    TRUST_PROXY: z.string().optional(),
 
-  // Core infrastructure (required — validated presence at boot).
-  DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string().url(),
-  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
-  // AES-256-GCM key for field encryption (TOTP secrets). Derived from
-  // SESSION_SECRET when absent; set a dedicated value in production.
-  ENCRYPTION_KEY: z.string().optional(),
+    // Core infrastructure (required — validated presence at boot).
+    DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url(),
+    SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+    // AES-256-GCM key for field encryption (TOTP secrets). Derived from
+    // SESSION_SECRET when absent; set a dedicated value in production.
+    ENCRYPTION_KEY: z.string().optional(),
 
-  // Object storage (MinIO / S3).
-  S3_ENDPOINT: z.string().url(),
-  S3_ACCESS_KEY: z.string().min(1),
-  S3_SECRET_KEY: z.string().min(1),
-  S3_REGION: z.string().default('us-east-1'),
-  S3_BUCKET: z.string().default('cuks'),
+    // Object storage (MinIO / S3).
+    S3_ENDPOINT: z.string().url(),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_REGION: z.string().default('us-east-1'),
+    S3_BUCKET: z.string().default('cuks'),
 
-  // Later phases — optional for now.
-  SMTP_URL: z.string().optional(),
-  LIVEKIT_URL: z.string().optional(),
-  LIVEKIT_API_KEY: z.string().optional(),
-  LIVEKIT_API_SECRET: z.string().optional(),
-  GEOSERVER_URL: z.string().optional(),
-  GEOSERVER_ADMIN_PASSWORD: z.string().optional(),
-  MARTIN_URL: z.string().optional(),
-  CA_KEY_PATH: z.string().optional(),
-});
+    // Later phases — optional for now.
+    SMTP_URL: z.string().optional(),
+    LIVEKIT_URL: z.string().optional(),
+    LIVEKIT_API_KEY: z.string().optional(),
+    LIVEKIT_API_SECRET: z.string().optional(),
+    GEOSERVER_URL: z.string().optional(),
+    GEOSERVER_ADMIN_PASSWORD: z.string().optional(),
+    MARTIN_URL: z.string().optional(),
+    CA_KEY_PATH: z.string().optional(),
+  })
+  .superRefine((env, ctx) => {
+    // In production require a dedicated field-encryption key, decoupled from
+    // SESSION_SECRET so rotating one does not invalidate the other (docs/09).
+    if (env.NODE_ENV === 'production' && (env.ENCRYPTION_KEY ?? '').length < 32) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ENCRYPTION_KEY'],
+        message: 'ENCRYPTION_KEY (min 32 chars) is required in production',
+      });
+    }
+  });
 
 export type AppConfig = z.infer<typeof envSchema>;
 

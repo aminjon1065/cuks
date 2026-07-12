@@ -8,7 +8,7 @@ function makeService() {
     findActiveByUsername: vi.fn(),
     markLoggedIn: vi.fn().mockResolvedValue(undefined),
   };
-  const passwords = { verify: vi.fn() };
+  const passwords = { verify: vi.fn(), verifyDummy: vi.fn().mockResolvedValue(undefined) };
   const sessions = {
     create: vi.fn().mockResolvedValue({ sessionId: 's', csrfToken: 'c', ttlSeconds: 100 }),
   };
@@ -49,13 +49,6 @@ describe('AuthService.login', () => {
     ctxObj = makeService();
   });
 
-  it('rejects when rate limited', async () => {
-    ctxObj.lockout.isRateLimited.mockResolvedValue(true);
-    await expect(
-      ctxObj.service.login({ username: 'a', password: 'b', remember: false }, ctx),
-    ).rejects.toMatchObject({ code: 'auth.login.rate_limited' });
-  });
-
   it('rejects when locked out', async () => {
     ctxObj.lockout.isLocked.mockResolvedValue(true);
     await expect(
@@ -71,11 +64,20 @@ describe('AuthService.login', () => {
     expect(ctxObj.lockout.recordFailure).toHaveBeenCalled();
   });
 
-  it('rejects a blocked account', async () => {
+  it('reveals a blocked account only after a correct password', async () => {
     ctxObj.users.findActiveByUsername.mockResolvedValue({ ...activeUser, status: 'blocked' });
+    ctxObj.passwords.verify.mockResolvedValue(true);
     await expect(
       ctxObj.service.login({ username: 'a', password: 'b', remember: false }, ctx),
     ).rejects.toMatchObject({ code: 'auth.login.blocked' });
+  });
+
+  it('runs a dummy verify for an unknown user (anti-enumeration)', async () => {
+    ctxObj.users.findActiveByUsername.mockResolvedValue(undefined);
+    await expect(
+      ctxObj.service.login({ username: 'ghost', password: 'b', remember: false }, ctx),
+    ).rejects.toMatchObject({ code: 'auth.login.invalid_credentials' });
+    expect(ctxObj.passwords.verifyDummy).toHaveBeenCalledWith('b');
   });
 
   it('rejects a wrong password with the generic error', async () => {
