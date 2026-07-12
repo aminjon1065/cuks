@@ -1,0 +1,36 @@
+{
+  "sections": {
+    "main": "Основное",
+    "admin": "Администрирование"
+  },
+  "items": {
+    "dashboard": "Дашборд",
+    "map": "Карта",
+    "incidents": "ЧС",
+    "analytics": "Аналитика",
+    "docs": "Документы",
+    "tasks": "Задачи",
+    "chat": "Чат",
+    "meet": "Встречи",
+    "files": "Файлы",
+    "adminUsers": "Пользователи",
+    "adminRoles": "Роли",
+    "adminOrg": "Оргструктура",
+    "adminAudit": "Аудит"
+  },
+  "sidebar": {
+    "collapse": "Свернуть меню",
+    "expand": "Развернуть меню"
+  },
+  "commandPalette": {
+    "open": "Открыть командную панель",
+    "placeholder": "Поиск разделов и действий…",
+    "empty": "Ничего не найдено",
+    "groupNavigation": "Навигация"
+  },
+  "notifications": {
+    "label": "Уведомления",
+    "empty": "Новых уведомлений нет",
+    "markAllRead": "Прочитать все"
+  }
+}

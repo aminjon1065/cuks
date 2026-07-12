@@ -1,9 +1,12 @@
-import { UiShowcase } from './dev/UiShowcase';
+import { RouterProvider } from 'react-router-dom';
+import { Providers } from './app/providers';
+import { router } from './app/router';
 
-/**
- * Phase 0.7 renders the design-system gallery. The real application shell
- * (router, sidebar, topbar, command palette, i18n) replaces this in phase 0.8.
- */
+/** Application root (docs/03): global providers wrap the router. */
 export function App(): React.JSX.Element {
-  return <UiShowcase />;
+  return (
+    <Providers>
+      <RouterProvider router={router} />
+    </Providers>
+  );
 }
