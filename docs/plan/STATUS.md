@@ -5,7 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 0 (Фундамент) — в работе
-- **Последняя сессия**: 2026-07-12 — задача 0.3
+- **Последняя сессия**: 2026-07-12 — задача 0.4
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -14,7 +14,7 @@
 
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
-| 0 Фундамент       | 🟡 в работе (0.1–0.3 готовы) | —                  |
+| 0 Фундамент       | 🟡 в работе (0.1–0.4 готовы) | —                  |
 | 1 Файлы           | ⬜                           | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
@@ -26,6 +26,40 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-12 — Фаза 0: задача 0.4 (аутентификация и авторизация)
+
+**Сделано:**
+
+- **Сессии (Redis)**: 256-битный id, cookie `cuks_session` (httpOnly/SameSite=Lax/Secure в prod),
+  скользящий TTL 12ч / 30д «запомнить», лимит 10 сессий на пользователя (вытеснение старейшей),
+  список/отзыв сессий. **CSRF**: double-submit cookie `cuks_csrf` + заголовок `X-CSRF-Token` +
+  проверка Origin.
+- **Логин**: argon2id-проверка, **lockout** (5 неудач/15 мин по username и IP), **rate-limit**
+  `/auth/login` 10 rpm/IP, generic-ошибка на неверные данные, блок заблокированных.
+- **TOTP**: setup/confirm/disable (otplib), секрет — AES-256-GCM at rest (`node:crypto`),
+  10 одноразовых backup-кодов (sha256 в `app.totp_backup_codes`, миграция 0002), обязателен для
+  ролей `admin.*`/`docflow.sign`/`gis.pg.access` (нельзя выключить).
+- **Force-change**: `must_change_password` блокирует все маршруты, кроме `@AllowDuringPasswordChange`
+  (me/password/logout).
+- **Guards (глобальные, по порядку)**: SessionGuard → PasswordChangeGuard → CsrfGuard →
+  PermissionGuard (`@RequirePermission` через CASL). `@Public` для login/health.
+- **CASL ability** в `@cuks/shared` (общая FE/BE): каталог permissions + роли-шаблоны; permissions
+  читаются на каждый запрос (мгновенный отзыв прав/сессий).
+- **`GET /auth/me`**: профиль + сериализованные ability-правила + орг-контекст + флаги totp/force.
+- **Стандартный конверт ошибок** `{ error: { code, message, details, requestId } }` (глобальный
+  ExceptionFilter + zod-пайп) — закрыт [P2] из ревью 0.1–0.2.
+- Эндпоинты: `POST /auth/login|logout|logout-all|password|totp/setup|totp/confirm|totp/disable`,
+  `GET /auth/me|sessions`, `DELETE /auth/sessions/:id` (все под `/api/auth/*`, version-neutral).
+
+**Тесты/проверка**: `typecheck/lint/format/test/build` — зелёные (30 тестов; +ability, crypto
+round-trip, password argon2, auth.login-ветки). **Live (реальные Redis+PG)**: неверный пароль→401,
+логин→200+cookies, `/auth/me`→superadmin, force-change→403, CSRF без токена→403, чужой Origin→403,
+смена пароля→200, logout→401; **TOTP**: setup→confirm(10 кодов)→логин без кода→401→логин с кодом→200,
+суперадмин не может выключить 2FA→422.
+
+**Отложено**: полная per-route rate-limit матрица docs/09 (auth done; остальное — [P2] ниже);
+persist аудита в БД — 0.11; `nestjs-zod` не берём (свой zod-пайп для контроля формата ошибок).
 
 ### 2026-07-12 — Фаза 0: задача 0.3 (ядро БД, миграция, сиды)
 
@@ -152,6 +186,16 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   `@cuks/shared/permissions`. Суперадмин = wildcard `*` (bypass — интерпретируется CASL в 0.5).
 - 2026-07-12 — **`org_units.head_position_id` без FK** (иначе цикл org_units↔positions);
   целостность — на уровне приложения. Коды справочников — латиницей (стабильные ключи).
+- 2026-07-12 — **Auth под `/api/auth/*` (version-neutral)**, как health — аутентификация редко
+  версионируется. Спека 05 пишет `/auth/*`; фактически с префиксом `/api`.
+- 2026-07-12 — **Permissions читаются на каждый запрос** (SessionGuard), не кэшируются в сессии —
+  чтобы отзыв прав/сессии действовал мгновенно (docs/02 ADR-3). Оптимизация кэшем — при нужде.
+- 2026-07-12 — **Свой `ZodValidationPipe`** вместо `nestjs-zod` — полный контроль над форматом
+  ошибок (единый конверт), без завязки на версию плагина.
+- 2026-07-12 — **`ENCRYPTION_KEY` опционален** (AES-256-GCM для TOTP-секретов); при отсутствии
+  выводится из `SESSION_SECRET` (scrypt). В prod — задать отдельный ключ.
+- 2026-07-12 — **Два пула PG**: отдельный маленький пул для health-проб (изоляция) и общий
+  прикладной пул (`DbModule`). У обоих — обработчик ошибок пула.
 
 ## Известные проблемы / техдолг
 
@@ -169,6 +213,11 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   `requestId` ещё не подключены — сделать с первыми реальными эндпоинтами (фаза 0.4). — apps/api.
 - [P3] CSP из docs/09 §1 задаётся приложением только в prod (для JSON API); CSP самого SPA —
   на уровне Caddy (edge), реализуется в фазе деплоя (7). — apps/api/main.ts, infra/Caddyfile.
+- [P2] Rate-limit по docs/09 §1 реализован только для `/auth/login` (10 rpm/IP). Полная матрица
+  (мутации 120, чтение 600, загрузки 20, поиск 60; per-user) — общий middleware, вводится по мере
+  появления соответствующих эндпоинтов / в hardening (фаза 7). — apps/api.
+- [P2] Стандартный конверт ошибок теперь подключён (глобальный ExceptionFilter) — прежний [P2]
+  из ревью 0.1–0.2 закрыт.
 
 ## Добавленные зависимости (сверх docs/02-stack.md)
 
@@ -187,3 +236,8 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
 - `argon2@^0.41.1` — хэширование паролей (argon2id, docs/05 §1). **Нативный биндинг** (node-gyp,
   собирается при install); используется сидом (и auth в 0.4). В списке стека docs/02.
 - `@fastify/helmet@^13.0.1` — security-заголовки (docs/09 §1, добавлено при исправлении ревью 0.1–0.2).
+- `@casl/ability@^6.7.2` — общая ability FE/BE (docs/02, docs/05 §3); в `@cuks/shared` и api.
+- `@fastify/cookie@^11.0.2` — cookie-парсинг/установка (сессия + CSRF).
+- `otplib@^12.0.1` — TOTP (RFC 6238), docs/05 §1.
+- `drizzle-orm@^0.38.3` добавлен в `apps/api` (прямые запросы в UsersService/TotpService; strict
+  node_modules pnpm требует явной зависимости).

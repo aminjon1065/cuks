@@ -25,7 +25,7 @@
 - [x] 0.1 Монорепо: pnpm+turbo, packages (shared/db/ui/config), apps (web/api/worker), tsconfig/eslint/prettier/husky, CI (lint+typecheck+test+build)
 - [x] 0.2 `compose.dev.yaml`: pg+postgis, redis, minio, clamav, maildev; env-валидация zod; health-эндпоинты
 - [x] 0.3 packages/db: drizzle-подключение, схемы core (07-data-model), первая миграция, сиды (админ, роли, орг-скелет, справочники)
-- [ ] 0.4 Auth: login/logout/sessions (Redis), CSRF, lockout, argon2, force-change, TOTP, guards, `GET /auth/me` + ability (CASL)
+- [x] 0.4 Auth: login/logout/sessions (Redis), CSRF, lockout, argon2, force-change, TOTP, guards, `GET /auth/me` + ability (CASL)
 - [ ] 0.5 RBAC: роли/permissions/user_roles со скоупами, resource_acl хелперы, декоратор `@RequirePermission`
 - [ ] 0.6 Орг-структура API: org_units/positions/user_positions CRUD
 - [ ] 0.7 Дизайн-система: токены (обе темы), Tailwind-пресет, базовые shadcn, собственные компоненты минимум: DataTable, PageHeader, EmptyState, StatusBadge, ConfirmDialog, UserChip/Picker, OrgUnitPicker, FilterBar, SidePanel
