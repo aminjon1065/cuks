@@ -6,6 +6,16 @@ import { AuditService } from '../../common/audit/audit.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 
+/** True for a Postgres unique-violation error (SQLSTATE 23505). */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: string }).code === '23505'
+  );
+}
+
 /** Assigning users to positions; exactly one primary per user (docs/05 §2). */
 @Injectable()
 export class UserPositionsService {
@@ -59,35 +69,46 @@ export class UserPositionsService {
         'Already assigned to this position',
       );
 
-    const existing = await this.db
-      .select({ id: userPositions.id })
-      .from(userPositions)
-      .where(eq(userPositions.userId, input.userId));
-    const makePrimary = input.isPrimary || existing.length === 0;
-
-    const id = await this.db.transaction(async (tx) => {
-      if (makePrimary) {
-        await tx
-          .update(userPositions)
-          .set({ isPrimary: false })
+    let result: { id: string; makePrimary: boolean };
+    try {
+      result = await this.db.transaction(async (tx) => {
+        const existing = await tx
+          .select({ id: userPositions.id })
+          .from(userPositions)
           .where(eq(userPositions.userId, input.userId));
+        const makePrimary = input.isPrimary || existing.length === 0;
+        if (makePrimary) {
+          await tx
+            .update(userPositions)
+            .set({ isPrimary: false })
+            .where(eq(userPositions.userId, input.userId));
+        }
+        const [row] = await tx
+          .insert(userPositions)
+          .values({ userId: input.userId, positionId: input.positionId, isPrimary: makePrimary })
+          .returning({ id: userPositions.id });
+        if (!row)
+          throw AppException.badRequest('admin.user_position.create_failed', 'Could not assign');
+        return { id: row.id, makePrimary };
+      });
+    } catch (err) {
+      // A concurrent assign racing the pre-check hits the DB unique index.
+      if (isUniqueViolation(err)) {
+        throw AppException.badRequest(
+          'admin.user_position.duplicate',
+          'Already assigned to this position',
+        );
       }
-      const [row] = await tx
-        .insert(userPositions)
-        .values({ userId: input.userId, positionId: input.positionId, isPrimary: makePrimary })
-        .returning({ id: userPositions.id });
-      if (!row)
-        throw AppException.badRequest('admin.user_position.create_failed', 'Could not assign');
-      return row.id;
-    });
+      throw err;
+    }
     this.audit.log({
       action: 'admin.user_position.assigned',
       actorId,
       entityType: 'user',
       entityId: input.userId,
-      meta: { positionId: input.positionId, isPrimary: makePrimary },
+      meta: { positionId: input.positionId, isPrimary: result.makePrimary },
     });
-    return this.getOne(id);
+    return this.getOne(result.id);
   }
 
   async setPrimary(id: string, actorId: string): Promise<UserPositionDto> {
@@ -104,7 +125,13 @@ export class UserPositionsService {
         .where(and(eq(userPositions.userId, row.userId), ne(userPositions.id, id)));
       await tx.update(userPositions).set({ isPrimary: true }).where(eq(userPositions.id, id));
     });
-    this.audit.log({ action: 'admin.user_position.primary_set', actorId, entityId: id });
+    this.audit.log({
+      action: 'admin.user_position.primary_set',
+      actorId,
+      entityType: 'user',
+      entityId: row.userId,
+      meta: { userPositionId: id },
+    });
     return this.getOne(id);
   }
 
@@ -124,6 +151,7 @@ export class UserPositionsService {
           .select({ id: userPositions.id })
           .from(userPositions)
           .where(eq(userPositions.userId, row.userId))
+          .orderBy(userPositions.createdAt)
           .limit(1);
         if (next)
           await tx

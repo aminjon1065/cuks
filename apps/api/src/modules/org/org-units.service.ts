@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, eq, isNull, like } from 'drizzle-orm';
-import { type Database, orgUnits, positions, userPositions } from '@cuks/db';
+import { and, countDistinct, eq, isNull, like, sql } from 'drizzle-orm';
+import { type Database, orgUnits, positions, userPositions, userRoles, users } from '@cuks/db';
 import type {
   CreateOrgUnitInput,
   OrgUnitDto,
@@ -11,6 +11,10 @@ import { uuidv7 } from 'uuidv7';
 import { AuditService } from '../../common/audit/audit.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
+
+// Transaction-level advisory lock key that serializes concurrent moves so the
+// cycle guard cannot be invalidated by a simultaneous move.
+const MOVE_LOCK_KEY = 4242001;
 
 /** Org-unit tree management (docs/05 §2, docs/16 §2). `admin.org.manage`. */
 @Injectable()
@@ -81,12 +85,18 @@ export class OrgUnitsService {
       const [pos] = await this.db
         .select({ id: positions.id })
         .from(positions)
-        .where(and(eq(positions.id, input.headPositionId), eq(positions.orgUnitId, id)))
+        .where(
+          and(
+            eq(positions.id, input.headPositionId),
+            eq(positions.orgUnitId, id),
+            isNull(positions.deletedAt),
+          ),
+        )
         .limit(1);
       if (!pos) {
         throw AppException.badRequest(
           'admin.org_unit.head_not_in_unit',
-          'Head position must belong to the unit',
+          'Head position must be a live position in the unit',
         );
       }
     }
@@ -110,26 +120,28 @@ export class OrgUnitsService {
   }
 
   async move(id: string, newParentId: string | null, actorId: string): Promise<OrgUnitDto> {
-    const unit = await this.requireUnit(id);
     if (newParentId === id) {
       throw AppException.badRequest(
         'admin.org_unit.move_into_self',
         'Cannot move a unit into itself',
       );
     }
-    const parent = newParentId ? await this.requireUnit(newParentId) : null;
-    // Prevent moving a unit into its own subtree (cycle).
-    if (parent && (parent.path === unit.path || parent.path.startsWith(`${unit.path}.`))) {
-      throw AppException.badRequest(
-        'admin.org_unit.move_into_descendant',
-        'Cannot move a unit into its own subtree',
-      );
-    }
-    const oldPath = unit.path;
-    const newPath = parent ? `${parent.path}.${id}` : id;
-    if (oldPath === newPath) return this.getOne(id);
-
     await this.db.transaction(async (tx) => {
+      // Serialize moves so a concurrent move can't invalidate the cycle guard.
+      await tx.execute(sql`select pg_advisory_xact_lock(${MOVE_LOCK_KEY})`);
+      const unit = await this.requireUnit(id, tx);
+      const parent = newParentId ? await this.requireUnit(newParentId, tx) : null;
+      // Prevent moving a unit into its own subtree (cycle).
+      if (parent && (parent.path === unit.path || parent.path.startsWith(`${unit.path}.`))) {
+        throw AppException.badRequest(
+          'admin.org_unit.move_into_descendant',
+          'Cannot move a unit into its own subtree',
+        );
+      }
+      const oldPath = unit.path;
+      const newPath = parent ? `${parent.path}.${id}` : id;
+      if (oldPath === newPath) return;
+
       // Re-root descendants: swap the old path prefix for the new one (computed in
       // JS to keep it simple and robust; org trees are small).
       const descendants = await tx
@@ -179,6 +191,16 @@ export class OrgUnitsService {
         'admin.org_unit.has_positions',
         'Delete the unit positions first',
       );
+    const [scoped] = await this.db
+      .select({ id: userRoles.id })
+      .from(userRoles)
+      .where(eq(userRoles.orgUnitId, id))
+      .limit(1);
+    if (scoped)
+      throw AppException.badRequest(
+        'admin.org_unit.has_role_scopes',
+        'Reassign role scopes on this unit first',
+      );
 
     await this.db.update(orgUnits).set({ deletedAt: new Date() }).where(eq(orgUnits.id, id));
     this.audit.log({
@@ -190,17 +212,30 @@ export class OrgUnitsService {
   }
 
   private async employeeCounts(): Promise<Map<string, number>> {
+    // Distinct active people per unit (a user with two positions in a unit counts
+    // once; blocked/deleted users are excluded).
     const rows = await this.db
-      .select({ orgUnitId: positions.orgUnitId, n: count(userPositions.id) })
+      .select({ orgUnitId: positions.orgUnitId, n: countDistinct(userPositions.userId) })
       .from(positions)
       .innerJoin(userPositions, eq(userPositions.positionId, positions.id))
+      .innerJoin(
+        users,
+        and(
+          eq(users.id, userPositions.userId),
+          isNull(users.deletedAt),
+          eq(users.status, 'active'),
+        ),
+      )
       .where(isNull(positions.deletedAt))
       .groupBy(positions.orgUnitId);
     return new Map(rows.map((r) => [r.orgUnitId, Number(r.n)]));
   }
 
-  private async requireUnit(id: string): Promise<typeof orgUnits.$inferSelect> {
-    const [unit] = await this.db
+  private async requireUnit(
+    id: string,
+    db: Database = this.db,
+  ): Promise<typeof orgUnits.$inferSelect> {
+    const [unit] = await db
       .select()
       .from(orgUnits)
       .where(and(eq(orgUnits.id, id), isNull(orgUnits.deletedAt)))

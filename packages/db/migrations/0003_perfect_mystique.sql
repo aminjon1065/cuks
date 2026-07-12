@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "user_positions_primary_uq" ON "app"."user_positions" USING btree ("user_id") WHERE "app"."user_positions"."is_primary";

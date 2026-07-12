@@ -82,6 +82,10 @@ export const userPositions = appSchema.table(
   },
   (t) => [
     uniqueIndex('user_positions_user_position_uq').on(t.userId, t.positionId),
+    // At most one primary position per user (docs/05 §2) — DB backstop.
+    uniqueIndex('user_positions_primary_uq')
+      .on(t.userId)
+      .where(sql`${t.isPrimary}`),
     index('user_positions_position_idx').on(t.positionId),
   ],
 );
