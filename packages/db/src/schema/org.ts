@@ -39,7 +39,9 @@ export const orgUnits = appSchema.table(
       name: 'org_units_parent_fk',
     }).onDelete('restrict'),
     index('org_units_parent_idx').on(t.parentId),
-    index('org_units_path_idx').on(t.path),
+    // text_pattern_ops so subtree queries `path LIKE '<ancestor>.%'` use the index
+    // regardless of the database collation.
+    index('org_units_path_idx').on(t.path.op('text_pattern_ops')),
     check('org_units_type_chk', sql`${t.type} in ('committee', 'department', 'division', 'unit')`),
   ],
 );

@@ -37,12 +37,17 @@ export const users = appSchema.table(
     createdBy: uuid('created_by'),
   },
   (t) => [
-    uniqueIndex('users_username_uq').on(t.username),
+    // Partial unique: a soft-deleted row must not block reusing the username.
+    uniqueIndex('users_username_uq')
+      .on(t.username)
+      .where(sql`${t.deletedAt} is null`),
     foreignKey({
       columns: [t.createdBy],
       foreignColumns: [t.id],
       name: 'users_created_by_fk',
     }).onDelete('restrict'),
     check('users_status_chk', sql`${t.status} in ('active', 'blocked')`),
+    check('users_locale_chk', sql`${t.locale} in ('ru', 'tg')`),
+    check('users_theme_chk', sql`${t.theme} in ('system', 'light', 'dark')`),
   ],
 );

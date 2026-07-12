@@ -18,7 +18,12 @@ export const roles = appSchema.table(
     deletedAt: deletedAt(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'restrict' }),
   },
-  (t) => [uniqueIndex('roles_code_uq').on(t.code)],
+  (t) => [
+    // Partial unique: a soft-deleted role must not block reusing its code.
+    uniqueIndex('roles_code_uq')
+      .on(t.code)
+      .where(sql`${t.deletedAt} is null`),
+  ],
 );
 
 /** role_permissions — permission strings from the catalog (packages/shared). */
@@ -83,5 +88,10 @@ export const resourceAcl = appSchema.table(
     index('resource_acl_resource_idx').on(t.resourceType, t.resourceId),
     index('resource_acl_subject_idx').on(t.subjectType, t.subjectId),
     check('resource_acl_level_chk', sql`${t.level} in ('viewer', 'editor', 'manager')`),
+    check(
+      'resource_acl_resource_type_chk',
+      sql`${t.resourceType} in ('folder', 'file', 'layer', 'project', 'channel', 'recording', 'report')`,
+    ),
+    check('resource_acl_subject_type_chk', sql`${t.subjectType} in ('user', 'org_unit', 'role')`),
   ],
 );

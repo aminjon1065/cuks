@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, check, index, integer, jsonb, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { DICTIONARY_TYPES } from '@cuks/shared';
 import { appSchema, createdAt, primaryId, updatedAt } from './_shared';
 
@@ -28,5 +28,9 @@ export const dictionaries = appSchema.table(
   (t) => [
     uniqueIndex('dictionaries_type_code_uq').on(t.type, t.code),
     index('dictionaries_type_active_sort_idx').on(t.type, t.isActive, t.sort),
+    check(
+      'dictionaries_type_chk',
+      sql`${t.type} in ('incident_type', 'hazard_level', 'doc_type', 'correspondent_category')`,
+    ),
   ],
 );
