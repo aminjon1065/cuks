@@ -5,7 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 0 (Фундамент) — в работе
-- **Последняя сессия**: 2026-07-13 — задача 0.8
+- **Последняя сессия**: 2026-07-13 — задача 0.9
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -14,7 +14,7 @@
 
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
-| 0 Фундамент       | 🟡 в работе (0.1–0.8 готовы) | —                  |
+| 0 Фундамент       | 🟡 в работе (0.1–0.9 готовы) | —                  |
 | 1 Файлы           | ⬜                           | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
@@ -26,6 +26,33 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-13 — Фаза 0: задача 0.9 (Socket.IO)
+
+**Сделано** (realtime-каркас по `docs/01` §Realtime):
+
+- **Shared** (`ws-events`): `WS_NAMESPACE='/ws'`, хелперы комнат `wsRooms` (`user/channel/board/
+  entity`), событие `connection.ready`.
+- **API** (`modules/events`): `EventsGateway` на namespace `/ws` — авторизация handshake по той
+  же session-cookie (парсинг заголовка → `SessionService.get` → проверка активного/незаблок.
+  пользователя), затем `join user:{id}`; сокет без сессии/заблок. — дисконнект. `RealtimeService`
+  — развязанный publish-API (`emitToUser`/`emitToRoom`), который инжектят другие модули; гейтвей
+  биндит живой сервер в `afterInit`. `RedisIoAdapter` (`common/adapters`) — `@socket.io/redis-adapter`
+  на двух дублях ioredis + CORS на APP_ORIGIN с credentials; ставится в `main.ts`
+  (`useWebSocketAdapter`) до `listen`.
+- **Web** (`lib/socket.ts`): `SocketProvider` (одно `/ws`-соединение `withCredentials`,
+  смонтирован внутри авторизованной оболочки — коннектится после входа, рвётся при выходе) +
+  `useSocket`/`useSocketEvent` с типизированными событиями. Vite-proxy `/socket.io` (ws) → :3000.
+
+**Тесты/проверка**: `typecheck/lint/format/test/build` — зелёные (api +8 тестов: parseCookieHeader,
+handleConnection happy/‌no-cookie/‌stale/‌blocked, RealtimeService routing; сборка web 682 КБ).
+**Live**: сокет-эндпоинт отвечает; скриптовый socket.io-client с валидной session-cookie →
+`connect` + `connection.ready {userId}` (комната присвоена); без cookie → сервер дисконнектит
+(`unauthorizedRejected`); vite-proxy `/socket.io` через :5174 отдаёт handshake.
+
+**Примечание**: глобальные HTTP-guard'ы (SessionGuard и пр.) не мешают, т.к. в гейтвее пока нет
+`@SubscribeMessage`-хендлеров; когда появятся — нужен WS-совместимый guard (проверять
+`context.getType()`), иначе HTTP-guard сломает WS-контекст. Presence (`presence.changed`) — в 0.10.
 
 ### 2026-07-13 — Фаза 0: задача 0.8 (App Shell, `apps/web`)
 
