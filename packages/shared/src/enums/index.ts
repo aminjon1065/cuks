@@ -30,6 +30,14 @@ export type AclResourceType = (typeof ACL_RESOURCE_TYPES)[number];
 export const ACL_LEVELS = ['viewer', 'editor', 'manager'] as const;
 export type AclLevel = (typeof ACL_LEVELS)[number];
 
+/** ACL levels are ordered viewer < editor < manager (docs/05 §3). */
+export const ACL_LEVEL_RANK: Record<AclLevel, number> = { viewer: 1, editor: 2, manager: 3 };
+
+/** True if `have` grants at least `need`. */
+export function aclLevelSatisfies(have: AclLevel, need: AclLevel): boolean {
+  return ACL_LEVEL_RANK[have] >= ACL_LEVEL_RANK[need];
+}
+
 /**
  * Dictionary types (docs/07 §dictionaries). Extended as modules land; the full
  * incident-type tree is seeded in phase 2.1 (docs/modules/10).

@@ -62,6 +62,17 @@ export type Permission = (typeof PERMISSIONS)[number];
 /** Wildcard permission granting everything (superadmin bypass). */
 export const PERMISSION_WILDCARD = '*' as const;
 
+/** Module a permission belongs to (for the admin roles matrix — docs/16 §3). */
+export function permissionModule(code: string): string {
+  const head = code.split('.')[0] ?? code;
+  return head === 'incidents' ? 'gis' : head;
+}
+
+/** The permission catalog grouped by module (frontend renders RU text via i18n). */
+export function permissionCatalog(): { module: string; code: string }[] {
+  return PERMISSIONS.map((code) => ({ module: permissionModule(code), code }));
+}
+
 /** Permissions that require TOTP 2FA to be enabled (docs/05 §1). */
 export const PERMISSIONS_REQUIRING_2FA: readonly string[] = [
   'admin.users.manage',
