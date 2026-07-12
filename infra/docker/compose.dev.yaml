@@ -1,0 +1,90 @@
+# Development infrastructure only (docs/03 §infra). Application processes
+# (api/web/worker) run on the host via `pnpm dev`. Credentials here are
+# dev-only and intentionally static — never reuse them in production.
+#
+# Services for later phases (LiveKit, Martin, GeoServer) are added in their
+# respective phases (2 and 6) to keep the dev footprint small.
+name: cuks-dev
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cuks
+      POSTGRES_PASSWORD: cuks
+      POSTGRES_DB: cuks
+      TZ: Asia/Dushanbe
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cuks -d cuks']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: cuks
+      MINIO_ROOT_PASSWORD: cuks-dev-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    ports:
+      - '3310:3310'
+    volumes:
+      - clamavdata:/var/lib/clamav
+    healthcheck:
+      test: ['CMD', 'clamdcheck.sh']
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 120s
+
+  maildev:
+    image: maildev/maildev:latest
+    restart: unless-stopped
+    ports:
+      - '1080:1080' # web UI
+      - '1025:1025' # SMTP
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:1080']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  clamavdata:
