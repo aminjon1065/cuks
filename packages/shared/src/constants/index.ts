@@ -16,3 +16,16 @@ export const MAX_PAGE_SIZE = 200 as const;
 export const LOCALES = ['ru', 'tg'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'ru';
+
+/**
+ * Argon2id parameters (docs/05 §1: memory 64MB, iterations 3, parallelism 4).
+ * `memoryCost` is in KiB. Consumers add `type: argon2.argon2id`.
+ */
+export const ARGON2_OPTIONS = {
+  memoryCost: 65_536,
+  timeCost: 3,
+  parallelism: 4,
+} as const;
+
+/** Password policy (docs/05 §1): ≥ 12 chars, change required on first login. */
+export const PASSWORD_MIN_LENGTH = 12;
