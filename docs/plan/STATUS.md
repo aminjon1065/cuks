@@ -60,7 +60,22 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
 (`postgres/redis/minio: up`) и 503 при недоступной (корректный per-dependency up/down);
 `/api/docs` (Swagger UI) → 200. Инфра остановлена (volumes сохранены).
 
-**Коммиты:** phase-0 scaffolding (см. `git log`).
+**Ревью (adversarial, multi-agent).** Прогнан ревью скаффолда против спек; 7 подтверждённых
+находок исправлены в этой же сессии:
+
+- **[critical]** `packages/db/src/client.ts` — у pg `Pool` не было обработчика `error`: перезапуск
+  Postgres/`pg_terminate_backend` → unhandled `'error'` → падение процесса API. Добавлен
+  `pool.on('error', …)` (по умолчанию + пробрасываемый логгер).
+- **[desirable]** health-пробы pg/redis не отменялись по таймауту (утечка соединений при «завис,
+  но слушает» Postgres). Добавлены `statement_timeout` (pg) и `commandTimeout` (redis).
+- **[minor]** гонка connect/ping в redis-пробе → ложный `down`. Упрощено до ленивого ping.
+- **[desirable]** нет security-заголовков (docs/09 §1). Подключён `@fastify/helmet`:
+  X-Frame-Options DENY, nosniff, Referrer-Policy same-origin (везде); CSP+HSTS — в prod.
+- **[desirable]** Swagger отдавался и в prod. Теперь `/api/docs` — только вне production.
+- **[minor]** pino redact расширен до `password`/`totp`/`set-cookie` (docs/09 §1).
+- **[minor]** `bootstrap()` без `.catch` → добавлен явный лог+`exit(1)` при сбое старта.
+
+**Коммиты:** phase-0 scaffolding + review fixes (см. `git log`).
 
 ## Принятые решения (отклонения/уточнения спек)
 
@@ -94,6 +109,11 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   эмуляцию (медленнее). Для dev приемлемо; прод-сервер — amd64. — infra/docker/compose.dev.yaml.
 - [P3] Playwright: конфиг и smoke-спека есть, браузеры не установлены, e2e не в CI — включается
   в 0.14.
+- [P2] Стандартный конверт ошибок `{ error: { code, message, details, requestId } }` (docs/04 §13)
+  определён как тип в `packages/shared/dto/error.ts`, но глобальный ExceptionFilter и генерация
+  `requestId` ещё не подключены — сделать с первыми реальными эндпоинтами (фаза 0.4). — apps/api.
+- [P3] CSP из docs/09 §1 задаётся приложением только в prod (для JSON API); CSP самого SPA —
+  на уровне Caddy (edge), реализуется в фазе деплоя (7). — apps/api/main.ts, infra/Caddyfile.
 
 ## Добавленные зависимости (сверх docs/02-stack.md)
 
