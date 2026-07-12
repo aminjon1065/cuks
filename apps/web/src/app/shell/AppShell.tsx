@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { AbilityProvider } from '@/lib/ability';
+import { SocketProvider } from '@/lib/socket';
 import { useMe } from '@/features/auth/api/queries';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -26,16 +27,18 @@ export function AppShell(): React.JSX.Element | null {
 
   return (
     <AbilityProvider rules={me.abilityRules}>
-      <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar me={me} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar me={me} onOpenCommand={() => setCommandOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-6">
-            <Outlet />
-          </main>
+      <SocketProvider>
+        <div className="flex h-screen overflow-hidden bg-background">
+          <Sidebar me={me} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Topbar me={me} onOpenCommand={() => setCommandOpen(true)} />
+            <main className="flex-1 overflow-y-auto p-6">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
-      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+        <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      </SocketProvider>
     </AbilityProvider>
   );
 }
