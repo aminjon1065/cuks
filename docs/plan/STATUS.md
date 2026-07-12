@@ -5,7 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 0 (Фундамент) — в работе
-- **Последняя сессия**: 2026-07-12 — задачи 0.1, 0.2
+- **Последняя сессия**: 2026-07-12 — задача 0.3
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -14,7 +14,7 @@
 
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
-| 0 Фундамент       | 🟡 в работе (0.1–0.2 готовы) | —                  |
+| 0 Фундамент       | 🟡 в работе (0.1–0.3 готовы) | —                  |
 | 1 Файлы           | ⬜                           | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
@@ -26,6 +26,37 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-12 — Фаза 0: задача 0.3 (ядро БД, миграция, сиды)
+
+**Сделано:**
+
+- **Схема `app`** (Drizzle, `packages/db/src/schema/`, разбита по доменам): `users`, `org_units`
+  (materialized `path`), `positions`, `user_positions`, `roles`, `role_permissions`, `user_roles`
+  (nullable `org_unit_id` скоуп, UNIQUE NULLS NOT DISTINCT), `resource_acl`, `dictionaries`.
+  Конвенции 04: uuidv7 PK (клиентская генерация), timestamptz, soft-delete `deleted_at`,
+  `created_by → users` (restrict), FK on delete restrict (cascade — только `role_permissions`),
+  CHECK-констрейнты на enum-поля, индексы под запросы.
+- **Enum-словарь** в `@cuks/shared/enums` (единый источник для БД и фронта) + **каталог
+  permissions и роли-шаблоны** в `@cuks/shared/permissions` (docs/05 §4–5) + `ARGON2_OPTIONS`.
+- **Первая миграция** `0000_*.sql` (drizzle-kit generate, просмотрена глазами) — `CREATE SCHEMA app`
+  + 9 таблиц.
+- **Сиды** (`pnpm db:seed`, идемпотентные, onConflictDoNothing): суперадмин `admin`
+  (argon2id, `must_change_password`, временный пароль из `SEED_ADMIN_PASSWORD`), 7 ролей-шаблонов
+  + 70 permission-строк, орг-скелет из 10 узлов (docs/05 §2, фикс. id + materialized path),
+  18 записей справочников (уровни ЧС, типы документов, категории корреспондентов, стартовые виды
+  ЧС). `--demo` — заглушка (позже).
+
+**Тесты/проверка:** `typecheck/lint/format/test/build` — зелёные (13 тестов; +4 на целостность
+каталога permissions). **Live:** поднят postgres, `db:migrate` + `db:seed` прошли; проверено:
+корректные счётчики, admin→superadmin (global), argon2id-хэш, materialized-path дерева;
+**идемпотентность** (повторный сид не дублирует) и **FK restrict** (удаление роли с назначением
+блокируется) подтверждены на живой БД.
+
+**Отложенные core-таблицы 07** (создаются вместе с их потребителем): `notifications`/
+`notification_prefs` → 0.10; `audit_log`/`read_log` → 0.11; `files`/`file_versions` → фаза 1;
+`correspondents` → фаза 3; `comments`, `entity_links`, `saved_filters`, `user_settings`,
+`substitutions` → при первом использовании.
 
 ### 2026-07-12 — Фаза 0: задачи 0.1–0.2
 
@@ -97,6 +128,17 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   MinIO — HTTP `/minio/health/live` (без aws-sdk на этом этапе).
 - 2026-07-12 — **Vitest поднят до 3.x** (вместо 2.x) для совместимости с Vite 6 (единая копия
   vite в дереве). В рамках `docs/02` (там Vitest без версии).
+- 2026-07-12 — **0.3 создаёт только identity/org/RBAC/dictionaries-ядро**; остальные core-таблицы
+  07 отложены к их потребителю (см. журнал). Причина: каждая таблица создаётся с реальным
+  потребителем, чтобы не фиксировать форму без валидации.
+- 2026-07-12 — **UUIDv7 генерируется на клиенте** (`uuidv7`, ADR-14) через `$defaultFn`, без
+  PG-функции (в PG17 нет `uuidv7()`). Орг-скелет в сидах — с фиксированными UUID для
+  идемпотентности и детерминированного `path`.
+- 2026-07-12 — **Нечёткие права в ролях-шаблонах** (05 §5: «chat.*базовое*», «всё
+  пользовательское») сведены к конкретным permission из каталога 05 §4 в
+  `@cuks/shared/permissions`. Суперадмин = wildcard `*` (bypass — интерпретируется CASL в 0.5).
+- 2026-07-12 — **`org_units.head_position_id` без FK** (иначе цикл org_units↔positions);
+  целостность — на уровне приложения. Коды справочников — латиницей (стабильные ключи).
 
 ## Известные проблемы / техдолг
 
@@ -128,3 +170,7 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
   `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals` — в рамках «ESLint 9 flat».
 - Dev-тулинг: `rimraf` (clean), `tsx` (запуск сидов), `@swc/core` + `unplugin-swc` (транспиляция
   для Nest+Vitest, **@swc/core — нативный бинарник**), `pino-pretty` (dev-логи).
+- `uuidv7@^1.0.2` — генерация сортируемых UUIDv7 на клиенте (ADR-14); малый, без нативных биндингов.
+- `argon2@^0.41.1` — хэширование паролей (argon2id, docs/05 §1). **Нативный биндинг** (node-gyp,
+  собирается при install); используется сидом (и auth в 0.4). В списке стека docs/02.
+- `@fastify/helmet@^13.0.1` — security-заголовки (docs/09 §1, добавлено при исправлении ревью 0.1–0.2).
