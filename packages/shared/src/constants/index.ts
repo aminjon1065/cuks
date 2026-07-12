@@ -29,3 +29,23 @@ export const ARGON2_OPTIONS = {
 
 /** Password policy (docs/05 §1): ≥ 12 chars, change required on first login. */
 export const PASSWORD_MIN_LENGTH = 12;
+
+/** Session + CSRF cookies and headers (docs/05 §1, docs/09 §1). */
+export const SESSION_COOKIE = 'cuks_session';
+export const CSRF_COOKIE = 'cuks_csrf';
+export const CSRF_HEADER = 'x-csrf-token';
+
+/** Session lifetimes (docs/05 §1): 12h sliding, 30d with "remember me". */
+export const SESSION_TTL_SECONDS = 12 * 60 * 60;
+export const SESSION_REMEMBER_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const MAX_SESSIONS_PER_USER = 10;
+
+/** Anti-bruteforce (docs/05 §1): 5 failures → 15-minute lockout by username and IP. */
+export const LOCKOUT_MAX_ATTEMPTS = 5;
+export const LOCKOUT_WINDOW_SECONDS = 15 * 60;
+
+/** Rate limit for /auth/login per IP (docs/09 §1: /auth/* 10 rpm). */
+export const AUTH_LOGIN_RATE_PER_MINUTE = 10;
+
+/** TOTP one-time backup codes (docs/05 §1). */
+export const TOTP_BACKUP_CODES_COUNT = 10;
