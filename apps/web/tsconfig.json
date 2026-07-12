@@ -1,0 +1,15 @@
+{
+  "extends": "../../packages/config/tsconfig/react.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@cuks/shared": ["../../packages/shared/src/index.ts"],
+      "@cuks/shared/*": ["../../packages/shared/src/*"],
+      "@cuks/ui": ["../../packages/ui/src/index.ts"],
+      "@cuks/ui/*": ["../../packages/ui/src/*"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e"]
+}
