@@ -1,8 +1,15 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
-import { and, eq, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 import type { Job, Queue } from 'bullmq';
-import { fileUploads, fileVersions, fsNodes, type Database } from '@cuks/db';
+import {
+  fileLinks,
+  fileUploads,
+  fileVersions,
+  fsNodes,
+  resourceAcl,
+  type Database,
+} from '@cuks/db';
 import {
   PREVIEW_SIZES,
   QUEUE,
@@ -61,7 +68,20 @@ export class RetentionProcessor extends WorkerHost {
     const abandoned = await this.purgeAbandonedUploads();
     const purged = await this.purgeTrash();
     const reconciled = await this.reconcileStalePendingScans();
-    this.logger.log({ purged, abandoned, reconciled }, 'retention sweep complete');
+    const expiredLinks = await this.purgeExpiredLinks();
+    this.logger.log({ purged, abandoned, reconciled, expiredLinks }, 'retention sweep complete');
+  }
+
+  /** Delete internal links past their expiry. Enforcement already ignores an
+   *  expired link (fs-nodes.service.ts joins on `expires_at > now`), so this is
+   *  housekeeping — but deleting the link cascades its `file_link_grants`, so the
+   *  accepted-user grant rows don't linger either (task 1.4). */
+  private async purgeExpiredLinks(): Promise<number> {
+    const removed = await this.db
+      .delete(fileLinks)
+      .where(and(isNotNull(fileLinks.expiresAt), lt(fileLinks.expiresAt, new Date())))
+      .returning({ id: fileLinks.id });
+    return removed.length;
   }
 
   private async purgeTrash(): Promise<number> {
@@ -117,6 +137,17 @@ export class RetentionProcessor extends WorkerHost {
         }
       }
       await tx.delete(fileVersions).where(eq(fileVersions.nodeId, nodeId));
+      // Orphaned ACL grants for this node (resource_acl.resource_id has no FK —
+      // polymorphic — so they wouldn't cascade; clean them up here). file_links
+      // do cascade via their FK, so they need no explicit delete.
+      await tx
+        .delete(resourceAcl)
+        .where(
+          and(
+            inArray(resourceAcl.resourceType, ['folder', 'file']),
+            eq(resourceAcl.resourceId, nodeId),
+          ),
+        );
       await tx.delete(fsNodes).where(eq(fsNodes.id, nodeId));
       return true;
     });
