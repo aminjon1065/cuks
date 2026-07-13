@@ -11,6 +11,12 @@ import { REDIS } from '../../common/redis/redis.module';
 const ISSUER = 'CUKS';
 const TOTP_STEP_SECONDS = 30;
 
+// otplib defaults to window: 0 (zero tolerance) — a code is only valid for the
+// exact server-side step, so ordinary input/network latency rejects correct
+// codes. ±1 step (RFC 6238 §5.2) is standard practice and doesn't weaken
+// security: verifyForLogin's Redis guard still blocks replay within the window.
+authenticator.options = { window: 1 };
+
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
 /** TOTP (RFC 6238) via otplib + one-time backup codes (docs/05 §1). */
