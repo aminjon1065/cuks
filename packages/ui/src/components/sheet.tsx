@@ -8,21 +8,33 @@ export const SheetTrigger = SheetPrimitive.Trigger;
 export const SheetClose = SheetPrimitive.Close;
 
 /** `closeLabel` is the accessible name of the ✕ button; the app passes an i18n
- * value, the English default is only a fallback (docs/06 §4). */
+ * value, the English default is only a fallback (docs/06 §4). `modal={false}`
+ * makes it a non-blocking peek panel (no backdrop) so the underlying list stays
+ * interactive (docs/06 §5) — pair with `<Sheet modal={false}>`. */
 export interface SheetContentProps extends React.ComponentPropsWithoutRef<
   typeof SheetPrimitive.Content
 > {
   closeLabel?: string;
+  modal?: boolean;
 }
 
 export const SheetContent = forwardRef<
   React.ComponentRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ className, children, closeLabel = 'Close', ...props }, ref) => (
+>(({ className, children, closeLabel = 'Close', modal = true, ...props }, ref) => (
   <SheetPrimitive.Portal>
-    <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />
+    {modal ? <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" /> : null}
     <SheetPrimitive.Content
       ref={ref}
+      // Non-modal content keeps interaction-outside from closing it (a peek panel
+      // is dismissed via the ✕ or by selecting another row), and doesn't steal
+      // focus back on open.
+      {...(modal
+        ? {}
+        : {
+            onInteractOutside: (e: Event) => e.preventDefault(),
+            onOpenAutoFocus: (e: Event) => e.preventDefault(),
+          })}
       className={cn(
         'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface text-text shadow-[var(--shadow-2)]',
         className,
