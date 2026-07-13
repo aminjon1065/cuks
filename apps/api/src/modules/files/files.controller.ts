@@ -22,7 +22,9 @@ import {
   patchNodeSchema,
   previewQuerySchema,
   quotaQuerySchema,
+  recentQuerySchema,
   revokeNodeAclSchema,
+  searchQuerySchema,
   treeQuerySchema,
   trashQuerySchema,
   type CompleteUploadInput,
@@ -41,7 +43,10 @@ import {
   type PreviewSize,
   type QuotaDto,
   type QuotaQuery,
+  type RecentQuery,
   type RevokeNodeAclInput,
+  type SearchQuery,
+  type SearchResultDto,
   type TreeQuery,
   type TreeResponse,
   type TrashQuery,
@@ -50,6 +55,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { FileSearchService } from './file-search.service';
 import { FileSharingService } from './file-sharing.service';
 import { FileVersionsService } from './file-versions.service';
 import { FsNodesService } from './fs-nodes.service';
@@ -69,6 +75,7 @@ export class FilesController {
     private readonly uploads: UploadsService,
     private readonly versions: FileVersionsService,
     private readonly sharing: FileSharingService,
+    private readonly searchSvc: FileSearchService,
   ) {}
 
   @Get('tree')
@@ -99,6 +106,26 @@ export class FilesController {
   @Get('shared')
   getShared(@CurrentUser() user: AuthUser): Promise<FsNodeDto[]> {
     return this.sharing.listSharedWithMe(user);
+  }
+
+  /** Global file search over name + tags + extracted text (docs/modules/12 §6-7),
+   *  scoped to what the caller can access. Declared before `:id` so "search" is
+   *  not parsed as a node id. */
+  @Get('search')
+  search(
+    @CurrentUser() user: AuthUser,
+    @Query(new ZodValidationPipe(searchQuerySchema)) query: SearchQuery,
+  ): Promise<SearchResultDto[]> {
+    return this.searchSvc.search(query.q, query.limit, user);
+  }
+
+  /** "Последние" — recently modified files the caller can access (docs/modules/12 §2). */
+  @Get('recent')
+  recent(
+    @CurrentUser() user: AuthUser,
+    @Query(new ZodValidationPipe(recentQuerySchema)) query: RecentQuery,
+  ): Promise<FsNodeDto[]> {
+    return this.searchSvc.recent(query.limit, user);
   }
 
   /** Resolve an internal link: grants the caller `viewer` and returns the node. */

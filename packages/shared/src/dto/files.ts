@@ -139,6 +139,28 @@ export interface FileVersionDto {
 
 export const nodeKindSchema = z.enum(FS_NODE_KINDS);
 
+// --- Search + Recent (docs/modules/12 §2, §6, §7; docs/07 §Поиск, task 1.8) ---
+
+/** Global file search over name + tags + extracted text, scoped to what the
+ *  caller can access. */
+export const searchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+export const recentQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+export type RecentQuery = z.infer<typeof recentQuerySchema>;
+
+/** A search hit: the file node plus a human-readable location (ancestor folder
+ *  names joined by " / ", null for a personal-root file) so the user can tell
+ *  which folder it lives in. */
+export interface SearchResultDto extends FsNodeDto {
+  location: string | null;
+}
+
 // --- Sharing: ACL on a node + internal links (docs/modules/12 §1, §3, task 1.4) ---
 
 /** Grant/upsert one subject's access level on a node (PUT /files/:id/acl). */

@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { QUEUE } from '@cuks/shared';
 import { AdminModule } from '../admin/admin.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { FileSearchService } from './file-search.service';
 import { FileSharingService } from './file-sharing.service';
 import { FileVersionsService } from './file-versions.service';
 import { FilesController } from './files.controller';
@@ -25,6 +26,7 @@ import { UploadsService } from './uploads.service';
     UploadsService,
     FileVersionsService,
     FileSharingService,
+    FileSearchService,
   ],
 })
 export class FilesModule {}
