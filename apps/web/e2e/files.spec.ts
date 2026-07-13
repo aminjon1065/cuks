@@ -60,3 +60,25 @@ test('files screen: uploading a text file and opening it in the viewer overlay',
   await page.keyboard.press('Escape');
   await expect(overlay).toBeHidden();
 });
+
+test('files screen: search finds an uploaded file, and Recent lists it', async ({ page }) => {
+  await page.goto('/app/files');
+
+  const ts = Date.now();
+  const name = `zzsmoke ${ts}.txt`;
+  await page.getByTestId('files-file-input').setInputFiles({
+    name,
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`recent search smoke ${ts}`),
+  });
+  await expect(page.locator('table').getByText(name)).toBeVisible({ timeout: 20_000 });
+
+  // Global search by a name token (FTS over the generated name vector).
+  await page.getByTestId('files-search').fill('zzsmoke');
+  await expect(page.getByTestId('files-results').getByText(name)).toBeVisible({ timeout: 10_000 });
+
+  // Clearing search and opening "Последние" shows the freshly-uploaded file.
+  await page.getByTestId('files-search').fill('');
+  await page.getByRole('button', { name: 'Последние' }).click();
+  await expect(page.getByTestId('files-results').getByText(name)).toBeVisible({ timeout: 10_000 });
+});

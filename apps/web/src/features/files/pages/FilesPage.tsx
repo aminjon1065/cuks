@@ -1,18 +1,21 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   ChevronRight,
+  Clock,
   FolderClosed,
   FolderPlus,
   Home,
   LayoutGrid,
   List,
+  Search,
   Share2,
   Trash2,
   Upload,
   Users,
+  X,
 } from 'lucide-react';
 import {
   Button,
@@ -37,7 +40,9 @@ import {
   filesKey,
   usePatchNode,
   useQuota,
+  useRecent,
   useRestoreNode,
+  useSearch,
   useSharedWithMe,
   useTrash,
   useTrashNode,
@@ -47,19 +52,31 @@ import {
 import { useUploadStore, UploadDock } from '@/features/uploads';
 import { formatBytes } from '../lib';
 import { FileList } from '../components/FileList';
+import { ResultList } from '../components/ResultList';
 import { FileInspector } from '../components/FileInspector';
 import { NewFolderDialog } from '../components/NewFolderDialog';
 import { MoveDialog } from '../components/MoveDialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { FileViewerOverlay } from '../components/viewer/FileViewerOverlay';
 
-type Section = 'personal' | 'org' | 'shared' | 'trash';
+type Section = 'personal' | 'org' | 'shared' | 'recent' | 'trash';
 const SECTIONS: { key: Section; icon: typeof FolderClosed }[] = [
   { key: 'personal', icon: FolderClosed },
   { key: 'org', icon: Users },
   { key: 'shared', icon: Share2 },
+  { key: 'recent', icon: Clock },
   { key: 'trash', icon: Trash2 },
 ];
+
+/** Debounce a rapidly-changing value (search box → query). */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 const VIEW_KEY = 'cuks-files-view';
 
@@ -82,18 +99,31 @@ export function FilesPage(): React.JSX.Element {
   const [renameNode, setRenameNode] = useState<FsNodeDto | null>(null);
   const [trashTarget, setTrashTarget] = useState<FsNodeDto | null>(null);
   const [viewerNode, setViewerNode] = useState<FsNodeDto | null>(null);
+  const [searchInput, setSearchInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isBrowse = section === 'personal' || section === 'org';
+  // `searching` follows the immediate input (not the debounced value) so clicking a
+  // rail section exits search at once — no ~300ms window of stale results. The
+  // request itself still uses the debounced `q`.
+  const q = useDebouncedValue(searchInput.trim(), 300);
+  const searching = searchInput.trim().length > 0;
+
+  const isBrowse = !searching && (section === 'personal' || section === 'org');
   const space: FsSpaceParam = section === 'org' ? 'org' : 'personal';
 
   const tree = useTree(
     { space, parentId: folderId, ...(unitParam ? { orgUnitId: unitParam } : {}) },
     isBrowse && (section !== 'org' || !!unitParam),
   );
-  const shared = useSharedWithMe(section === 'shared');
-  const trash = useTrash('personal', undefined, section === 'trash');
+  const shared = useSharedWithMe(!searching && section === 'shared');
+  const recent = useRecent(!searching && section === 'recent');
+  const trash = useTrash('personal', undefined, !searching && section === 'trash');
+  const search = useSearch(q, searching);
   const quota = useQuota(space, section === 'org' ? unitParam : undefined);
+
+  // Debounce still catching up to the input, or the request is in flight — show a
+  // skeleton rather than flashing "nothing found" while the first hits load.
+  const searchPending = searching && (q !== searchInput.trim() || search.isFetching);
 
   const patch = usePatchNode();
   const trashNode = useTrashNode();
@@ -114,16 +144,27 @@ export function FilesPage(): React.JSX.Element {
     else if (next.folder) p.set('folder', next.folder);
     setParams(p);
     setSelected(null);
+    setSearchInput(''); // navigating exits search mode
   };
 
-  const nodes: FsNodeDto[] =
-    section === 'shared'
+  const nodes: FsNodeDto[] = searching
+    ? (search.data ?? [])
+    : section === 'shared'
       ? (shared.data ?? [])
-      : section === 'trash'
-        ? (trash.data ?? [])
-        : (tree.data?.items ?? []);
+      : section === 'recent'
+        ? (recent.data ?? [])
+        : section === 'trash'
+          ? (trash.data ?? [])
+          : (tree.data?.items ?? []);
   const breadcrumbs: BreadcrumbDto[] = isBrowse ? (tree.data?.breadcrumbs ?? []) : [];
-  const activeQuery = section === 'shared' ? shared : section === 'trash' ? trash : tree;
+  const activeQuery =
+    section === 'shared'
+      ? shared
+      : section === 'recent'
+        ? recent
+        : section === 'trash'
+          ? trash
+          : tree;
 
   const download = (node: FsNodeDto): void => {
     window.open(`/api/v1/files/${node.id}/download`, '_blank', 'noopener');
@@ -239,43 +280,68 @@ export function FilesPage(): React.JSX.Element {
           title={t('title')}
           description={t('subtitle')}
           actions={
-            isBrowse ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setNewFolderOpen(true)}
-                  data-testid="files-new-folder"
-                >
-                  <FolderPlus className="size-4" /> {t('toolbar.newFolder')}
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  data-testid="files-upload"
-                >
-                  <Upload className="size-4" /> {t('toolbar.upload')}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  data-testid="files-file-input"
-                  onChange={(e) => {
-                    startUpload([...(e.target.files ?? [])]);
-                    e.target.value = '';
-                  }}
+            <div className="flex items-center gap-2">
+              <div className="relative w-52">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder={t('search.placeholder')}
+                  aria-label={t('search.placeholder')}
+                  className="h-8 pl-8 pr-8 text-[13px]"
+                  data-testid="files-search"
                 />
+                {searchInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput('')}
+                    aria-label={t('search.clear')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                ) : null}
               </div>
-            ) : null
+              {isBrowse ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewFolderOpen(true)}
+                    data-testid="files-new-folder"
+                  >
+                    <FolderPlus className="size-4" /> {t('toolbar.newFolder')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="files-upload"
+                  >
+                    <Upload className="size-4" /> {t('toolbar.upload')}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    hidden
+                    data-testid="files-file-input"
+                    onChange={(e) => {
+                      startUpload([...(e.target.files ?? [])]);
+                      e.target.value = '';
+                    }}
+                  />
+                </>
+              ) : null}
+            </div>
           }
         />
 
         {/* Breadcrumbs + view toggle */}
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap items-center gap-1 text-[13px] text-text-muted">
-            {isBrowse ? (
+            {searching ? (
+              <span className="font-medium text-text">{t('search.title', { q })}</span>
+            ) : isBrowse ? (
               <>
                 <button
                   type="button"
@@ -301,7 +367,7 @@ export function FilesPage(): React.JSX.Element {
               <span className="font-medium text-text">{t(`sections.${section}`)}</span>
             )}
           </div>
-          {section !== 'trash' ? (
+          {!searching && (section === 'personal' || section === 'org' || section === 'shared') ? (
             <div className="flex items-center gap-1">
               <Button
                 variant={view === 'table' ? 'secondary' : 'ghost'}
@@ -325,10 +391,33 @@ export function FilesPage(): React.JSX.Element {
           ) : null}
         </div>
 
-        {section === 'trash' ? <p className="text-xs text-text-muted">{t('trash.hint')}</p> : null}
+        {!searching && section === 'trash' ? (
+          <p className="text-xs text-text-muted">{t('trash.hint')}</p>
+        ) : null}
 
         {/* Content */}
-        {activeQuery.isLoading ? (
+        {searching ? (
+          search.isError ? (
+            <ErrorState forbidden={false} onRetry={() => void search.refetch()} />
+          ) : (search.data ?? []).length === 0 ? (
+            searchPending ? (
+              <Skeleton className="h-80 w-full rounded-lg" />
+            ) : (
+              <EmptyState
+                icon={Search}
+                title={t('search.empty.title')}
+                description={t('search.empty.description')}
+              />
+            )
+          ) : (
+            <ResultList
+              items={search.data ?? []}
+              showLocation
+              onOpen={open}
+              onDownload={download}
+            />
+          )
+        ) : activeQuery.isLoading ? (
           <Skeleton className="h-80 w-full rounded-lg" />
         ) : activeQuery.isError ? (
           <ErrorState
@@ -347,6 +436,8 @@ export function FilesPage(): React.JSX.Element {
           ) : (
             <FilesEmpty section={section} />
           )
+        ) : section === 'recent' ? (
+          <ResultList items={recent.data ?? []} onOpen={open} onDownload={download} />
         ) : section === 'trash' ? (
           <TrashList
             nodes={nodes}
@@ -483,6 +574,7 @@ function FilesEmpty({ section }: { section: Section }): React.JSX.Element {
     personal: { title: t('empty.title'), description: t('empty.description') },
     org: { title: t('empty.org.title'), description: t('empty.org.description') },
     shared: { title: t('empty.shared.title'), description: t('empty.shared.description') },
+    recent: { title: t('empty.recent.title'), description: t('empty.recent.description') },
     trash: { title: t('trash.empty.title'), description: t('trash.empty.description') },
   }[section];
   return <EmptyState icon={FolderClosed} title={map.title} description={map.description} />;

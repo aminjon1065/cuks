@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 import type {
   CreateFolderInput,
   DirectoryOrgUnitDto,
@@ -12,6 +18,7 @@ import type {
   PatchNodeInput,
   QuotaDto,
   RevokeNodeAclInput,
+  SearchResultDto,
   TreeResponse,
 } from '@cuks/shared';
 import { api } from '@/lib/api-client';
@@ -62,6 +69,27 @@ export function useTrash(
     queryKey: [...filesKey, 'trash', space, orgUnitId],
     queryFn: () => api.get<FsNodeDto[]>(`/v1/files/trash?${q}`),
     enabled,
+  });
+}
+
+export function useRecent(enabled = true): UseQueryResult<FsNodeDto[]> {
+  return useQuery({
+    queryKey: [...filesKey, 'recent'],
+    queryFn: () => api.get<FsNodeDto[]>('/v1/files/recent'),
+    enabled,
+  });
+}
+
+/** Global file search (name + tags + extracted text). Disabled for a blank query.
+ *  Keeps the previous hits visible while a refined query loads (no skeleton flash
+ *  on every keystroke). */
+export function useSearch(q: string, enabled = true): UseQueryResult<SearchResultDto[]> {
+  const query = q.trim();
+  return useQuery({
+    queryKey: [...filesKey, 'search', query],
+    queryFn: () => api.get<SearchResultDto[]>(`/v1/files/search?q=${encodeURIComponent(query)}`),
+    enabled: enabled && query.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
