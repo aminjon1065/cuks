@@ -5,7 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 0 (Фундамент) — в работе
-- **Последняя сессия**: 2026-07-13 — задача 0.9
+- **Последняя сессия**: 2026-07-13 — задача 0.10
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -14,7 +14,7 @@
 
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
-| 0 Фундамент       | 🟡 в работе (0.1–0.9 готовы) | —                  |
+| 0 Фундамент       | 🟡 в работе (0.1–0.10 готовы) | —                 |
 | 1 Файлы           | ⬜                           | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
@@ -26,6 +26,45 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-13 — Фаза 0: задача 0.10 (уведомления-ядро)
+
+**Сделано** (по `docs/07`/`docs/16`; исследование фазы прогнано understand-воркфлоу):
+
+- **БД** (миграция `0004`): `notifications` (user-scoped, индекс `(user_id,is_read,created_at desc)`)
+  и `notification_prefs` (unique `(user_id,type_group,channel)`, check `inapp|email`). Идемпотентный
+  demo-сид уведомлений админу.
+- **Shared** (`notifications/`): группы `[system,docflow,tasks,chat,meet,incidents]`, каналы,
+  критичные группы (in-app нельзя выключить) `[docflow,meet,incidents]`, `groupOfType()`; DTO;
+  `notify.new` payload `{id,type,createdAt}`.
+- **API** (`modules/notifications`): `NotificationsService.notify()` — единая точка входа: учитывает
+  prefs (in-app критичных — всегда, email — по умолчанию вкл), пишет in-app строку + шлёт `notify.new`
+  (RealtimeService), отправляет email best-effort. Эндпоинты `/api/v1/notifications` (лента, unread-count,
+  read/:id, read-all, prefs GET/PATCH) — без permission-гейта, всё скоупится на вызывающего. `MailService`
+  (`common/mail`) — nodemailer/`SMTP_URL` за тонким фасадом (0.13 переведёт на BullMQ); нет SMTP —
+  логируемый no-op. `NotificationsModule` — `@Global`, чтобы AuthService слал `system.account.password_changed`
+  без цикла модулей. Юнит-тесты сервиса + prefs-lock.
+- **Web** (`features/notifications`): колокольчик-поповер (бейдж непрочитанных, лента, «прочитать все»),
+  страница уведомлений, матрица настроек (критичные in-app-ячейки заблокированы, оптимистичное сохранение);
+  `notify.new` инвалидирует ленту и поднимает тост. Toast + Switch добавлены в `packages/ui`. Текст и
+  относительное время (`Intl.RelativeTimeFormat`) локализуются на клиенте по `type`.
+
+**Тесты/проверка**: `typecheck/lint/format/test/build` — зелёные (api 32 теста). **Live e2e** (обе темы):
+вход админом (2FA) → на дашборде бейдж «3» (сид+password_changed); поповер — локализованные заголовки по
+`type`, иконки по группе, относительное время «5 минут назад», точки непрочитанного; страница; матрица —
+lock-иконки у docflow/meet/incidents in-app, тумблеры сохраняются; **live `notify.new`** (смена пароля →
+бейдж 3→4→5 + тост «Новое уведомление»); **email → maildev** (лог maildev `no-reply@cuks.local ->
+admin@cuks.local`); отключение SMTP — action не падает. Тёмная тема ок. Сид-админ восстановлен после теста.
+
+**Adversarial-review** (воркфлоу: 4 измерения → рефутация): 6 находок → 4 подтверждены, все low/medium,
+без корректности/безопасности — исправлены: (1) i18n aria-label пагинации; (2) оптимистичное сохранение
+prefs (onMutate+rollback) вместо пессимистичного + снят глобальный disable свитчей; (3) error-тост
+`role="alert"` вместо `status`.
+
+**Решения** (docs/07 молчит — минимальные): группа = первый сегмент `type`; email по умолчанию вкл,
+критичность форсит только in-app (не email); контент уведомления (`title/body`) — данные продюсера
+(англ. фолбэк в БД, локализация на клиенте по `type`), не UI-хардкод; email отправляется inline сейчас,
+в 0.13 уедет за BullMQ-очередь; `notification_prefs` имеет `updated_at` + unique-ключ.
 
 ### 2026-07-13 — Фаза 0: задача 0.9 (Socket.IO)
 

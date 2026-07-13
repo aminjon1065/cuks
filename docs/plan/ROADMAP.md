@@ -31,7 +31,7 @@
 - [x] 0.7 Дизайн-система: токены (обе темы), Tailwind-пресет, базовые shadcn, собственные компоненты минимум: DataTable, PageHeader, EmptyState, StatusBadge, ConfirmDialog, UserChip/Picker, OrgUnitPicker, FilterBar, SidePanel
 - [x] 0.8 App Shell: роутер, layout (Sidebar/Topbar), страница логина, темы, i18n-каркас (ru/tg), страница 403/404, Command Palette (каркас: навигация)
 - [x] 0.9 Socket.IO: gateway, авторизация по cookie, комнаты user:*, redis-adapter; клиентский socket-провайдер
-- [ ] 0.10 Уведомления-ядро: таблица, notify(), WS `notify.new`, колокольчик-поповер, страница, email-канал (nodemailer+maildev), prefs
+- [x] 0.10 Уведомления-ядро: таблица, notify(), WS `notify.new`, колокольчик-поповер, страница, email-канал (nodemailer+maildev), prefs
 - [ ] 0.11 Аудит-ядро: audit_log (партиции), audit.log(), интерцептор контекста (ip/ua)
 - [ ] 0.12 Админка v0: пользователи (CRUD+блокировка+сброс), роли (матрица), орг-дерево, аудит-просмотр
 - [ ] 0.13 Worker-каркас: BullMQ подключение, очередь email, deadlines-cron заглушка
