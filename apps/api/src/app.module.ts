@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { BullModule } from '@nestjs/bullmq';
 import { LoggerModule } from 'nestjs-pino';
+import { DEFAULT_JOB_OPTIONS } from '@cuks/shared';
 import { AuditModule } from './common/audit/audit.module';
 import { DbModule } from './common/db/db.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -48,6 +50,17 @@ import { UsersModule } from './modules/users/users.module';
           ],
           autoLogging: true,
         },
+      }),
+    }),
+    // BullMQ producer: the api enqueues background jobs; the worker consumes them
+    // (docs/01 §Фоновые задачи). A dedicated ioredis connection (maxRetriesPerRequest
+    // must be null for BullMQ) separate from the session/cache client.
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: { url: config.get('REDIS_URL'), maxRetriesPerRequest: null },
+        defaultJobOptions: DEFAULT_JOB_OPTIONS,
       }),
     }),
     RedisModule,

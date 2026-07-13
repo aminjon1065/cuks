@@ -1,41 +1,27 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { createTransport, type Transporter } from 'nodemailer';
-import { ConfigService } from '../../config/config.service';
+import { Queue } from 'bullmq';
+import { QUEUE, type EmailJobData } from '@cuks/shared';
 
-export interface MailMessage {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}
+export type MailMessage = EmailJobData;
 
 /**
- * SMTP sender (docs/02 §Email: Nodemailer → maildev in dev, corporate SMTP in prod;
- * `SMTP_URL`). A thin façade so phase 0.13 can move sending behind the BullMQ email
- * queue without touching callers. If `SMTP_URL` is unset the send is a logged no-op,
- * so the platform runs without a mail server configured.
+ * Mail façade (docs/02 §Email). Enqueues an `email` job onto BullMQ; the worker owns
+ * the SMTP transport and does the actual send with retries (docs/01 §73). Callers are
+ * unchanged from the 0.10 inline version — a mail failure still can't break the
+ * originating action (enqueue errors are swallowed and logged).
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: Transporter | null;
-  private readonly from = 'CUKS <no-reply@cuks.local>';
 
-  constructor(config: ConfigService) {
-    const url = config.get('SMTP_URL');
-    this.transporter = url ? createTransport(url) : null;
-    if (!this.transporter) {
-      this.logger.warn('SMTP_URL is not set — outgoing email is disabled');
-    }
-  }
+  constructor(@InjectQueue(QUEUE.email) private readonly queue: Queue<EmailJobData>) {}
 
   async send(message: MailMessage): Promise<void> {
-    if (!this.transporter) return;
     try {
-      await this.transporter.sendMail({ from: this.from, ...message });
+      await this.queue.add('send', message);
     } catch (err) {
-      // Email is best-effort: a mail failure must never break the originating action.
-      this.logger.error({ err, to: message.to }, 'failed to send email');
+      this.logger.error({ err, to: message.to }, 'failed to enqueue email');
     }
   }
 }

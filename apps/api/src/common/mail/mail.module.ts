@@ -1,9 +1,12 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Global, Module } from '@nestjs/common';
+import { QUEUE } from '@cuks/shared';
 import { MailService } from './mail.service';
 
-/** SMTP sending, available app-wide (like AuditService). */
+/** Email enqueueing, available app-wide. Actual SMTP send runs in the worker. */
 @Global()
 @Module({
+  imports: [BullModule.registerQueue({ name: QUEUE.email })],
   providers: [MailService],
   exports: [MailService],
 })
