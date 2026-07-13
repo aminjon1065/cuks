@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
   foreignKey,
@@ -31,6 +32,9 @@ export const users = appSchema.table(
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     locale: text('locale', { enum: LOCALES }).notNull().default('ru'),
     theme: text('theme', { enum: THEMES }).notNull().default('system'),
+    // Personal file-storage quota in bytes (docs/modules/12 §4); null = platform
+    // default (DEFAULT_PERSONAL_QUOTA_BYTES).
+    quotaBytes: bigint('quota_bytes', { mode: 'number' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),

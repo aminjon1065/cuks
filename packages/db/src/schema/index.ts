@@ -9,3 +9,4 @@ export * from './rbac';
 export * from './dictionaries';
 export * from './auth';
 export * from './notifications';
+export * from './fs';

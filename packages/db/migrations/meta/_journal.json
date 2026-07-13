@@ -43,6 +43,13 @@
       "when": 1783908280631,
       "tag": "0005_audit_log_partitioned",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783931361898,
+      "tag": "0006_gray_cable",
+      "breakpoints": true
     }
   ]
 }
