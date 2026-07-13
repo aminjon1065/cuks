@@ -3,6 +3,7 @@
  * app via `@cuks/ui/styles.css` after `@import "tailwindcss"`.
  */
 export { cn } from './lib/cn';
+export { fileIcon } from './lib/file-icon';
 
 // Base primitives
 export * from './components/button';
@@ -20,6 +21,8 @@ export * from './components/dropdown-menu';
 export * from './components/command';
 export * from './components/toast';
 export * from './components/switch';
+export * from './components/file-dropzone';
+export * from './components/attachment-list';
 
 // Composite components
 export * from './components/status-badge';
