@@ -5,7 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 0 (Фундамент) — в работе
-- **Последняя сессия**: 2026-07-13 — задача 0.12
+- **Последняя сессия**: 2026-07-13 — задача 0.13
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -14,7 +14,7 @@
 
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
-| 0 Фундамент       | 🟡 в работе (0.1–0.12 готовы) | —                 |
+| 0 Фундамент       | 🟡 в работе (0.1–0.13 готовы) | —                 |
 | 1 Файлы           | ⬜                           | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
@@ -26,6 +26,44 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-13 — Фаза 0: задача 0.13 (worker-каркас, BullMQ)
+
+**Сделано** (по `docs/01` §Фоновые задачи, `docs/02` §Email; BullMQ producer в api, consumer в worker):
+
+- **Shared** (`queues/`): контракт очередей — `QUEUE` (`email`/`deadlines`/`audit-maintenance`),
+  `EmailJobData`, `DEFAULT_JOB_OPTIONS` (3 попытки, экспон. backoff, ограниченное хранение
+  завершённых). Имена и пейлоады общие, чтобы api и worker не разъехались.
+- **API (producer)**: `BullModule.forRootAsync` в `app.module`. `MailService` теперь **кладёт задачу
+  в очередь `email`** вместо inline-nodemailer из 0.10 — интерфейс `send()` для вызывающих не изменился,
+  best-effort сохранён (ошибка enqueue проглатывается+логируется, исходное действие не ломает). Юнит:
+  enqueue + best-effort.
+- **Worker (consumer)**: отдельное Nest-приложение (`createApplicationContext`), zod-валидация env на
+  старте, `DbModule` (@Global, пул закрывается на shutdown-хуке). Процессоры: **email** (владеет
+  nodemailer/SMTP; throw = ретрай с backoff; без `SMTP_URL` — логируемый no-op), **deadlines** (часовой
+  repeatable-стаб; реальная логика overdue/эскалаций — с docflow/tasks), **audit-maintenance**
+  (провижинит партиции `audit.audit_log` на текущий месяц + 2 вперёд, на старте и ежемесячно cron
+  `0 3 1 * *`) — **закрывает автоматизацию партиций из 0.11**. Юнит: email-процессор (send + no-op).
+
+**Тесты/проверка**: `typecheck/lint/format/test/build` — зелёные (api 50 тестов). **Live e2e**: полный
+путь письма **api → worker → maildev** — enqueue в api, worker залогировал `email sent`, maildev принял
+`no-reply@cuks.local -> admin@cuks.local`; **audit-partition cron отработал на старте**
+(`audit_log partitions ensured (current month + 2 ahead)`); worker поднялся
+(`Worker started — email, deadlines, audit-maintenance queues online.`). Сид-админ восстановлен, демо-
+письмо не осталось.
+
+**Adversarial-review**: воркфлоу упёрлось в session-limit (3 агента — ошибка, 0 находок,
+**неинформативно**), поэтому провёл фокусный ручной проход по зонам риска: дедуп repeatable-джоб
+BullMQ по `(name,pattern)` (нет накопления при рестартах), TZ-край audit-cron (месяц уже провижинен
+как «+2» в прошлом прогоне, DEFAULT ловит остаток — потери строк нет), best-effort mail, закрытие
+пула. Дефектов не найдено, правок кода не потребовалось.
+
+**Решения**: (1) BullMQ-подключение задаётся как `connection: { url, maxRetriesPerRequest: null }`, а не
+инстансом IORedis — bullmq пинит ioredis 5.10.1, установлен 5.11.1, инстанс-типы несовместимы; url-форма
+обходит конфликт и работает. (2) `deadlines` — стаб (proof cron-обвязки); реальная детекция просрочек и
+эскалации приедут с docflow/tasks. (3) Дроп старых партиций по retention (≥3 г) отложен — сейчас только
+провижининг вперёд; авто-дроп добавим ближе к prod (концерн деплоя). (4) У worker свой пул PG (нужен
+только audit-maintenance) и nodemailer-транспорт живёт в процессоре (api о SMTP больше не знает).
 
 ### 2026-07-13 — Фаза 0: задача 0.12 (админка v0)
 
