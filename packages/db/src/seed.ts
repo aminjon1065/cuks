@@ -4,10 +4,18 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: ['.env', '../../.env'] });
 
 import argon2 from 'argon2';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { ARGON2_OPTIONS, ROLE_TEMPLATES, type OrgUnitType } from '@cuks/shared';
 import { createDb, type Database } from './client';
-import { dictionaries, orgUnits, rolePermissions, roles, userRoles, users } from './schema/index';
+import {
+  dictionaries,
+  notifications,
+  orgUnits,
+  rolePermissions,
+  roles,
+  userRoles,
+  users,
+} from './schema/index';
 
 const SUPERADMIN_ROLE_CODE = 'superadmin';
 const ADMIN_USERNAME = 'admin';
@@ -204,6 +212,41 @@ async function seedDictionaries(db: Database): Promise<void> {
   }
 }
 
+/**
+ * A few notifications for the admin so the bell/feed have content out of the box.
+ * Idempotent: skipped once the admin has any. Titles are English fallbacks — the
+ * client renders localized text from `type` (notifications:types.*).
+ */
+async function seedDemoNotifications(db: Database, adminId: string): Promise<void> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(notifications)
+    .where(eq(notifications.userId, adminId));
+  if ((row?.n ?? 0) > 0) return;
+  await db.insert(notifications).values([
+    {
+      userId: adminId,
+      type: 'system.welcome',
+      title: 'Welcome to CUKS',
+      body: 'The platform is ready.',
+    },
+    {
+      userId: adminId,
+      type: 'docflow.route.assigned',
+      title: 'Document assigned',
+      body: 'A document needs your review.',
+    },
+    {
+      userId: adminId,
+      type: 'incidents.incident.created',
+      title: 'Emergency registered',
+      body: 'A new emergency was registered.',
+      isRead: true,
+      readAt: new Date(),
+    },
+  ]);
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is required for seeding');
@@ -219,6 +262,7 @@ async function main(): Promise<void> {
     const adminId = await seedAdmin(db);
     await assignSuperadmin(db, adminId);
     await seedDictionaries(db);
+    await seedDemoNotifications(db, adminId);
     console.log(
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
         `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries.`,

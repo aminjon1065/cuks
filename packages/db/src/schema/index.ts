@@ -8,3 +8,4 @@ export * from './org';
 export * from './rbac';
 export * from './dictionaries';
 export * from './auth';
+export * from './notifications';
