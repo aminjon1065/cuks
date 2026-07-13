@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  customType,
   foreignKey,
   index,
   integer,
@@ -14,6 +15,15 @@ import { AV_STATUSES, FS_NODE_KINDS, FS_SPACES } from '@cuks/shared';
 import { appSchema, createdAt, deletedAt, primaryId, updatedAt } from './_shared';
 import { orgUnits } from './org';
 import { users } from './users';
+
+/** Postgres full-text search vector (docs/07 §Поиск: config `russian`, generated
+ *  column + GIN). Stored generated columns keep it in sync with their source
+ *  text automatically — no worker/app upkeep on rename/retag/re-extract. */
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 /**
  * fs_nodes — unified folder/file tree (docs/modules/12 §3), materialized `path`
@@ -41,6 +51,11 @@ export const fsNodes = appSchema.table(
     tags: text('tags').array().notNull().default([]),
     starredBy: uuid('starred_by').array().notNull().default([]),
     path: text('path').notNull(),
+    // FTS over the node name (docs/modules/12 §3, docs/07). Only `name` goes in the
+    // generated vector — `array_to_string` is STABLE (not immutable) so tags can't
+    // live here; the search query matches `tags` separately. extracted_text has its
+    // own vector on file_versions (extracted_tsv); search matches any of the three.
+    searchTsv: tsvector('search_tsv').generatedAlwaysAs(sql`to_tsvector('russian', "name")`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -56,6 +71,7 @@ export const fsNodes = appSchema.table(
     index('fs_nodes_path_idx').on(t.path.op('text_pattern_ops')),
     index('fs_nodes_owner_user_idx').on(t.ownerUserId),
     index('fs_nodes_owner_org_unit_idx').on(t.ownerOrgUnitId),
+    index('fs_nodes_search_tsv_idx').using('gin', t.searchTsv),
     // At most one lazily-provisioned root folder per org unit (docs/modules/12 §2)
     // — a DB backstop against a create-if-missing race between concurrent requests.
     uniqueIndex('fs_nodes_org_root_uq')
@@ -85,11 +101,17 @@ export const fileVersions = appSchema.table(
     avStatus: text('av_status', { enum: AV_STATUSES }).notNull().default('pending'),
     // Populated by the worker's text-extract job (phase 1.3) for FTS; null until then.
     extractedText: text('extracted_text'),
+    // FTS over the extracted document text (docs/07). Generated from extracted_text
+    // so re-extraction/restore keeps it current without any worker change.
+    extractedTsv: tsvector('extracted_tsv').generatedAlwaysAs(
+      sql`to_tsvector('russian', coalesce("extracted_text", ''))`,
+    ),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex('file_versions_node_version_uq').on(t.nodeId, t.version),
     index('file_versions_node_idx').on(t.nodeId),
+    index('file_versions_extracted_tsv_idx').using('gin', t.extractedTsv),
     check('file_versions_av_status_chk', sql`${t.avStatus} in ('pending', 'clean', 'infected')`),
   ],
 );
