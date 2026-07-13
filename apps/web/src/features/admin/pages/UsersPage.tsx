@@ -55,7 +55,7 @@ export function UsersPage(): React.JSX.Element {
         title={t('users.title')}
         description={t('users.subtitle')}
         actions={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" data-testid="users-create" onClick={() => setCreateOpen(true)}>
             <Plus /> {t('users.create')}
           </Button>
         }
@@ -80,6 +80,7 @@ export function UsersPage(): React.JSX.Element {
             setPage(1);
           }}
           placeholder={t('users.searchPlaceholder')}
+          data-testid="users-search"
           className="h-8 w-64"
         />
         <select

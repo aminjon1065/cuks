@@ -185,6 +185,7 @@ export function UserDetailPanel({
                 value={newRoleId}
                 onChange={(e) => setNewRoleId(e.target.value)}
                 aria-label={t('users.card.assignRole')}
+                data-testid="assign-role-select"
                 className="h-9 rounded-md border border-border bg-surface px-2 text-[13px] text-text"
               >
                 <option value="">{t('users.card.assignRole')}…</option>
@@ -206,6 +207,7 @@ export function UserDetailPanel({
               </div>
               <Button
                 size="sm"
+                data-testid="assign-role-confirm"
                 disabled={!newRoleId || assignRole.isPending}
                 onClick={doAssignRole}
               >

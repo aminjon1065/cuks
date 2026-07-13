@@ -56,7 +56,10 @@ export function EnrollTotpPage(): React.JSX.Element {
       <div className="mt-3">
         <Label>{t('totp.secretLabel')}</Label>
         {secret ? (
-          <code className="mt-1 block select-all break-all rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-[13px] text-text">
+          <code
+            data-testid="totp-secret"
+            className="mt-1 block select-all break-all rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-[13px] text-text"
+          >
             {secret}
           </code>
         ) : (

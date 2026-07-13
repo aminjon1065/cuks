@@ -28,7 +28,7 @@ export function AppShell(): React.JSX.Element | null {
   return (
     <AbilityProvider rules={me.abilityRules}>
       <SocketProvider>
-        <div className="flex h-screen overflow-hidden bg-background">
+        <div data-testid="app-shell" className="flex h-screen overflow-hidden bg-background">
           <Sidebar me={me} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar me={me} onOpenCommand={() => setCommandOpen(true)} />
