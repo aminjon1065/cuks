@@ -10,6 +10,8 @@ export interface WsEventPayloads {
   'connection.ready': { userId: string };
   /** A new in-app notification arrived; the client refetches the feed/count. */
   'notify.new': { id: string; type: string; createdAt: string };
+  /** The server ended this user's sessions (blocked / revoked) — client logs out. */
+  'auth.forced_logout': { reason: string };
   'presence.changed': { userId: string; online: boolean };
 }
 

@@ -6,3 +6,4 @@ export * from './rbac';
 export * from './org';
 export * from './notifications';
 export * from './audit';
+export * from './users';
