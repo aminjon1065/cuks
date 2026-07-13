@@ -19,6 +19,6 @@ import { TotpService } from './totp.service';
     TotpService,
     CryptoService,
   ],
-  exports: [AuthService, SessionService, LockoutService],
+  exports: [AuthService, SessionService, LockoutService, PasswordService],
 })
 export class AuthModule {}
