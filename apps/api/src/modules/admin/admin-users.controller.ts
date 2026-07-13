@@ -50,10 +50,11 @@ export class AdminUsersController {
   @Patch(':id')
   @HttpCode(200)
   async update(
+    @CurrentUser() actor: AuthUser,
     @Param('id', new ZodValidationPipe(idParam)) id: string,
     @Body(new ZodValidationPipe(updateUserSchema)) body: UpdateUserInput,
   ): Promise<{ ok: true }> {
-    await this.users.update(id, body);
+    await this.users.update(id, body, actor);
     return { ok: true };
   }
 
@@ -69,21 +70,30 @@ export class AdminUsersController {
 
   @Post(':id/unblock')
   @HttpCode(200)
-  async unblock(@Param('id', new ZodValidationPipe(idParam)) id: string): Promise<{ ok: true }> {
-    await this.users.unblock(id);
+  async unblock(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', new ZodValidationPipe(idParam)) id: string,
+  ): Promise<{ ok: true }> {
+    await this.users.unblock(id, actor);
     return { ok: true };
   }
 
   @Post(':id/reset-password')
   @HttpCode(200)
-  resetPassword(@Param('id', new ZodValidationPipe(idParam)) id: string): Promise<TempPasswordDto> {
-    return this.users.resetPassword(id);
+  resetPassword(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', new ZodValidationPipe(idParam)) id: string,
+  ): Promise<TempPasswordDto> {
+    return this.users.resetPassword(id, actor);
   }
 
   @Post(':id/reset-totp')
   @HttpCode(200)
-  async resetTotp(@Param('id', new ZodValidationPipe(idParam)) id: string): Promise<{ ok: true }> {
-    await this.users.resetTotp(id);
+  async resetTotp(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', new ZodValidationPipe(idParam)) id: string,
+  ): Promise<{ ok: true }> {
+    await this.users.resetTotp(id, actor);
     return { ok: true };
   }
 

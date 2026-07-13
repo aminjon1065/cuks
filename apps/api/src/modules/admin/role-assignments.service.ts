@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, eq, isNull, ne, type SQL } from 'drizzle-orm';
 import { type Database, orgUnits, rolePermissions, roles, userRoles, users } from '@cuks/db';
 import { PERMISSION_WILDCARD, type AssignRoleInput, type RoleAssignmentDto } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
@@ -86,11 +86,19 @@ export class RoleAssignmentsService {
     if (!assignment) {
       throw AppException.notFound('admin.role_assignment.not_found', 'Assignment not found');
     }
+    const isWildcard = await this.roleHasWildcard(assignment.roleId);
     // Only superadmin may strip a superadmin (wildcard) assignment.
-    if (!actor.isSuperadmin && (await this.roleHasWildcard(assignment.roleId))) {
+    if (!actor.isSuperadmin && isWildcard) {
       throw AppException.forbidden(
         'admin.role_assignment.superadmin_forbidden',
         'Only a superadmin can revoke a superadmin assignment',
+      );
+    }
+    // Never leave the platform with zero superadmins (no in-app way back).
+    if (isWildcard && (await this.otherWildcardAssignments(id)) === 0) {
+      throw AppException.badRequest(
+        'admin.role_assignment.last_superadmin',
+        'Cannot revoke the last superadmin assignment',
       );
     }
     await this.db.delete(userRoles).where(eq(userRoles.id, id));
@@ -124,6 +132,16 @@ export class RoleAssignmentsService {
 
   private async roleHasWildcard(roleId: string): Promise<boolean> {
     return (await this.rolePermissionCodes(roleId)).includes(PERMISSION_WILDCARD);
+  }
+
+  /** Count wildcard (superadmin) role assignments other than `exceptId`. */
+  private async otherWildcardAssignments(exceptId: string): Promise<number> {
+    const rows = await this.db
+      .selectDistinct({ id: userRoles.id })
+      .from(userRoles)
+      .innerJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
+      .where(and(eq(rolePermissions.permission, PERMISSION_WILDCARD), ne(userRoles.id, exceptId)));
+    return rows.length;
   }
 
   private async rolePermissionCodes(roleId: string): Promise<string[]> {

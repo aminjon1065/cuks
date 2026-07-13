@@ -174,8 +174,9 @@ export class AdminUsersService {
     return { id: row.id, username, tempPassword };
   }
 
-  async update(id: string, input: UpdateUserInput): Promise<void> {
+  async update(id: string, input: UpdateUserInput, actor: AuthUser): Promise<void> {
     await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     const patch: Record<string, unknown> = {};
     if (input.fullName !== undefined) {
       patch['fullName'] = input.fullName;
@@ -193,19 +194,22 @@ export class AdminUsersService {
       throw AppException.badRequest('admin.user.self_block', 'You cannot block yourself');
     }
     await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     await this.db.update(users).set({ status: 'blocked' }).where(eq(users.id, id));
     await this.forceLogout(id, 'blocked');
     this.audit.log({ action: 'admin.user.blocked', entityType: 'user', entityId: id });
   }
 
-  async unblock(id: string): Promise<void> {
+  async unblock(id: string, actor: AuthUser): Promise<void> {
     await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     await this.db.update(users).set({ status: 'active' }).where(eq(users.id, id));
     this.audit.log({ action: 'admin.user.unblocked', entityType: 'user', entityId: id });
   }
 
-  async resetPassword(id: string): Promise<TempPasswordDto> {
+  async resetPassword(id: string, actor: AuthUser): Promise<TempPasswordDto> {
     const user = await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     const tempPassword = generateTempPassword();
     await this.usersService.setPassword(id, await this.passwords.hash(tempPassword));
     // setPassword clears mustChangePassword — re-arm it so they must change the temp one.
@@ -215,8 +219,9 @@ export class AdminUsersService {
     return { id, username: user.username, tempPassword };
   }
 
-  async resetTotp(id: string): Promise<void> {
+  async resetTotp(id: string, actor: AuthUser): Promise<void> {
     await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     await this.usersService.clearTotp(id);
     this.audit.log({ action: 'admin.user.totp_reset', entityType: 'user', entityId: id });
   }
@@ -226,9 +231,26 @@ export class AdminUsersService {
       throw AppException.badRequest('admin.user.self_delete', 'You cannot delete yourself');
     }
     await this.requireUser(id);
+    await this.assertMayManage(id, actor);
     await this.db.update(users).set({ deletedAt: new Date() }).where(eq(users.id, id));
     await this.forceLogout(id, 'deleted');
     this.audit.log({ action: 'admin.user.deleted', entityType: 'user', entityId: id });
+  }
+
+  /**
+   * Privilege-bounded delegation (docs/05, mirrors role-assignments): a manager who
+   * is not a superadmin must not act on a superadmin — otherwise resetting the
+   * superadmin's password/2FA would be a path to full escalation.
+   */
+  private async assertMayManage(targetId: string, actor: AuthUser): Promise<void> {
+    if (actor.isSuperadmin) return;
+    const { isSuperadmin } = await this.usersService.getPermissions(targetId);
+    if (isSuperadmin) {
+      throw AppException.forbidden(
+        'admin.user.forbidden_target',
+        'Only a superadmin can manage a superadmin',
+      );
+    }
   }
 
   private async forceLogout(userId: string, reason: string): Promise<void> {

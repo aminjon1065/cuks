@@ -24,6 +24,7 @@ function make() {
   const sessions = { revokeAll: vi.fn().mockResolvedValue(0) };
   const usersService = {
     findActiveById: vi.fn().mockResolvedValue({ id: 'u2', username: 'target' }),
+    getPermissions: vi.fn().mockResolvedValue({ permissions: [], isSuperadmin: false }),
     setPassword: vi.fn().mockResolvedValue(undefined),
     clearTotp: vi.fn().mockResolvedValue(undefined),
   };
@@ -74,6 +75,16 @@ describe('AdminUsersService', () => {
     });
     await expect(c.service.remove('u1', actor)).rejects.toMatchObject({
       code: 'admin.user.self_delete',
+    });
+  });
+
+  it('forbids a non-superadmin from resetting a superadmin', async () => {
+    c.usersService.getPermissions.mockResolvedValue({ permissions: [], isSuperadmin: true });
+    await expect(c.service.resetPassword('u2', actor)).rejects.toMatchObject({
+      code: 'admin.user.forbidden_target',
+    });
+    await expect(c.service.resetTotp('u2', actor)).rejects.toMatchObject({
+      code: 'admin.user.forbidden_target',
     });
   });
 });
