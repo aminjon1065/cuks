@@ -1,0 +1,15 @@
+# Machine-local port remap — NOT committed, NOT part of the shared dev stack.
+# This host already runs Laragon's own postgres/redis/mailpit on 127.0.0.1,
+# which silently intercepts `localhost` connections meant for these containers
+# (Windows lets a loopback-specific bind win over the container's 0.0.0.0 bind).
+# Remap only the colliding host ports; MinIO/ClamAV are unaffected.
+services:
+  postgres:
+    ports:
+      - '5433:5432'
+  redis:
+    ports:
+      - '6380:6379'
+  maildev:
+    ports:
+      - '1026:1025'
