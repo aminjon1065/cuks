@@ -43,7 +43,7 @@
 
 - [x] 1.1 MinIO-сервис: бакеты, presigned multipart, complete-flow, download-redirect
 - [x] 1.2 fs_nodes/file_versions + деревья/крошки/квоты
-- [ ] 1.3 Jobs: av-scan (ClamAV), preview (sharp), text-extract (pdf-parse, mammoth), retention
+- [x] 1.3 Jobs: av-scan (ClamAV), preview (sharp), text-extract (pdf-parse, mammoth), retention
 - [ ] 1.4 ACL шаринг + внутренние ссылки + «Доступные мне»
 - [ ] 1.5 UI: разделы, DataTable/сетка, инспектор, dnd-загрузка с прогрессом, перемещение, корзина
 - [ ] 1.6 Просмотрщики: изображения-лайтбокс, pdf.js, видео/аудио
