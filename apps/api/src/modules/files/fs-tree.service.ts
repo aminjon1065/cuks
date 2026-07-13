@@ -185,6 +185,16 @@ export class FsTreeService {
             'Cannot move a node between different org units',
           );
         }
+        if (fresh.space === 'personal' && newParent.ownerUserId !== fresh.ownerUserId) {
+          // Symmetric to the org guard: a shared editor could otherwise relocate
+          // another user's personal node under their own tree (hiding it from the
+          // owner while it still counts against the owner's quota — ownerUserId is
+          // never rewritten on move). Cross-owner personal moves are forbidden.
+          throw AppException.badRequest(
+            'files.node.cross_owner_move_forbidden',
+            "Cannot move a node into another user's space",
+          );
+        }
         await this.nodes.assertAccess(newParent, user, 'editor');
       } else if (fresh.space !== 'personal') {
         throw AppException.badRequest(
@@ -246,10 +256,12 @@ export class FsTreeService {
   }
 
   /** Soft-delete; cascades to the whole subtree for a folder (a folder and its
-   *  contents are one unit in the trash — restored/purged together). An org unit's
-   *  root folder can't be deleted this way: every member holds 'editor' on it via
-   *  the auto-grant in ensureOrgRoot, which would otherwise let any ordinary member
-   *  trash the entire shared space. */
+   *  contents are one unit in the trash — restored/purged together). Deletion is
+   *  a `manager` right (docs/modules/12 §1: manager = "+доступ, удаление"); a
+   *  shared `editor` can upload/rename but not trash — otherwise a folder shared
+   *  at editor to an outside user would let them destroy the whole subtree. The
+   *  personal owner and superadmin bypass the level check (hasAccess). An org
+   *  unit's root folder additionally can't be trashed at all. */
   async remove(id: string, user: AuthUser): Promise<void> {
     const node = await this.nodes.requireNode(id);
     if (node.space === 'org' && node.parentId === null) {
@@ -258,7 +270,7 @@ export class FsTreeService {
         "An org unit's root folder cannot be deleted",
       );
     }
-    await this.nodes.assertAccess(node, user, 'editor');
+    await this.nodes.assertAccess(node, user, 'manager');
     const now = new Date();
     const where =
       node.kind === 'folder'

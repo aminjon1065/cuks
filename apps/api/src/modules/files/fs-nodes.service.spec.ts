@@ -16,7 +16,11 @@ function makeService(opts: { selectResults?: unknown[][]; aclCheck?: boolean } =
   const db = {
     select: vi.fn(() => selectChain(queue.shift() ?? [])),
   };
-  const acl = { check: vi.fn().mockResolvedValue(opts.aclCheck ?? false), grant: vi.fn() };
+  const acl = {
+    check: vi.fn().mockResolvedValue(opts.aclCheck ?? false),
+    checkNodeAccess: vi.fn().mockResolvedValue(opts.aclCheck ?? false),
+    grant: vi.fn(),
+  };
   const audit = { log: vi.fn() };
   const storage = {
     getDownloadUrl: vi.fn().mockResolvedValue('https://minio.example/signed-url'),
@@ -79,7 +83,7 @@ describe('FsNodesService.assertAccess', () => {
     ).rejects.toMatchObject({ code: 'files.node.access_denied' });
   });
 
-  it('allows org-space access via an ACL grant on the tree root', async () => {
+  it('allows org-space access via an ACL grant walked over the node path (root + node folders)', async () => {
     const { service, acl } = makeService({ aclCheck: true });
     const orgNode = {
       ...baseNode,
@@ -89,7 +93,23 @@ describe('FsNodesService.assertAccess', () => {
       path: 'root1.n1',
     };
     await expect(service.assertAccess(orgNode, user, 'editor')).resolves.toBeUndefined();
-    expect(acl.check).toHaveBeenCalledWith(user, 'folder', 'root1', 'editor');
+    // A folder node: every path segment (root1, n1) is a folder; no file id.
+    expect(acl.checkNodeAccess).toHaveBeenCalledWith(user, ['root1', 'n1'], null, 'editor');
+  });
+
+  it('checks the file id (not folder) as the last path segment for a file node', async () => {
+    const { service, acl } = makeService({ aclCheck: true });
+    const fileInFolder = {
+      ...baseNode,
+      kind: 'file' as const,
+      ownerUserId: null,
+      space: 'org' as const,
+      ownerOrgUnitId: 'ou1',
+      path: 'root1.folder2.f3',
+      id: 'f3',
+    };
+    await expect(service.assertAccess(fileInFolder, user, 'viewer')).resolves.toBeUndefined();
+    expect(acl.checkNodeAccess).toHaveBeenCalledWith(user, ['root1', 'folder2'], 'f3', 'viewer');
   });
 
   it('denies org-space access when the ACL check fails', async () => {
@@ -104,6 +124,36 @@ describe('FsNodesService.assertAccess', () => {
     await expect(service.assertAccess(orgNode, user, 'viewer')).rejects.toMatchObject({
       code: 'files.node.access_denied',
     });
+  });
+
+  it('grants viewer access via a live internal-link grant when the ACL check fails', async () => {
+    // No ACL match, but the link-grant query returns a row → viewer allowed.
+    const { service } = makeService({ aclCheck: false, selectResults: [[{ id: 'grant1' }]] });
+    const orgFile = {
+      ...baseNode,
+      kind: 'file' as const,
+      ownerUserId: null,
+      space: 'org' as const,
+      ownerOrgUnitId: 'ou1',
+      path: 'root1.f2',
+      id: 'f2',
+    };
+    await expect(service.hasAccess(orgFile, user, 'viewer')).resolves.toBe(true);
+  });
+
+  it('does NOT let a link grant satisfy an editor/manager check (links are viewer-only)', async () => {
+    // Even if a link grant exists, an editor-level check must not pass through it.
+    const { service } = makeService({ aclCheck: false, selectResults: [[{ id: 'grant1' }]] });
+    const orgFile = {
+      ...baseNode,
+      kind: 'file' as const,
+      ownerUserId: null,
+      space: 'org' as const,
+      ownerOrgUnitId: 'ou1',
+      path: 'root1.f2',
+      id: 'f2',
+    };
+    await expect(service.hasAccess(orgFile, user, 'editor')).resolves.toBe(false);
   });
 });
 

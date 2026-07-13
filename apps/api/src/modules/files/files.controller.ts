@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Redirect,
 } from '@nestjs/common';
@@ -14,24 +15,33 @@ import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   completeUploadSchema,
+  createFileLinkSchema,
   createFolderSchema,
+  grantNodeAclSchema,
   initiateUploadSchema,
   patchNodeSchema,
   previewQuerySchema,
   quotaQuerySchema,
+  revokeNodeAclSchema,
   treeQuerySchema,
   trashQuerySchema,
   type CompleteUploadInput,
+  type CreateFileLinkInput,
   type CreateFolderInput,
+  type FileLinkDto,
   type FileVersionDto,
   type FsNodeDto,
+  type GrantNodeAclInput,
   type InitiateUploadInput,
   type InitiateUploadResponse,
+  type NodeAclEntryDto,
+  type NodeAclResponse,
   type PatchNodeInput,
   type PreviewQuery,
   type PreviewSize,
   type QuotaDto,
   type QuotaQuery,
+  type RevokeNodeAclInput,
   type TreeQuery,
   type TreeResponse,
   type TrashQuery,
@@ -40,6 +50,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { FileSharingService } from './file-sharing.service';
 import { FileVersionsService } from './file-versions.service';
 import { FsNodesService } from './fs-nodes.service';
 import { FsTreeService } from './fs-tree.service';
@@ -57,6 +68,7 @@ export class FilesController {
     private readonly nodes: FsNodesService,
     private readonly uploads: UploadsService,
     private readonly versions: FileVersionsService,
+    private readonly sharing: FileSharingService,
   ) {}
 
   @Get('tree')
@@ -81,6 +93,19 @@ export class FilesController {
     @Query(new ZodValidationPipe(quotaQuerySchema)) query: QuotaQuery,
   ): Promise<QuotaDto> {
     return this.nodes.getQuota(query.space, query.orgUnitId, user);
+  }
+
+  /** "Доступные мне" — everything shared with the user (docs/modules/12 §2). */
+  @Get('shared')
+  getShared(@CurrentUser() user: AuthUser): Promise<FsNodeDto[]> {
+    return this.sharing.listSharedWithMe(user);
+  }
+
+  /** Resolve an internal link: grants the caller `viewer` and returns the node. */
+  @Post('links/:token/accept')
+  @HttpCode(200)
+  acceptLink(@CurrentUser() user: AuthUser, @Param('token') token: string): Promise<FsNodeDto> {
+    return this.sharing.acceptLink(token, user);
   }
 
   @Post('folders')
@@ -153,6 +178,64 @@ export class FilesController {
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
   ): Promise<FileVersionDto[]> {
     return this.versions.list(id, user);
+  }
+
+  // --- Sharing: ACL grants + internal links (task 1.4) ---
+
+  @Get(':id/acl')
+  getAcl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<NodeAclResponse> {
+    return this.sharing.getAcl(id, user);
+  }
+
+  @Put(':id/acl')
+  grantAcl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(grantNodeAclSchema)) body: GrantNodeAclInput,
+  ): Promise<NodeAclEntryDto> {
+    return this.sharing.grantAcl(id, body, user);
+  }
+
+  @Delete(':id/acl')
+  @HttpCode(200)
+  async revokeAcl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(revokeNodeAclSchema)) body: RevokeNodeAclInput,
+  ): Promise<{ ok: true }> {
+    await this.sharing.revokeAcl(id, body, user);
+    return { ok: true };
+  }
+
+  @Get(':id/links')
+  listLinks(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<FileLinkDto[]> {
+    return this.sharing.listLinks(id, user);
+  }
+
+  @Post(':id/links')
+  createLink(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(createFileLinkSchema)) body: CreateFileLinkInput,
+  ): Promise<FileLinkDto> {
+    return this.sharing.createLink(id, body.expiresInDays ?? null, user);
+  }
+
+  @Delete(':id/links/:linkId')
+  @HttpCode(200)
+  async revokeLink(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('linkId', new ZodValidationPipe(uuidSchema)) linkId: string,
+  ): Promise<{ ok: true }> {
+    await this.sharing.revokeLink(id, linkId, user);
+    return { ok: true };
   }
 
   @Post(':id/versions/:version/restore')

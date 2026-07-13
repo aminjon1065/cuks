@@ -83,10 +83,65 @@ export class AclService {
     minLevel: AclLevel,
   ): Promise<boolean> {
     if (user.isSuperadmin) return true;
-    const { roleIds, orgUnitIds } = await this.resolveUserSubjects(user.id);
+    const subjectCond = await this.subjectMatchCond(user.id);
+    const rows = await this.db
+      .select({ level: resourceAcl.level })
+      .from(resourceAcl)
+      .where(
+        and(
+          eq(resourceAcl.resourceType, resourceType),
+          eq(resourceAcl.resourceId, resourceId),
+          subjectCond,
+        ),
+      );
+    return rows.some((r) => aclLevelSatisfies(r.level, minLevel));
+  }
 
+  /**
+   * True if the user has at least `minLevel` on an fs node via a grant on the
+   * node itself OR any ancestor folder (grants inherit down the tree —
+   * docs/modules/12 §6 "наследование от папки"). `folderIds` are the ancestor
+   * folder ids (all path segments that are folders, incl. the node itself if it
+   * is a folder); `fileId` is the node id when it is a file, else null. One
+   * query with two IN-clauses — no per-ancestor round trips.
+   */
+  async checkNodeAccess(
+    user: Pick<AuthUser, 'id' | 'isSuperadmin'>,
+    folderIds: string[],
+    fileId: string | null,
+    minLevel: AclLevel,
+  ): Promise<boolean> {
+    if (user.isSuperadmin) return true;
+    if (folderIds.length === 0 && !fileId) return false;
+    const subjectCond = await this.subjectMatchCond(user.id);
+
+    const resourceConds: SQL[] = [];
+    if (folderIds.length > 0) {
+      resourceConds.push(
+        and(
+          eq(resourceAcl.resourceType, 'folder'),
+          inArray(resourceAcl.resourceId, folderIds),
+        ) as SQL,
+      );
+    }
+    if (fileId) {
+      resourceConds.push(
+        and(eq(resourceAcl.resourceType, 'file'), eq(resourceAcl.resourceId, fileId)) as SQL,
+      );
+    }
+
+    const rows = await this.db
+      .select({ level: resourceAcl.level })
+      .from(resourceAcl)
+      .where(and(or(...resourceConds), subjectCond));
+    return rows.some((r) => aclLevelSatisfies(r.level, minLevel));
+  }
+
+  /** OR-condition over the user's ACL subjects (self, roles, org units). */
+  private async subjectMatchCond(userId: string): Promise<SQL> {
+    const { roleIds, orgUnitIds } = await this.resolveUserSubjects(userId);
     const subjectConds: SQL[] = [
-      and(eq(resourceAcl.subjectType, 'user'), eq(resourceAcl.subjectId, user.id)) as SQL,
+      and(eq(resourceAcl.subjectType, 'user'), eq(resourceAcl.subjectId, userId)) as SQL,
     ];
     if (roleIds.length > 0) {
       subjectConds.push(
@@ -101,18 +156,7 @@ export class AclService {
         ) as SQL,
       );
     }
-
-    const rows = await this.db
-      .select({ level: resourceAcl.level })
-      .from(resourceAcl)
-      .where(
-        and(
-          eq(resourceAcl.resourceType, resourceType),
-          eq(resourceAcl.resourceId, resourceId),
-          or(...subjectConds),
-        ),
-      );
-    return rows.some((r) => aclLevelSatisfies(r.level, minLevel));
+    return or(...subjectConds) as SQL;
   }
 
   /** The user's role ids (non-deleted roles) and directly-held org-unit ids. */

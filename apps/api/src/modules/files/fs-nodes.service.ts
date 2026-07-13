@@ -1,6 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull, ne, sql, sum } from 'drizzle-orm';
-import { fileVersions, fsNodes, orgUnits, users, type Database } from '@cuks/db';
+import { and, eq, gt, inArray, isNull, ne, or, sql, sum } from 'drizzle-orm';
+import {
+  fileLinkGrants,
+  fileLinks,
+  fileVersions,
+  fsNodes,
+  orgUnits,
+  users,
+  type Database,
+} from '@cuks/db';
 import {
   DEFAULT_PERSONAL_QUOTA_BYTES,
   previewObjectKey,
@@ -136,18 +144,49 @@ export class FsNodesService {
     });
   }
 
-  /** Personal space: ownership. Org space: ACL check on the tree's root folder
-   *  (its id is always the first path segment). Falls back to a direct ACL grant
-   *  on the node itself for future per-item sharing (task 1.4). */
+  /** Personal space: ownership. Otherwise an ACL grant at or above the required
+   *  level on the node itself OR any ancestor folder (grants inherit down the
+   *  tree — docs/modules/12 §6). The org root's auto `editor` grant for the unit
+   *  is just the top-most such ancestor, so org membership is subsumed by the
+   *  same walk (task 1.4). */
   async assertAccess(node: FsNode, user: AuthUser, minLevel: AclLevel): Promise<void> {
-    if (user.isSuperadmin) return;
-    if (node.space === 'personal' && node.ownerUserId === user.id) return;
-    if (node.space === 'org') {
-      const rootId = node.path.split('.')[0]!;
-      if (await this.acl.check(user, 'folder', rootId, minLevel)) return;
+    if (!(await this.hasAccess(node, user, minLevel))) {
+      throw AppException.forbidden('files.node.access_denied', 'No access to this file or folder');
     }
-    if (await this.acl.check(user, node.kind, node.id, minLevel)) return;
-    throw AppException.forbidden('files.node.access_denied', 'No access to this file or folder');
+  }
+
+  /** Non-throwing form of {@link assertAccess} — for filtering lists where a
+   *  denied node is simply hidden rather than an error. */
+  async hasAccess(node: FsNode, user: AuthUser, minLevel: AclLevel): Promise<boolean> {
+    if (user.isSuperadmin) return true;
+    if (node.space === 'personal' && node.ownerUserId === user.id) return true;
+    const pathIds = node.path.split('.');
+    // Every path segment is a folder except the last, which is the node itself.
+    const folderIds = node.kind === 'folder' ? pathIds : pathIds.slice(0, -1);
+    const fileId = node.kind === 'file' ? node.id : null;
+    if (await this.acl.checkNodeAccess(user, folderIds, fileId, minLevel)) return true;
+    // Internal links confer `viewer` only, and are enforced live so revoking or
+    // expiring the link cuts access (task 1.4). A grant on any ancestor inherits.
+    if (minLevel === 'viewer' && (await this.hasActiveLinkGrant(user.id, pathIds))) return true;
+    return false;
+  }
+
+  /** True if the user holds a still-valid internal-link grant on the node or any
+   *  of its ancestors (`pathIds` = the node id plus every ancestor id). */
+  private async hasActiveLinkGrant(userId: string, pathIds: string[]): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: fileLinkGrants.id })
+      .from(fileLinkGrants)
+      .innerJoin(fileLinks, eq(fileLinks.id, fileLinkGrants.linkId))
+      .where(
+        and(
+          eq(fileLinkGrants.userId, userId),
+          inArray(fileLinkGrants.nodeId, pathIds),
+          or(isNull(fileLinks.expiresAt), gt(fileLinks.expiresAt, new Date())),
+        ),
+      )
+      .limit(1);
+    return !!row;
   }
 
   /** Resolves a create/upload target from `(space, parentId?, orgUnitId?)`: the
