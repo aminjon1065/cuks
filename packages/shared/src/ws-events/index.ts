@@ -8,7 +8,8 @@ export const WS_NAMESPACE = '/ws';
 export interface WsEventPayloads {
   /** Emitted right after a socket authorizes and joins its user room. */
   'connection.ready': { userId: string };
-  'notify.new': { id: string; kind: string; createdAt: string };
+  /** A new in-app notification arrived; the client refetches the feed/count. */
+  'notify.new': { id: string; type: string; createdAt: string };
   'presence.changed': { userId: string; online: boolean };
 }
 
