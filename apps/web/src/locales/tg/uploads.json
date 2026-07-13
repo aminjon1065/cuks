@@ -1,0 +1,20 @@
+{
+  "countActive": "Загрузка {{done}} из {{total}}",
+  "allDone": "Загружено {{total}}",
+  "clear": "Очистить",
+  "done": "Готово",
+  "failed": "Ошибка",
+  "uploading": "Загрузка",
+  "dropzone": {
+    "label": "Перетащите файлы сюда",
+    "hint": "или нажмите, чтобы выбрать"
+  },
+  "actions": {
+    "download": "Скачать",
+    "remove": "Убрать"
+  },
+  "av": {
+    "pending": "Проверка…",
+    "infected": "Заблокировано"
+  }
+}

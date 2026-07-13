@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
   EmptyState,
+  FileDropzone,
   Input,
   Label,
   PageHeader,
@@ -43,14 +44,13 @@ import {
   useTree,
   type FsSpaceParam,
 } from '../api/queries';
-import { useUploadStore } from '../api/uploads';
+import { useUploadStore, UploadDock } from '@/features/uploads';
 import { formatBytes } from '../lib';
 import { FileList } from '../components/FileList';
 import { FileInspector } from '../components/FileInspector';
 import { NewFolderDialog } from '../components/NewFolderDialog';
 import { MoveDialog } from '../components/MoveDialog';
 import { ShareDialog } from '../components/ShareDialog';
-import { UploadDock } from '../components/UploadDock';
 import { FileViewerOverlay } from '../components/viewer/FileViewerOverlay';
 
 type Section = 'personal' | 'org' | 'shared' | 'trash';
@@ -261,6 +261,7 @@ export function FilesPage(): React.JSX.Element {
                   type="file"
                   multiple
                   hidden
+                  data-testid="files-file-input"
                   onChange={(e) => {
                     startUpload([...(e.target.files ?? [])]);
                     e.target.value = '';
@@ -335,7 +336,17 @@ export function FilesPage(): React.JSX.Element {
             onRetry={() => void activeQuery.refetch()}
           />
         ) : nodes.length === 0 ? (
-          <FilesEmpty section={section} />
+          isBrowse ? (
+            <FileDropzone
+              onFiles={startUpload}
+              label={t('dropzone.label')}
+              hint={t('dropzone.hint')}
+              className="py-16"
+              data-testid="files-empty-dropzone"
+            />
+          ) : (
+            <FilesEmpty section={section} />
+          )
         ) : section === 'trash' ? (
           <TrashList
             nodes={nodes}

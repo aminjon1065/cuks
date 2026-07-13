@@ -39,7 +39,9 @@ test('files screen: uploading a text file and opening it in the viewer overlay',
   // real presigned-multipart flow: initiate → XHR PUT to MinIO → complete).
   const name = `viewer-smoke-${Date.now()}.txt`;
   const content = `CUKS viewer smoke ${Date.now()}`;
-  await page.locator('input[type=file]').setInputFiles({
+  // Target the toolbar input by testid: an empty folder also renders the
+  // FileDropzone (which has its own file input), so `input[type=file]` is ambiguous.
+  await page.getByTestId('files-file-input').setInputFiles({
     name,
     mimeType: 'text/plain',
     buffer: Buffer.from(content),
