@@ -1,6 +1,17 @@
 import { z } from 'zod';
 
 /**
+ * `FOO=` in `.env` (present, blank) must mean "unset" for an optional field —
+ * otherwise `foo ?? fallback` never falls back, since `??` only triggers on
+ * `null`/`undefined`, not `''`. `.env.example` ships several vars this way.
+ */
+const optionalString = () =>
+  z
+    .string()
+    .optional()
+    .transform((v) => (v === '' ? undefined : v));
+
+/**
  * Environment schema, validated at boot (fail-fast — docs/01 §Configuration).
  * The exhaustive variable list lives in `.env.example`. Variables for later
  * phases (LiveKit, SMTP, GeoServer, Martin, CA) are optional so the platform
@@ -16,7 +27,7 @@ export const envSchema = z
     // Fastify trustProxy: number of proxy hops to trust (e.g. "1" behind Caddy) or
     // a comma-separated IP/subnet list. Unset = trust none (request.ip = socket IP).
     // Trusting all proxies would let clients spoof X-Forwarded-For (docs/09 §1).
-    TRUST_PROXY: z.string().optional(),
+    TRUST_PROXY: optionalString(),
 
     // Core infrastructure (required — validated presence at boot).
     DATABASE_URL: z.string().url(),
@@ -24,7 +35,7 @@ export const envSchema = z
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
     // AES-256-GCM key for field encryption (TOTP secrets). Derived from
     // SESSION_SECRET when absent; set a dedicated value in production.
-    ENCRYPTION_KEY: z.string().optional(),
+    ENCRYPTION_KEY: optionalString(),
 
     // Object storage (MinIO / S3).
     S3_ENDPOINT: z.string().url(),
@@ -34,14 +45,14 @@ export const envSchema = z
     S3_BUCKET: z.string().default('cuks'),
 
     // Later phases — optional for now.
-    SMTP_URL: z.string().optional(),
-    LIVEKIT_URL: z.string().optional(),
-    LIVEKIT_API_KEY: z.string().optional(),
-    LIVEKIT_API_SECRET: z.string().optional(),
-    GEOSERVER_URL: z.string().optional(),
-    GEOSERVER_ADMIN_PASSWORD: z.string().optional(),
-    MARTIN_URL: z.string().optional(),
-    CA_KEY_PATH: z.string().optional(),
+    SMTP_URL: optionalString(),
+    LIVEKIT_URL: optionalString(),
+    LIVEKIT_API_KEY: optionalString(),
+    LIVEKIT_API_SECRET: optionalString(),
+    GEOSERVER_URL: optionalString(),
+    GEOSERVER_ADMIN_PASSWORD: optionalString(),
+    MARTIN_URL: optionalString(),
+    CA_KEY_PATH: optionalString(),
   })
   .superRefine((env, ctx) => {
     // In production require a dedicated field-encryption key, decoupled from
