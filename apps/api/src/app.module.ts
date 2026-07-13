@@ -11,6 +11,7 @@ import { PermissionGuard } from './common/guards/permission.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { ThrottleGuard } from './common/guards/throttle.guard';
 import { TotpEnrollmentGuard } from './common/guards/totp-enrollment.guard';
+import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
 import { SlidingSessionInterceptor } from './common/interceptors/sliding-session.interceptor';
 import { RedisModule } from './common/redis/redis.module';
 import { ConfigModule } from './config/config.module';
@@ -71,6 +72,8 @@ import { UsersModule } from './modules/users/users.module';
     { provide: APP_GUARD, useClass: TotpEnrollmentGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
+    // Seed the request-context ALS before the handler runs (after guards set authUser).
+    { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: SlidingSessionInterceptor },
   ],
 })
