@@ -18,6 +18,8 @@ export * from './components/tooltip';
 export * from './components/table';
 export * from './components/dropdown-menu';
 export * from './components/command';
+export * from './components/toast';
+export * from './components/switch';
 
 // Composite components
 export * from './components/status-badge';
