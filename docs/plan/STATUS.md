@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 1 (Файлы) — задачи 1.1–1.6 готовы
-- **Последняя сессия**: 2026-07-13 — задача 1.6 (просмотрщики: изображения/pdf.js/видео/аудио/текст)
+- **Фаза**: 1 (Файлы) — задачи 1.1–1.7 готовы
+- **Последняя сессия**: 2026-07-13 — задача 1.7 (переиспользуемые FileDropzone/AttachmentList)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -15,7 +15,7 @@
 | Фаза              | Статус                       | Принята заказчиком |
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
-| 1 Файлы           | 🟡 задачи 1.1–1.6 готовы      | —                  |
+| 1 Файлы           | 🟡 задачи 1.1–1.7 готовы      | —                  |
 | 2 ГИС/аналитика   | ⬜                           | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
@@ -26,6 +26,81 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-13 — Фаза 1: задача 1.7 (переиспользуемые FileDropzone/AttachmentList)
+
+**Сделано** (по `ROADMAP.md` 1.7, `docs/modules/12` §3–4, `docs/06`; frontend-only, без изменений
+API/миграций — обобщение уже проверенной логики загрузки, «не переписывая»):
+
+- **`packages/ui` — презентационные примитивы** (locale-free, без api/`@cuks/shared` — чистота
+  проверена grep'ом): `FileDropzone` (drag-drop + browse, клавиатурно-доступная кнопка, лейблы от
+  потребителя), `AttachmentList`/`AttachmentRow` (список позиций с прогрессом/статусом/действиями,
+  слоты `meta`/`subLabel`), `fileIcon(mime)` (единый mime→иконка — `files/lib.nodeIcon` теперь
+  делегирует ему).
+- **`apps/web/src/features/uploads` — общий feature-слой** (то, что зависит от api-client/react-
+  query/i18n и не может жить в дизайн-системе): `uploadFile()` — единственный источник правды
+  multipart-потока (sha256, XHR-части с прогрессом, ETag, complete→возвращает node DTO, abort при
+  ошибке, опциональный `AbortSignal` для отмены); `useUploadStore` (глобальный док); `useUploadManager`
+  (локальный менеджер поля — отдаёт готовые `FsNodeDto` вызывающему и отменяет незавершённую загрузку
+  при удалении строки); `UploadDock` (переехал, рендерится через `AttachmentList`); `AttachmentField`
+  (готовая композиция FileDropzone + менеджер + AttachmentList — drop-in для форм будущих модулей).
+- **Общий `@/lib/format`** (`formatBytes`/`formatDateTime` вынесены сюда; `files/lib` ре-экспортит для
+  обратной совместимости) — дизайн-система остаётся без локале-зависимых строк.
+- **Рефактор `features/files`**: пустое состояние browsable-раздела теперь `FileDropzone` (действие
+  вместо пассивного `EmptyState` — `docs/06` §UX); `FilesPage` тянет `UploadDock`/`useUploadStore` из
+  `@/features/uploads`; удалены старые `features/files/api/uploads.ts` и `components/UploadDock.tsx`.
+- **i18n**: новый namespace `uploads` (`locales/{ru,tg}/uploads.json`, tg — ru-заглушка, паритет
+  ключей 11/11); строки дока переехали из `files.json`; добавлены `files:dropzone.*`.
+- **Новых зависимостей нет.**
+
+**Тесты/проверка**: `typecheck/lint/test/build` — зелёные. **Компонентные тесты** `@cuks/ui` +10
+(FileDropzone: drop/browse/multiple/disabled/**stopPropagation**; AttachmentList: рендер/действия/
+**progressbar-a11y**). **Юнит** `@cuks/web` +3 (`useUploadManager`: захват узла, ошибка, отмена по
+remove с abort сигнала). **Playwright** `files.spec.ts` 3/3 (селектор загрузки → `getByTestId(
+files-file-input)`, т.к. в пустой папке теперь два `input[type=file]`). **Live против реального стека**
+(nazarova.n): полный presigned-multipart через приложение — initiate `201` → PUT в MinIO `200`
+(кросс-ориджин) → complete `201`; файл в списке, квота инвалидировалась, док прогресса рендерится через
+`AttachmentList` в тёмной теме, просмотрщик открывается; **регресс двойной загрузки проверен** (один
+drop на dropzone → ровно один initiate/complete/узел). Тест-данные подчищены.
+
+**Adversarial-review** (воркфлоу: 4 независимых измерения — upload-flow-correctness, react-hooks-and-
+state, reusable-component-api-and-a11y, integration-regression; каждая находка адверсариально
+рефутирована): **7 находок → 2 подтверждено** (1 medium, 1 low), исправлены:
+
+- **[medium, регресс]** Drag-drop на dropzone пустой папки грузил файл **дважды**: `FileDropzone.onDrop`
+  делал `preventDefault`, но не `stopPropagation`, и drop всплывал до родительского `div onDrop` в
+  `FilesPage` → `startUpload` срабатывал дважды (2 узла, 2× квота). Регресс введён заменой пассивного
+  `EmptyState` на dropzone внутри drop-области. Исправлено: `FileDropzone.onDrop` останавливает
+  всплытие (dropzone, обработавший drop, не должен повторно триггерить окружающую область);
+  регресс-тест + live (один drop → один узел).
+- **[low, a11y]** Строка `AttachmentList` в статусе загрузки передавала состояние только визуально
+  (спиннер + `div` ширины) — без `role="progressbar"`/`aria-valuenow`, а `AttachmentField` ставил
+  `meta`(процент) только после завершения → скринридер во время загрузки озвучивал лишь имя файла.
+  Исправлено: полоса прогресса — `role="progressbar"` c `aria-valuenow/min/max` + опциональный
+  `aria-label` (`labels.uploading`), декоративные иконки статуса `aria-hidden`; потребители передают
+  лейбл.
+
+**Рефутировано ревью (корректно)**: `useUploadManager` не отменяет загрузки при размонтировании — нет
+потребителя (только barrel/тест), не регресс (старый док по спеке §4 переживает навигацию), спека не
+требует abort-on-unmount; недоступные имена icon-кнопок (лейблы передаются потребителями); `FileDropzone`
+без label+hint без имени (потребители всегда передают label); a11y-baseline дока; `AttachmentField`
+`onChange([])` один раз на маунте (безвредно).
+
+**Решения**:
+- **Граница ui↔web**: презентационные примитивы (FileDropzone/AttachmentList/fileIcon) — в `packages/ui`
+  (locale-free, лейблы/иконки от потребителя, как `UserPicker`); обвязка (uploadFile/стор/менеджер/док/
+  поле) — в новом общем `apps/web/features/uploads`, т.к. зависит от api-client/react-query/i18n.
+  Будущие модули (документы/чат/задачи/ЧС) — тоже web-фичи, поэтому переиспользование на уровне web, не
+  дизайн-системы.
+- **`space=system` вложения отложены**: API **отклоняет** прямую загрузку в system-пространство
+  (`fs-nodes.service` `system_space_unsupported`) — узлы-вложения создаёт сам модуль своей машинерией.
+  `UploadTarget` намеренно `personal|org`; первый модуль-потребитель (фаза 2+) добавит свой
+  attachment-эндпоинт и передаст цель в тот же `AttachmentField`. Пока `AttachmentField` покрыт
+  компонентными тестами, живая привязка — с первым потребителем.
+- **«Не переписывая»**: проверенный multipart-поток перенесён дословно в одну `uploadFile()`; и
+  глобальный док-стор, и локальный `useUploadManager` делят её.
+- **`formatBytes`/`formatDateTime` → `@/lib/format`** (дизайн-система не держит ru-RU-строки);
+  `files/lib` ре-экспортит — существующие импорты не тронуты.
 
 ### 2026-07-13 — Фаза 1: задача 1.6 (просмотрщики файлов)
 
