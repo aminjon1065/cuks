@@ -41,3 +41,81 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: cuks
+          POSTGRES_PASSWORD: cuks
+          POSTGRES_DB: cuks
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U cuks -d cuks"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - '6379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Non-production so session/CSRF cookies aren't Secure-only over http (dev parity).
+      NODE_ENV: test
+      DATABASE_URL: postgres://cuks:cuks@localhost:5432/cuks
+      REDIS_URL: redis://localhost:6379
+      SESSION_SECRET: ci-e2e-session-secret-at-least-32-characters
+      APP_ORIGIN: http://localhost:5173
+      # Required by env validation but unused by the auth/admin smoke flows.
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: cuks
+      S3_SECRET_KEY: cuks-dev-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Build so `nest start` / vite resolve the workspace packages (@cuks/db, @cuks/shared).
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Migrate database
+        run: pnpm db:migrate
+
+      - name: Seed database
+        run: pnpm db:seed
+
+      - name: Provision e2e admin
+        run: pnpm db:seed:e2e
+
+      - name: Install Playwright browser
+        run: pnpm --filter @cuks/web exec playwright install --with-deps chromium
+
+      # webServer in playwright.config starts the api + web dev servers.
+      - name: Run smoke tests
+        run: pnpm --filter @cuks/web e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
