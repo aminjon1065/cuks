@@ -12,6 +12,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService, type UserRow } from '../users/users.service';
 import { LockoutService } from './lockout.service';
 import { PasswordService } from './password.service';
@@ -40,6 +41,7 @@ export class AuthService {
     private readonly totp: TotpService,
     private readonly crypto: CryptoService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async login(input: LoginInput, ctx: RequestContext): Promise<LoginResult> {
@@ -155,6 +157,13 @@ export class AuthService {
     // Force re-login on other devices after a password change.
     await this.sessions.revokeAll(user.id, user.sessionId);
     this.audit.log({ action: 'auth.password.changed', actorId: user.id });
+    // Security notification; display text is localized on the client from `type`.
+    await this.notifications.notify({
+      userId: user.id,
+      type: 'system.account.password_changed',
+      title: 'Password changed',
+      body: 'Your account password was changed.',
+    });
   }
 
   async setupTotp(user: AuthUser): Promise<{ secret: string; otpauthUrl: string }> {

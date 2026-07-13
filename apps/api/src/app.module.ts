@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './common/audit/audit.module';
 import { DbModule } from './common/db/db.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { MailModule } from './common/mail/mail.module';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { PasswordChangeGuard } from './common/guards/password-change.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
@@ -18,6 +19,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
 import { HealthModule } from './modules/health/health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -50,11 +52,13 @@ import { UsersModule } from './modules/users/users.module';
     RedisModule,
     DbModule,
     AuditModule,
+    MailModule,
     UsersModule,
     AuthModule,
     AdminModule,
     OrgModule,
     EventsModule,
+    NotificationsModule,
     HealthModule,
   ],
   providers: [

@@ -31,6 +31,7 @@ function makeService() {
     encrypt: vi.fn().mockReturnValue('enc'),
   };
   const audit = { log: vi.fn() };
+  const notifications = { notify: vi.fn().mockResolvedValue(undefined) };
   const service = new AuthService(
     users as never,
     passwords as never,
@@ -39,6 +40,7 @@ function makeService() {
     totp as never,
     crypto as never,
     audit as never,
+    notifications as never,
   );
   return { service, users, passwords, sessions, lockout, totp, crypto };
 }

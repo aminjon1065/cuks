@@ -9,16 +9,20 @@ describe('RealtimeService', () => {
     const service = new RealtimeService();
     service.bind({ to } as never);
 
-    service.emitToUser('u1', 'notify.new', { id: 'n1', kind: 'test', createdAt: 'now' });
+    service.emitToUser('u1', 'notify.new', { id: 'n1', type: 'system.test', createdAt: 'now' });
 
     expect(to).toHaveBeenCalledWith(wsRooms.user('u1'));
-    expect(emit).toHaveBeenCalledWith('notify.new', { id: 'n1', kind: 'test', createdAt: 'now' });
+    expect(emit).toHaveBeenCalledWith('notify.new', {
+      id: 'n1',
+      type: 'system.test',
+      createdAt: 'now',
+    });
   });
 
   it('is a no-op before the server is bound', () => {
     const service = new RealtimeService();
     expect(() =>
-      service.emitToUser('u1', 'notify.new', { id: 'n1', kind: 'test', createdAt: 'now' }),
+      service.emitToUser('u1', 'notify.new', { id: 'n1', type: 'system.test', createdAt: 'now' }),
     ).not.toThrow();
   });
 });
