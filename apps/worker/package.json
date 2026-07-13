@@ -14,16 +14,24 @@
   "dependencies": {
     "@cuks/db": "workspace:*",
     "@cuks/shared": "workspace:*",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
+    "bullmq": "^5.80.2",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.3",
+    "nodemailer": "^9.0.3",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@cuks/config": "workspace:*",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@types/node": "^22.10.5",
+    "@types/nodemailer": "^8.0.1",
     "eslint": "^9.17.0",
     "rimraf": "^6.0.1",
     "typescript": "^5.7.3",
