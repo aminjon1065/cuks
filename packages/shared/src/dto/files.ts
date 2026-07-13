@@ -1,8 +1,14 @@
 import { z } from 'zod';
+import { PREVIEW_SIZES } from '../constants/index';
 import { FS_NODE_KINDS, FS_SPACES } from '../enums/index';
-import type { AV_STATUSES } from '../enums/index';
+import type { AvStatus } from '../enums/index';
 
 const uuid = () => z.string().uuid();
+
+export const previewQuerySchema = z.object({
+  size: z.enum(Object.keys(PREVIEW_SIZES) as [string, ...string[]]).default('medium'),
+});
+export type PreviewQuery = z.infer<typeof previewQuerySchema>;
 
 export interface FsNodeDto {
   id: string;
@@ -13,6 +19,10 @@ export interface FsNodeDto {
   ownerUserId: string | null;
   ownerOrgUnitId: string | null;
   currentVersionId: string | null;
+  /** The current version's antivirus verdict; null for folders (no version).
+   *  `pending`/`clean` both download today (docs/09 §2) — exposed so a future UI
+   *  can show a "still scanning" indicator without an extra per-file round trip. */
+  avStatus: AvStatus | null;
   sizeCached: number;
   mime: string | null;
   tags: string[];
@@ -123,7 +133,7 @@ export interface FileVersionDto {
   mime: string;
   checksumSha256: string;
   uploadedBy: string;
-  avStatus: (typeof AV_STATUSES)[number];
+  avStatus: AvStatus;
   createdAt: string;
 }
 

@@ -7,6 +7,10 @@ export const QUEUE = {
   email: 'email',
   deadlines: 'deadlines',
   auditMaintenance: 'audit-maintenance',
+  avScan: 'av-scan',
+  preview: 'preview',
+  textExtract: 'text-extract',
+  retention: 'retention',
 } as const;
 
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
@@ -17,6 +21,15 @@ export interface EmailJobData {
   subject: string;
   text: string;
   html?: string;
+}
+
+/** Shared by `av-scan`/`preview`/`text-extract` (docs/modules/12 §8) — identifies
+ *  the file_version to process; the worker fetches its own copy of the bytes. */
+export interface FileVersionJobData {
+  nodeId: string;
+  versionId: string;
+  storageKey: string;
+  mime: string;
 }
 
 /**

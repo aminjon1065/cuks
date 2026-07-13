@@ -63,3 +63,53 @@ export const DEFAULT_PERSONAL_QUOTA_BYTES = 10 * 1024 ** 3; // 10 GiB
 
 /** Abandoned multipart-upload staging rows (docs/modules/12 §8: "temp-uploads 24 ч"). */
 export const UPLOAD_STAGING_TTL_HOURS = 24;
+
+/** Trash retention before permanent purge (docs/modules/12 §8: "корзина 30 дн"). */
+export const TRASH_RETENTION_DAYS = 30;
+
+/**
+ * Preview sizes (docs/modules/12 §5: "sharp-превью 3 размеров") — longest-edge px,
+ * re-encoded to webp regardless of source format (docs/09 §2: EXIF-очистка via
+ * re-encode; sharp strips metadata by default when not asked to keep it).
+ */
+export const PREVIEW_SIZES = { small: 256, medium: 720, large: 1600 } as const;
+export type PreviewSize = keyof typeof PREVIEW_SIZES;
+
+/** Cap on `file_versions.extracted_text` (docs/modules/12 §5) — FTS doesn't need
+ *  megabytes of text, and an unbounded column would bloat storage/index size. */
+export const MAX_EXTRACTED_TEXT_LENGTH = 100_000;
+
+/**
+ * Binary types that are never legitimate uploads regardless of declared MIME
+ * (docs/09 §2: "опасные типы... помечаются"). Detected from real file bytes
+ * (`file-type`), not the client-supplied Content-Type. Text-based dangerous
+ * content (SVG with embedded script, shell scripts) has no binary magic-byte
+ * signature `file-type` can key off — those get their own real-bytes checks in
+ * apps/worker/src/queues/av-scan/content-sniff.ts instead of living in this list.
+ */
+export const DANGEROUS_MIME_TYPES = [
+  'application/x-msdownload', // .exe
+  'application/x-executable',
+  'application/x-elf',
+  'application/x-mach-binary',
+  'application/vnd.microsoft.portable-executable',
+  'application/x-msi',
+] as const;
+
+/** MIME types the `text-extract` job knows how to handle (docs/modules/12 §5/§8). */
+export const PDF_MIME_TYPE = 'application/pdf';
+export const DOCX_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** A `file_versions` row stuck at `avStatus='pending'` this long (enqueue
+ *  failure, exhausted BullMQ retries, an unreachable ClamAV) gets picked up by
+ *  the retention sweep and re-enqueued — see retention.processor.ts. Well above
+ *  normal scan latency (seconds) so an in-flight/queued scan is never re-queued
+ *  as a duplicate. */
+export const STALE_PENDING_SCAN_HOURS = 1;
+
+/** Bound on how long the `preview`/`text-extract` jobs let a single sharp/
+ *  pdf-parse/mammoth call run before giving up — mirrors the explicit ClamAV
+ *  socket timeout (clamd-client.ts) so a pathological/crafted file can't hang a
+ *  worker slot indefinitely relying only on BullMQ's stalled-job defaults. */
+export const JOB_PARSE_TIMEOUT_MS = 60_000;
