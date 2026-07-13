@@ -84,5 +84,8 @@ export const api = {
     apiFetch<T>(path, body === undefined ? { method: 'POST' } : { method: 'POST', body }),
   patch: <T>(path: string, body?: unknown): Promise<T> =>
     apiFetch<T>(path, body === undefined ? { method: 'PATCH' } : { method: 'PATCH', body }),
-  delete: <T>(path: string): Promise<T> => apiFetch<T>(path, { method: 'DELETE' }),
+  put: <T>(path: string, body?: unknown): Promise<T> =>
+    apiFetch<T>(path, body === undefined ? { method: 'PUT' } : { method: 'PUT', body }),
+  delete: <T>(path: string, body?: unknown): Promise<T> =>
+    apiFetch<T>(path, body === undefined ? { method: 'DELETE' } : { method: 'DELETE', body }),
 };
