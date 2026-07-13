@@ -56,3 +56,10 @@ export const UPLOAD_PART_SIZE_BYTES = 16 * 1024 ** 2; // 16 MiB chunks, uploaded
 // Generous — a slow link on a large multipart upload can take a while between parts.
 export const UPLOAD_PART_URL_EXPIRY_SECONDS = 60 * 60;
 export const DOWNLOAD_URL_EXPIRY_SECONDS = 5 * 60;
+
+/** Storage quotas (docs/modules/12 §4). Org quota has no stated default — unlimited
+ *  until an admin sets one; only the personal default is spec'd. */
+export const DEFAULT_PERSONAL_QUOTA_BYTES = 10 * 1024 ** 3; // 10 GiB
+
+/** Abandoned multipart-upload staging rows (docs/modules/12 §8: "temp-uploads 24 ч"). */
+export const UPLOAD_STAGING_TTL_HOURS = 24;
