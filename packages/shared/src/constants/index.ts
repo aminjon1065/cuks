@@ -49,3 +49,10 @@ export const AUTH_LOGIN_RATE_PER_MINUTE = 10;
 
 /** TOTP one-time backup codes (docs/05 §1). */
 export const TOTP_BACKUP_CODES_COUNT = 10;
+
+/** File uploads (docs/09 §2, docs/modules/12 §4). */
+export const MAX_FILE_SIZE_BYTES = 2 * 1024 ** 3; // 2 GiB
+export const UPLOAD_PART_SIZE_BYTES = 16 * 1024 ** 2; // 16 MiB chunks, uploaded in parallel
+// Generous — a slow link on a large multipart upload can take a while between parts.
+export const UPLOAD_PART_URL_EXPIRY_SECONDS = 60 * 60;
+export const DOWNLOAD_URL_EXPIRY_SECONDS = 5 * 60;

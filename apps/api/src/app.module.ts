@@ -16,6 +16,7 @@ import { TotpEnrollmentGuard } from './common/guards/totp-enrollment.guard';
 import { RequestContextInterceptor } from './common/interceptors/request-context.interceptor';
 import { SlidingSessionInterceptor } from './common/interceptors/sliding-session.interceptor';
 import { RedisModule } from './common/redis/redis.module';
+import { StorageModule } from './common/storage/storage.module';
 import { ConfigModule } from './config/config.module';
 import { ConfigService } from './config/config.service';
 import { AdminModule } from './modules/admin/admin.module';
@@ -65,6 +66,7 @@ import { UsersModule } from './modules/users/users.module';
     }),
     RedisModule,
     DbModule,
+    StorageModule,
     AuditModule,
     MailModule,
     UsersModule,
