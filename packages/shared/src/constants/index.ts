@@ -67,6 +67,15 @@ export const UPLOAD_STAGING_TTL_HOURS = 24;
 /** Trash retention before permanent purge (docs/modules/12 §8: "корзина 30 дн"). */
 export const TRASH_RETENTION_DAYS = 30;
 
+/** Internal share-link token entropy (docs/modules/12 §3) — 32 random bytes,
+ *  base64url-encoded, generated with node:crypto (docs/09 — no custom crypto). */
+export const FILE_LINK_TOKEN_BYTES = 32;
+
+/** SPA route a copied internal link points at; the client resolves `:token`
+ *  against `POST /files/links/:token/accept`. Kept here so api (builds it) and
+ *  web (routes it) can't drift. */
+export const FILE_LINK_URL_PREFIX = '/app/files/link';
+
 /**
  * Preview sizes (docs/modules/12 §5: "sharp-превью 3 размеров") — longest-edge px,
  * re-encoded to webp regardless of source format (docs/09 §2: EXIF-очистка via

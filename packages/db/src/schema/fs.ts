@@ -128,3 +128,64 @@ export const fileUploads = appSchema.table(
   },
   (t) => [check('file_uploads_space_chk', sql`${t.space} in ('personal', 'org', 'system')`)],
 );
+
+/**
+ * file_links — internal share links (docs/modules/12 §3): "для всех
+ * аутентифицированных, у кого есть ссылка" (no anonymous/external links in v1 —
+ * closed network). Holding a valid, unexpired token lets an authenticated user
+ * claim `viewer` access to the node. `onDelete: cascade` so a purged node's
+ * links go with it (retention deletes fs_nodes directly — a restrict FK would
+ * wedge the sweep, the class of bug found in 1.3's review).
+ */
+export const fileLinks = appSchema.table(
+  'file_links',
+  {
+    id: primaryId(),
+    nodeId: uuid('node_id')
+      .notNull()
+      .references(() => fsNodes.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    // null = never expires.
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('file_links_token_uq').on(t.token),
+    index('file_links_node_idx').on(t.nodeId),
+  ],
+);
+
+/**
+ * file_link_grants — records that a user accepted a specific internal link
+ * (docs/modules/12 §3, task 1.4). Access from a link is enforced LIVE against
+ * this table joined to `file_links` (not materialized as a permanent
+ * resource_acl grant) so that revoking the link (cascade) or its expiry
+ * immediately cuts the access it conferred. `viewer` level is implicit — links
+ * only ever grant view/download. Both FKs cascade: deleting the link OR purging
+ * the node removes the grant with no sweep needed.
+ */
+export const fileLinkGrants = appSchema.table(
+  'file_link_grants',
+  {
+    id: primaryId(),
+    linkId: uuid('link_id')
+      .notNull()
+      .references(() => fileLinks.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Denormalized from the link's node for a fast enforcement lookup (node +
+    // ancestors) without a second join back to file_links.
+    nodeId: uuid('node_id')
+      .notNull()
+      .references(() => fsNodes.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('file_link_grants_link_user_uq').on(t.linkId, t.userId),
+    index('file_link_grants_user_node_idx').on(t.userId, t.nodeId),
+  ],
+);

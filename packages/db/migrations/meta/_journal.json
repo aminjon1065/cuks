@@ -50,6 +50,20 @@
       "when": 1783931361898,
       "tag": "0006_gray_cable",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783943416160,
+      "tag": "0007_fearless_lord_hawal",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783945591095,
+      "tag": "0008_opposite_dragon_lord",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PREVIEW_SIZES } from '../constants/index';
-import { FS_NODE_KINDS, FS_SPACES } from '../enums/index';
-import type { AvStatus } from '../enums/index';
+import { ACL_LEVELS, ACL_SUBJECT_TYPES, FS_NODE_KINDS, FS_SPACES } from '../enums/index';
+import type { AclLevel, AclSubjectType, AvStatus } from '../enums/index';
 
 const uuid = () => z.string().uuid();
 
@@ -138,3 +138,57 @@ export interface FileVersionDto {
 }
 
 export const nodeKindSchema = z.enum(FS_NODE_KINDS);
+
+// --- Sharing: ACL on a node + internal links (docs/modules/12 §1, §3, task 1.4) ---
+
+/** Grant/upsert one subject's access level on a node (PUT /files/:id/acl). */
+export const grantNodeAclSchema = z.object({
+  subjectType: z.enum(ACL_SUBJECT_TYPES),
+  subjectId: uuid(),
+  level: z.enum(ACL_LEVELS),
+});
+export type GrantNodeAclInput = z.infer<typeof grantNodeAclSchema>;
+
+/** Revoke one subject's grant (DELETE /files/:id/acl). */
+export const revokeNodeAclSchema = z.object({
+  subjectType: z.enum(ACL_SUBJECT_TYPES),
+  subjectId: uuid(),
+});
+export type RevokeNodeAclInput = z.infer<typeof revokeNodeAclSchema>;
+
+export interface NodeAclEntryDto {
+  id: string;
+  subjectType: AclSubjectType;
+  subjectId: string;
+  /** Resolved display name of the subject (user full name / org unit / role). */
+  subjectName: string;
+  level: AclLevel;
+  /** When true, this grant comes from an ancestor folder, not the node itself. */
+  inherited: boolean;
+  /** The ancestor node id the grant is inherited from (null for a direct grant). */
+  inheritedFrom: string | null;
+}
+
+export interface NodeAclResponse {
+  /** Direct grants on this node (editable). */
+  entries: NodeAclEntryDto[];
+  /** Grants inherited from ancestor folders (read-only, shown with a badge). */
+  inherited: NodeAclEntryDto[];
+}
+
+/** Create an internal link. `expiresInDays` null/omitted = never expires. */
+export const createFileLinkSchema = z.object({
+  expiresInDays: z.number().int().positive().max(3650).nullish(),
+});
+export type CreateFileLinkInput = z.infer<typeof createFileLinkSchema>;
+
+export interface FileLinkDto {
+  id: string;
+  nodeId: string;
+  token: string;
+  /** Relative app path a client can copy — the SPA route that resolves the token. */
+  url: string;
+  expiresAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
