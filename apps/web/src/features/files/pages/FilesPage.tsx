@@ -51,6 +51,7 @@ import { NewFolderDialog } from '../components/NewFolderDialog';
 import { MoveDialog } from '../components/MoveDialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { UploadDock } from '../components/UploadDock';
+import { FileViewerOverlay } from '../components/viewer/FileViewerOverlay';
 
 type Section = 'personal' | 'org' | 'shared' | 'trash';
 const SECTIONS: { key: Section; icon: typeof FolderClosed }[] = [
@@ -80,6 +81,7 @@ export function FilesPage(): React.JSX.Element {
   const [shareNode, setShareNode] = useState<FsNodeDto | null>(null);
   const [renameNode, setRenameNode] = useState<FsNodeDto | null>(null);
   const [trashTarget, setTrashTarget] = useState<FsNodeDto | null>(null);
+  const [viewerNode, setViewerNode] = useState<FsNodeDto | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isBrowse = section === 'personal' || section === 'org';
@@ -126,9 +128,16 @@ export function FilesPage(): React.JSX.Element {
   const download = (node: FsNodeDto): void => {
     window.open(`/api/v1/files/${node.id}/download`, '_blank', 'noopener');
   };
+  // Double-click / Enter: folders navigate in, files open the quick-view overlay
+  // (docs/modules/12 §5). Explicit download stays available in the row menu/inspector.
   const open = (node: FsNodeDto): void => {
     if (node.kind === 'folder') go({ folder: node.id });
-    else download(node);
+    else {
+      // Close the peek inspector the first click opened, so a single Esc closes
+      // just the viewer (not both layers).
+      setSelected(null);
+      setViewerNode(node);
+    }
   };
 
   const startUpload = (files: File[]): void => {
@@ -418,6 +427,14 @@ export function FilesPage(): React.JSX.Element {
         }}
       />
       <UploadDock />
+      {viewerNode ? (
+        <FileViewerOverlay
+          nodes={nodes}
+          node={viewerNode}
+          onNavigate={setViewerNode}
+          onClose={() => setViewerNode(null)}
+        />
+      ) : null}
     </div>
   );
 }

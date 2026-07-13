@@ -51,6 +51,7 @@ export function FileInspector({
     <SidePanel
       open={!!node}
       onOpenChange={(o) => !o && onClose()}
+      modal={false}
       title={
         node ? (
           <span className="flex items-center gap-2">

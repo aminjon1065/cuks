@@ -56,3 +56,10 @@ export function nodeIcon(node: Pick<FsNodeDto, 'kind' | 'mime'>): LucideIcon {
 export function isImage(node: Pick<FsNodeDto, 'kind' | 'mime'>): boolean {
   return node.kind === 'file' && (node.mime ?? '').startsWith('image/');
 }
+
+/** Same-origin download URL — the API 302s to a presigned MinIO URL. Media
+ *  elements and fetch both follow the redirect; MinIO serves cross-origin reads
+ *  with range support, so viewers need no proxy. */
+export function downloadUrl(id: string): string {
+  return `/api/v1/files/${id}/download`;
+}

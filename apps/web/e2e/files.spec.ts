@@ -29,3 +29,32 @@ test('files screen: shared and trash sections open with their empty states', asy
   await page.getByRole('button', { name: 'Корзина' }).click();
   await expect(page).toHaveURL(/section=trash/);
 });
+
+test('files screen: uploading a text file and opening it in the viewer overlay', async ({
+  page,
+}) => {
+  await page.goto('/app/files');
+
+  // Upload a small text file straight through the hidden input (exercises the
+  // real presigned-multipart flow: initiate → XHR PUT to MinIO → complete).
+  const name = `viewer-smoke-${Date.now()}.txt`;
+  const content = `CUKS viewer smoke ${Date.now()}`;
+  await page.locator('input[type=file]').setInputFiles({
+    name,
+    mimeType: 'text/plain',
+    buffer: Buffer.from(content),
+  });
+
+  const cell = page.locator('table').getByText(name);
+  await expect(cell).toBeVisible({ timeout: 20_000 });
+
+  // Double-click opens the full-screen quick-view overlay with the text content.
+  await cell.dblclick();
+  const overlay = page.locator('[role="dialog"][aria-modal="true"]');
+  await expect(overlay).toBeVisible();
+  await expect(overlay.getByText(content)).toBeVisible({ timeout: 10_000 });
+
+  // Esc closes it.
+  await page.keyboard.press('Escape');
+  await expect(overlay).toBeHidden();
+});
