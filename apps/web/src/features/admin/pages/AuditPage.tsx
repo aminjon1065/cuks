@@ -47,13 +47,23 @@ export function AuditPage(): React.JSX.Element {
   const onExport = async (): Promise<void> => {
     setExporting(true);
     try {
-      const params = new URLSearchParams({ page: '1', limit: '100' });
-      if (action) params.set('action', action);
-      if (query.from) params.set('from', query.from);
-      if (query.to) params.set('to', query.to);
-      const data = await api.get<{ items: AuditLogDto[] }>(`/v1/admin/audit?${params}`);
+      // Page through the whole filtered set (backend caps limit at 100) so the CSV
+      // is never silently truncated. Bounded to keep a runaway export in check.
+      const EXPORT_CAP = 10_000;
+      const rows: AuditLogDto[] = [];
+      for (let p = 1; rows.length < EXPORT_CAP; p++) {
+        const params = new URLSearchParams({ page: String(p), limit: '100' });
+        if (action) params.set('action', action);
+        if (query.from) params.set('from', query.from);
+        if (query.to) params.set('to', query.to);
+        const batch = await api.get<{ items: AuditLogDto[]; total: number }>(
+          `/v1/admin/audit?${params}`,
+        );
+        rows.push(...batch.items);
+        if (batch.items.length < 100 || rows.length >= batch.total) break;
+      }
       const csv = toCsv(
-        data.items.map((r) => ({
+        rows.map((r) => ({
           time: formatDateTime(r.createdAt),
           actor: r.actorId ?? t('audit.system'),
           action: r.action,

@@ -88,6 +88,7 @@ export function UsersPage(): React.JSX.Element {
             setStatus(e.target.value as UserStatus | '');
             setPage(1);
           }}
+          aria-label={t('users.card.statusFilter')}
           className="h-8 rounded-md border border-border bg-surface px-2 text-[13px] text-text"
         >
           <option value="">—</option>

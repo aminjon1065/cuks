@@ -14,9 +14,12 @@ export interface OrgTreeNode {
 export interface OrgUnitPickerProps {
   tree: OrgTreeNode[];
   value?: string | null;
-  onChange: (id: string) => void;
+  onChange: (id: string | null) => void;
   placeholder?: React.ReactNode;
   disabled?: boolean;
+  /** Show a row that clears the selection to `null` (move to root / global scope). */
+  clearable?: boolean;
+  clearLabel?: React.ReactNode;
 }
 
 function findName(nodes: OrgTreeNode[], id: string): string | undefined {
@@ -108,6 +111,8 @@ export function OrgUnitPicker({
   onChange,
   placeholder = '—',
   disabled = false,
+  clearable = false,
+  clearLabel = '—',
 }: OrgUnitPickerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const selectedName = value ? findName(tree, value) : undefined;
@@ -128,6 +133,20 @@ export function OrgUnitPicker({
       </PopoverTrigger>
       <PopoverContent className="max-h-72 w-[var(--radix-popover-trigger-width)] overflow-y-auto">
         <ul>
+          {clearable ? (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[13px] text-text-muted hover:bg-surface-2"
+              >
+                {clearLabel}
+              </button>
+            </li>
+          ) : null}
           <TreeRows
             nodes={tree}
             depth={0}

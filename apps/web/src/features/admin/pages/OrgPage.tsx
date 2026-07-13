@@ -188,6 +188,7 @@ function UnitPanel({
                 move.mutate({ id: node.id, input: { parentId } }, { onSuccess: ok, onError: fail })
               }
               placeholder="—"
+              clearable
             />
           </div>
           <Button size="sm" onClick={save} disabled={update.isPending}>
@@ -208,7 +209,9 @@ function UnitPanel({
               {positions.data?.map((p) => (
                 <li key={p.id} className="flex items-center gap-2 text-[13px]">
                   <span className="text-text">{p.name}</span>
-                  {p.isHead ? <StatusBadge tone="primary" label="рук." /> : null}
+                  {p.isHead ? (
+                    <StatusBadge tone="primary" label={t('org.position.headShort')} />
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => deletePos.mutate(p.id, { onError: fail })}

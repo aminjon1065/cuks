@@ -123,7 +123,7 @@ export function UserDetailPanel({
               />
               <StatusBadge
                 tone={user.data.totpEnabled ? 'success' : 'neutral'}
-                label={`2ФА: ${user.data.totpEnabled ? t('users.twofa.on') : t('users.twofa.off')}`}
+                label={`${t('users.card.twofaLabel')}: ${user.data.totpEnabled ? t('users.twofa.on') : t('users.twofa.off')}`}
               />
             </div>
             {user.data.email ? (
@@ -184,6 +184,7 @@ export function UserDetailPanel({
               <select
                 value={newRoleId}
                 onChange={(e) => setNewRoleId(e.target.value)}
+                aria-label={t('users.card.assignRole')}
                 className="h-9 rounded-md border border-border bg-surface px-2 text-[13px] text-text"
               >
                 <option value="">{t('users.card.assignRole')}…</option>
@@ -199,6 +200,8 @@ export function UserDetailPanel({
                   value={scopeId}
                   onChange={setScopeId}
                   placeholder={t('users.card.global')}
+                  clearable
+                  clearLabel={t('users.card.global')}
                 />
               </div>
               <Button

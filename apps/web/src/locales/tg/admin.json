@@ -63,6 +63,8 @@
       "assignPosition": "Назначить должность",
       "scope": "Область (подразделение)",
       "makePrimary": "Основная",
+      "twofaLabel": "2ФА",
+      "statusFilter": "Фильтр по статусу",
       "resetPassword": "Сбросить пароль",
       "resetTotp": "Сбросить 2ФА",
       "block": "Заблокировать",
@@ -126,6 +128,7 @@
       "titleNew": "Новая должность",
       "name": "Название",
       "isHead": "Руководитель",
+      "headShort": "рук.",
       "rank": "Ранг"
     },
     "confirm": {

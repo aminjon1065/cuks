@@ -36,6 +36,12 @@ export function CreateUserDialog({
     setPhone('');
     setResult(null);
   };
+  // Single close path so every dismissal (footer button, ✕, Esc, overlay) clears the
+  // form — otherwise reopening would still show the previous user's temp password.
+  const handleOpenChange = (o: boolean): void => {
+    onOpenChange(o);
+    if (!o) reset();
+  };
 
   const onSubmit = (e: FormEvent): void => {
     e.preventDefault();
@@ -53,13 +59,7 @@ export function CreateUserDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        onOpenChange(o);
-        if (!o) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>
@@ -71,7 +71,7 @@ export function CreateUserDialog({
           <>
             <TempPasswordView data={result} />
             <DialogFooter>
-              <Button onClick={() => onOpenChange(false)}>{t('common.close')}</Button>
+              <Button onClick={() => handleOpenChange(false)}>{t('common.close')}</Button>
             </DialogFooter>
           </>
         ) : (
@@ -105,7 +105,7 @@ export function CreateUserDialog({
             </div>
             <p className="text-xs text-text-muted">{t('users.create_form.hint')}</p>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                 {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={create.isPending || fullName.trim().length < 3}>

@@ -135,19 +135,23 @@ export function useRoleAssignments(userId: string | null): UseQueryResult<RoleAs
     enabled: !!userId,
   });
 }
+function invalidateAssignments(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['admin', 'role-assignments'] });
+  void qc.invalidateQueries({ queryKey: usersKey }); // list roles column
+}
 export function useAssignRole() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: AssignRoleInput) =>
       api.post<RoleAssignmentDto>('/v1/admin/role-assignments', input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'role-assignments'] }),
+    onSuccess: () => invalidateAssignments(qc),
   });
 }
 export function useRevokeRole() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete<{ ok: true }>(`/v1/admin/role-assignments/${id}`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'role-assignments'] }),
+    onSuccess: () => invalidateAssignments(qc),
   });
 }
 
@@ -232,18 +236,22 @@ export function useUserPositions(userId: string | null): UseQueryResult<UserPosi
     enabled: !!userId,
   });
 }
+function invalidatePositions(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['admin', 'user-positions'] });
+  void qc.invalidateQueries({ queryKey: usersKey }); // list primaryPosition column
+}
 export function useAssignPosition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: AssignPositionInput) => api.post('/v1/admin/user-positions', input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'user-positions'] }),
+    onSuccess: () => invalidatePositions(qc),
   });
 }
 export function useUnassignPosition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/v1/admin/user-positions/${id}`),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['admin', 'user-positions'] }),
+    onSuccess: () => invalidatePositions(qc),
   });
 }
 
