@@ -11,8 +11,10 @@ import {
   dictionaries,
   notifications,
   orgUnits,
+  positions,
   rolePermissions,
   roles,
+  userPositions,
   userRoles,
   users,
 } from './schema/index';
@@ -247,13 +249,323 @@ async function seedDemoNotifications(db: Database, adminId: string): Promise<voi
   ]);
 }
 
+/**
+ * Demo roster (Phase-0 acceptance: "two employees from the seeds see a different
+ * UI by permissions" — docs/plan/ROADMAP.md §Фаза 0). Fixed usernames/ids keep the
+ * seed idempotent and reproducible across environments; roles are non-superadmin
+ * templates from `@cuks/shared` spread across the org skeleton so reviewers can log
+ * in as, e.g., `nazarova.n` (employee — no admin UI) vs `yusupov.f` (platform_admin
+ * — sees "Администрирование"). `positionId` is fixed for the same reason `org.ts`
+ * uses fixed org-unit ids: re-running the seed must not create duplicate rows.
+ */
+interface DemoUserSeed {
+  positionId: string;
+  fullName: string;
+  shortName: string;
+  username: string;
+  orgUnitId: string;
+  positionName: string;
+  isHeadPosition: boolean;
+  roleCode: string;
+  /** platform_admin is IT-wide, not tied to one department — assigned globally. */
+  roleScopeGlobal?: boolean;
+}
+
+const DEMO_USERS: readonly DemoUserSeed[] = [
+  // Центральный аппарат (002)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000001',
+    fullName: 'Раҳимов Далер Саидович',
+    shortName: 'Д.С. Раҳимов',
+    username: 'rahimov.d',
+    orgUnitId: '0190a000-0000-7000-8000-000000000002',
+    positionName: 'Начальник аппарата',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000002',
+    fullName: 'Назарова Нигина Абдуллоевна',
+    shortName: 'Н.А. Назарова',
+    username: 'nazarova.n',
+    orgUnitId: '0190a000-0000-7000-8000-000000000002',
+    positionName: 'Ведущий специалист',
+    isHeadPosition: false,
+    roleCode: 'employee',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000003',
+    fullName: 'Юсупов Фарход Камолович',
+    shortName: 'Ф.К. Юсупов',
+    username: 'yusupov.f',
+    orgUnitId: '0190a000-0000-7000-8000-000000000002',
+    positionName: 'Администратор платформы',
+    isHeadPosition: false,
+    roleCode: 'platform_admin',
+    roleScopeGlobal: true,
+  },
+  // Управление защиты населения (003)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000004',
+    fullName: 'Каримов Умед Раджабович',
+    shortName: 'У.Р. Каримов',
+    username: 'karimov.u',
+    orgUnitId: '0190a000-0000-7000-8000-000000000003',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000005',
+    fullName: 'Латифи Зарина Достиевна',
+    shortName: 'З.Д. Латифи',
+    username: 'latifi.z',
+    orgUnitId: '0190a000-0000-7000-8000-000000000003',
+    positionName: 'Оперативный дежурный',
+    isHeadPosition: false,
+    roleCode: 'duty_officer',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000006',
+    fullName: 'Шарипова Мадина Носировна',
+    shortName: 'М.Н. Шарипова',
+    username: 'sharipova.m',
+    orgUnitId: '0190a000-0000-7000-8000-000000000003',
+    positionName: 'Ведущий специалист',
+    isHeadPosition: false,
+    roleCode: 'employee',
+  },
+  // Управление гражданской обороны (004)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000007',
+    fullName: 'Давлатов Сино Абдуллоевич',
+    shortName: 'С.А. Давлатов',
+    username: 'davlatov.s',
+    orgUnitId: '0190a000-0000-7000-8000-000000000004',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000008',
+    fullName: 'Одинаева Дилноза Файзуллоевна',
+    shortName: 'Д.Ф. Одинаева',
+    username: 'odinaeva.d',
+    orgUnitId: '0190a000-0000-7000-8000-000000000004',
+    positionName: 'Специалист по ГО',
+    isHeadPosition: false,
+    roleCode: 'employee',
+  },
+  // Канцелярия (005)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000009',
+    fullName: 'Набиева Гулнора Саидовна',
+    shortName: 'Г.С. Набиева',
+    username: 'nabieva.g',
+    orgUnitId: '0190a000-0000-7000-8000-000000000005',
+    positionName: 'Заведующая канцелярией',
+    isHeadPosition: true,
+    roleCode: 'clerk',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000a',
+    fullName: 'Мирзоев Бахтиёр Хушвахтович',
+    shortName: 'Б.Х. Мирзоев',
+    username: 'mirzoev.b',
+    orgUnitId: '0190a000-0000-7000-8000-000000000005',
+    positionName: 'Делопроизводитель',
+    isHeadPosition: false,
+    roleCode: 'clerk',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000b',
+    fullName: 'Тагоева Шахло Джумаевна',
+    shortName: 'Ш.Д. Тагоева',
+    username: 'tagoeva.s',
+    orgUnitId: '0190a000-0000-7000-8000-000000000005',
+    positionName: 'Делопроизводитель',
+    isHeadPosition: false,
+    roleCode: 'clerk',
+  },
+  // Управление по Согдийской области (006)
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000c',
+    fullName: 'Рустамов Шерали Назарович',
+    shortName: 'Ш.Н. Рустамов',
+    username: 'rustamov.s',
+    orgUnitId: '0190a000-0000-7000-8000-000000000006',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000d',
+    fullName: 'Файзуллоева Малика Толибовна',
+    shortName: 'М.Т. Файзуллоева',
+    username: 'fayzulloeva.m',
+    orgUnitId: '0190a000-0000-7000-8000-000000000006',
+    positionName: 'Ведущий специалист',
+    isHeadPosition: false,
+    roleCode: 'employee',
+  },
+  // Отдел по г. Худжанд (007)
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000e',
+    fullName: 'Нозимов Хуршед Абдугафурович',
+    shortName: 'Х.А. Нозимов',
+    username: 'nozimov.h',
+    orgUnitId: '0190a000-0000-7000-8000-000000000007',
+    positionName: 'Начальник отдела',
+    isHeadPosition: true,
+    roleCode: 'duty_officer',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-00000000000f',
+    fullName: 'Саидова Фарзона Муродовна',
+    shortName: 'Ф.М. Саидова',
+    username: 'saidova.f',
+    orgUnitId: '0190a000-0000-7000-8000-000000000007',
+    positionName: 'Специалист',
+    isHeadPosition: false,
+    roleCode: 'employee',
+  },
+  // Управление по Хатлонской области (008)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000010',
+    fullName: 'Абдуллоев Зафар Раҳматович',
+    shortName: 'З.Р. Абдуллоев',
+    username: 'abdulloev.z',
+    orgUnitId: '0190a000-0000-7000-8000-000000000008',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000011',
+    fullName: 'Каримова Ойша Файзуллоевна',
+    shortName: 'О.Ф. Каримова',
+    username: 'karimova.o',
+    orgUnitId: '0190a000-0000-7000-8000-000000000008',
+    positionName: 'Оперативный дежурный',
+    isHeadPosition: false,
+    roleCode: 'duty_officer',
+  },
+  // Управление по ГБАО (009)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000012',
+    fullName: 'Шоев Умарали Давлатович',
+    shortName: 'У.Д. Шоев',
+    username: 'shoev.u',
+    orgUnitId: '0190a000-0000-7000-8000-000000000009',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000013',
+    fullName: 'Гуломова Саодат Назаровна',
+    shortName: 'С.Н. Гуломова',
+    username: 'gulomova.s',
+    orgUnitId: '0190a000-0000-7000-8000-000000000009',
+    positionName: 'Специалист ГИС',
+    isHeadPosition: false,
+    roleCode: 'gis_analyst',
+  },
+  // Управления и отделы РРП (00a)
+  {
+    positionId: '0190a0d0-0000-7000-8000-000000000014',
+    fullName: 'Холов Джамшед Саидович',
+    shortName: 'Д.С. Холов',
+    username: 'kholov.j',
+    orgUnitId: '0190a000-0000-7000-8000-00000000000a',
+    positionName: 'Начальник управления',
+    isHeadPosition: true,
+    roleCode: 'chief',
+  },
+];
+
+/**
+ * Demo users log in directly (`mustChangePassword: false`) with one shared,
+ * documented password — unlike real onboarding (temp password + forced change),
+ * this is deliberately frictionless so the roster can be handed to reviewers/
+ * leadership as-is (decision recorded in docs/plan/STATUS.md). Roles carrying
+ * `docflow.sign`/`admin.*`/`gis.pg.access` still force TOTP enrollment on first
+ * login (docs/09 §1) — that guard is not weakened for demo accounts.
+ */
+async function seedDemoUsers(db: Database): Promise<void> {
+  const password = process.env.SEED_DEMO_PASSWORD ?? 'Demo!2026';
+  const passwordHash = await argon2.hash(password, { type: argon2.argon2id, ...ARGON2_OPTIONS });
+  const roleIdByCode = new Map<string, string>();
+
+  for (const entry of DEMO_USERS) {
+    await db
+      .insert(positions)
+      .values({
+        id: entry.positionId,
+        orgUnitId: entry.orgUnitId,
+        name: entry.positionName,
+        isHead: entry.isHeadPosition,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(users)
+      .values({
+        username: entry.username,
+        passwordHash,
+        fullName: entry.fullName,
+        shortName: entry.shortName,
+        mustChangePassword: false,
+        status: 'active',
+      })
+      .onConflictDoNothing();
+    const [user] = await db.select().from(users).where(eq(users.username, entry.username));
+    if (!user) throw new Error(`Failed to create or find demo user "${entry.username}"`);
+
+    await db
+      .insert(userPositions)
+      .values({ userId: user.id, positionId: entry.positionId, isPrimary: true })
+      .onConflictDoNothing();
+
+    if (entry.isHeadPosition) {
+      await db
+        .update(orgUnits)
+        .set({ headPositionId: entry.positionId })
+        .where(eq(orgUnits.id, entry.orgUnitId));
+    }
+
+    let roleId = roleIdByCode.get(entry.roleCode);
+    if (!roleId) {
+      const [role] = await db.select().from(roles).where(eq(roles.code, entry.roleCode));
+      if (!role)
+        throw new Error(`Demo role "${entry.roleCode}" missing — seedRoles must run first`);
+      roleId = role.id;
+      roleIdByCode.set(entry.roleCode, roleId);
+    }
+    await db
+      .insert(userRoles)
+      .values({
+        userId: user.id,
+        roleId,
+        orgUnitId: entry.roleScopeGlobal ? null : entry.orgUnitId,
+      })
+      .onConflictDoNothing();
+  }
+
+  console.log(
+    `Demo seed complete: ${DEMO_USERS.length} users (password: "${password}", ` +
+      `mustChangePassword: false). Try "nazarova.n" (employee) vs "yusupov.f" ` +
+      `(platform_admin) to see the permission-gated UI difference.`,
+  );
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
-  if (!url) throw new Error('DATABASE_URL is required for seeding');
-
-  if (process.argv.includes('--demo')) {
-    console.log('Demo seeds (20 users, incidents, …) are implemented in a later phase.');
+  const isDemo = process.argv.includes('--demo');
+  if (isDemo && process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to seed demo users (well-known password) with NODE_ENV=production');
   }
+  if (!url) throw new Error('DATABASE_URL is required for seeding');
 
   const { db, pool } = createDb(url);
   try {
@@ -267,6 +579,7 @@ async function main(): Promise<void> {
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
         `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries.`,
     );
+    if (isDemo) await seedDemoUsers(db);
   } finally {
     await pool.end();
   }
