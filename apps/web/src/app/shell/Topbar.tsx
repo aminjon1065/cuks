@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, Search } from 'lucide-react';
+import { Bell, LogOut, Search } from 'lucide-react';
 import type { MeResponse } from '@cuks/shared';
 import {
   Avatar,
@@ -14,12 +14,16 @@ import {
   DropdownMenuTrigger,
 } from '@cuks/ui';
 import { useLogout } from '@/features/auth/api/queries';
+import { useNotificationStream } from '@/features/notifications/useNotificationStream';
 import { ADMIN_NAV, MAIN_NAV } from './nav-items';
 import { NotificationsPopover } from './NotificationsPopover';
 
 function useSectionTitle(): string {
   const { t } = useTranslation('nav');
+  const { t: tn } = useTranslation('notifications');
   const { pathname } = useLocation();
+  if (pathname.startsWith('/app/settings/notifications')) return tn('prefs.title');
+  if (pathname.startsWith('/app/notifications')) return tn('page.title');
   const all = [...MAIN_NAV, ...ADMIN_NAV];
   const match = all
     .filter((i) => pathname === i.path || (i.path !== '/app' && pathname.startsWith(i.path)))
@@ -36,9 +40,11 @@ export function Topbar({
 }): React.JSX.Element {
   const { t } = useTranslation('common');
   const { t: ta } = useTranslation('auth');
+  const { t: tn } = useTranslation('notifications');
   const navigate = useNavigate();
   const logout = useLogout();
   const title = useSectionTitle();
+  useNotificationStream();
 
   const onLogout = (): void => {
     logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) });
@@ -60,7 +66,7 @@ export function Topbar({
         </kbd>
       </button>
 
-      <NotificationsPopover />
+      <NotificationsPopover me={me} />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -75,6 +81,11 @@ export function Topbar({
             <div className="text-[13px] font-medium text-text">{me.fullName}</div>
             <div className="text-xs font-normal text-text-muted">@{me.username}</div>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => navigate('/app/settings/notifications')}>
+            <Bell />
+            {tn('prefs.title')}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem destructive onSelect={onLogout}>
             <LogOut />

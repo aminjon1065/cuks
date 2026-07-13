@@ -8,6 +8,8 @@ import { LoginPage } from '@/features/auth/pages/LoginPage';
 import { ForcePasswordPage } from '@/features/auth/pages/ForcePasswordPage';
 import { EnrollTotpPage } from '@/features/auth/pages/EnrollTotpPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
+import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
+import { NotificationPrefsPage } from '@/features/notifications/pages/NotificationPrefsPage';
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
@@ -62,6 +64,8 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'settings/notifications', element: <NotificationPrefsPage /> },
       ...PLACEHOLDER_PATHS.map((path) => ({ path, element: <ComingSoonPage /> })),
     ],
   },

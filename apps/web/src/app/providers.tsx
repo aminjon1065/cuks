@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { I18nextProvider } from 'react-i18next';
-import { TooltipProvider } from '@cuks/ui';
+import { Toaster, TooltipProvider } from '@cuks/ui';
 import i18n from '@/lib/i18n';
 import { createQueryClient } from '@/lib/query-client';
 import { useApplyTheme } from '@/lib/theme';
@@ -21,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }): React.JS
         <TooltipProvider delayDuration={200}>
           <ThemeEffect />
           {children}
+          <Toaster />
         </TooltipProvider>
       </I18nextProvider>
     </QueryClientProvider>
