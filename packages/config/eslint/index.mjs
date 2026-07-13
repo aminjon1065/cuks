@@ -85,9 +85,15 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'off',
     },
   },
-  // Config / script / CLI files may log to the console.
+  // Config / script / CLI / e2e files may log to the console.
   {
-    files: ['**/*.{js,mjs,cjs}', '**/*.config.{ts,mts}', '**/seed.ts', '**/scripts/**'],
+    files: [
+      '**/*.{js,mjs,cjs}',
+      '**/*.config.{ts,mts}',
+      '**/seed*.ts',
+      '**/scripts/**',
+      '**/e2e/**',
+    ],
     rules: {
       'no-console': 'off',
     },

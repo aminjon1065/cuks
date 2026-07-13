@@ -13,6 +13,8 @@ coverage/
 playwright-report/
 test-results/
 .playwright/
+# Playwright auth artifacts (session state + captured TOTP secret)
+apps/web/e2e/.auth/
 
 # Env
 .env
