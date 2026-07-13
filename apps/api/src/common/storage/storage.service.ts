@@ -4,6 +4,7 @@ import {
   CompleteMultipartUploadCommand,
   CreateBucketCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
@@ -127,6 +128,12 @@ export class StorageService {
     await this.s3.send(
       new AbortMultipartUploadCommand({ Bucket: this.bucket, Key: key, UploadId: uploadId }),
     );
+  }
+
+  /** Deletes a completed object — e.g. rolling back an upload that failed a
+   *  post-completion check (size/quota) or a DB write after the S3 side committed. */
+  async deleteObject(key: string): Promise<void> {
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
   /**

@@ -81,6 +81,15 @@ describe('StorageService.abortUpload', () => {
   });
 });
 
+describe('StorageService.deleteObject', () => {
+  it('sends a DeleteObject command', async () => {
+    const send = vi.fn().mockResolvedValue({});
+    const service = new StorageService({ send } as never, fakeConfig);
+    await service.deleteObject('k');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('StorageService.getDownloadUrl', () => {
   it('sets a forced attachment Content-Disposition, encoding non-ASCII filenames', async () => {
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');

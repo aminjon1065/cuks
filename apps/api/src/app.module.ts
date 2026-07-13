@@ -22,6 +22,7 @@ import { ConfigService } from './config/config.service';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
+import { FilesModule } from './modules/files/files.module';
 import { HealthModule } from './modules/health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
@@ -75,6 +76,7 @@ import { UsersModule } from './modules/users/users.module';
     OrgModule,
     EventsModule,
     NotificationsModule,
+    FilesModule,
     HealthModule,
   ],
   providers: [

@@ -24,8 +24,8 @@ export class AclService {
     private readonly audit: AuditService,
   ) {}
 
-  async grant(input: GrantAclInput, actorId: string): Promise<AclEntryDto> {
-    const [row] = await this.db
+  async grant(input: GrantAclInput, actorId: string, db: Database = this.db): Promise<AclEntryDto> {
+    const [row] = await db
       .insert(resourceAcl)
       .values({ ...input, createdBy: actorId })
       .onConflictDoUpdate({
