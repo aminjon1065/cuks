@@ -27,6 +27,9 @@ export const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  // Permit `data-*` hooks (e.g. data-testid for e2e/analytics); React's
+  // HTMLAttributes typing omits them for custom components.
+  [dataAttr: `data-${string}`]: string | undefined;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

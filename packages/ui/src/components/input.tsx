@@ -1,7 +1,11 @@
 import { forwardRef } from 'react';
 import { cn } from '../lib/cn';
 
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  // Permit `data-*` hooks (e.g. data-testid for e2e); React's HTMLAttributes typing
+  // omits them for custom components.
+  [dataAttr: `data-${string}`]: string | undefined;
+}
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(({ className, ...props }, ref) => (
   <input
