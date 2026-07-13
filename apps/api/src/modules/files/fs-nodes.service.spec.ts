@@ -18,9 +18,12 @@ function makeService(opts: { selectResults?: unknown[][]; aclCheck?: boolean } =
   };
   const acl = { check: vi.fn().mockResolvedValue(opts.aclCheck ?? false), grant: vi.fn() };
   const audit = { log: vi.fn() };
-  const storage = { getDownloadUrl: vi.fn() };
+  const storage = {
+    getDownloadUrl: vi.fn().mockResolvedValue('https://minio.example/signed-url'),
+    objectExists: vi.fn().mockResolvedValue(true),
+  };
   const service = new FsNodesService(db as never, acl as never, audit as never, storage as never);
-  return { service, db, acl };
+  return { service, db, acl, audit, storage };
 }
 
 const baseNode = {
@@ -41,6 +44,13 @@ const baseNode = {
   updatedAt: new Date('2026-01-01T00:00:00Z'),
   deletedAt: null,
   createdBy: 'owner1',
+};
+
+const fileNode = {
+  ...baseNode,
+  kind: 'file' as const,
+  currentVersionId: 'ver1',
+  mime: 'image/png',
 };
 
 const user = { id: 'owner1', isSuperadmin: false } as never;
@@ -161,5 +171,128 @@ describe('FsNodesService.toDto', () => {
     const dto = service.toDto(baseNode);
     expect(dto).toMatchObject({ id: 'n1', kind: 'folder', deletedAt: null, sizeCached: 0 });
     expect(dto.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('defaults avStatus to null when not passed', () => {
+    const { service } = makeService();
+    expect(service.toDto(baseNode).avStatus).toBeNull();
+  });
+
+  it('includes the passed avStatus when the caller has it in hand', () => {
+    const { service } = makeService();
+    expect(service.toDto(fileNode, 'pending').avStatus).toBe('pending');
+  });
+});
+
+describe('FsNodesService.getDownloadUrl', () => {
+  it('blocks an infected verdict', async () => {
+    const { service } = makeService({
+      selectResults: [[fileNode], [{ storageKey: 'k1', avStatus: 'infected' }]],
+    });
+    await expect(service.getDownloadUrl('n1', user)).rejects.toMatchObject({
+      code: 'files.file.infected',
+    });
+  });
+
+  it('allows a pending (not-yet-scanned) verdict and audits the download', async () => {
+    const { service, audit, storage } = makeService({
+      selectResults: [[fileNode], [{ storageKey: 'k1', avStatus: 'pending' }]],
+    });
+    const url = await service.getDownloadUrl('n1', user);
+    expect(url).toBe('https://minio.example/signed-url');
+    expect(storage.getDownloadUrl).toHaveBeenCalledWith('k1', fileNode.name);
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'files.file.downloaded' }),
+    );
+  });
+
+  it('allows a clean verdict', async () => {
+    const { service } = makeService({
+      selectResults: [[fileNode], [{ storageKey: 'k1', avStatus: 'clean' }]],
+    });
+    await expect(service.getDownloadUrl('n1', user)).resolves.toBe(
+      'https://minio.example/signed-url',
+    );
+  });
+
+  it('throws loudly when current_version_id points at a missing file_versions row', async () => {
+    const { service } = makeService({ selectResults: [[fileNode], []] });
+    await expect(service.getDownloadUrl('n1', user)).rejects.toThrow(
+      'current_version_id points to a missing file_versions row',
+    );
+  });
+
+  it('rejects a non-file node', async () => {
+    const { service } = makeService({ selectResults: [[baseNode]] }); // baseNode is a folder
+    await expect(service.getDownloadUrl('n1', user)).rejects.toMatchObject({
+      code: 'files.node.not_a_file',
+    });
+  });
+
+  it('denies a non-owner with no ACL grant', async () => {
+    const { service } = makeService({
+      selectResults: [[{ ...fileNode, ownerUserId: 'someone-else' }]],
+      aclCheck: false,
+    });
+    await expect(service.getDownloadUrl('n1', user)).rejects.toMatchObject({
+      code: 'files.node.access_denied',
+    });
+  });
+});
+
+describe('FsNodesService.getPreviewUrl', () => {
+  it('blocks an infected verdict', async () => {
+    const { service } = makeService({
+      selectResults: [[fileNode], [{ avStatus: 'infected' }]],
+    });
+    await expect(service.getPreviewUrl('n1', 'small', user)).rejects.toMatchObject({
+      code: 'files.file.infected',
+    });
+  });
+
+  it('throws loudly when current_version_id points at a missing file_versions row', async () => {
+    const { service } = makeService({ selectResults: [[fileNode], []] });
+    await expect(service.getPreviewUrl('n1', 'small', user)).rejects.toThrow(
+      'current_version_id points to a missing file_versions row',
+    );
+  });
+
+  it('returns 404 when the preview object has not been generated yet', async () => {
+    const { service, storage } = makeService({
+      selectResults: [[fileNode], [{ avStatus: 'pending' }]],
+    });
+    storage.objectExists.mockResolvedValue(false);
+    await expect(service.getPreviewUrl('n1', 'small', user)).rejects.toMatchObject({
+      code: 'files.preview.not_found',
+    });
+  });
+
+  it('returns a signed URL when the preview exists for a clean-verdict file', async () => {
+    const { service, storage } = makeService({
+      selectResults: [[fileNode], [{ avStatus: 'clean' }]],
+    });
+    const url = await service.getPreviewUrl('n1', 'small', user);
+    expect(url).toBe('https://minio.example/signed-url');
+    expect(storage.getDownloadUrl).toHaveBeenCalledWith(
+      'previews/ver1/small.webp',
+      `${fileNode.name}-small.webp`,
+    );
+  });
+
+  it('rejects a non-file node', async () => {
+    const { service } = makeService({ selectResults: [[baseNode]] });
+    await expect(service.getPreviewUrl('n1', 'small', user)).rejects.toMatchObject({
+      code: 'files.node.not_a_file',
+    });
+  });
+
+  it('denies a non-owner with no ACL grant', async () => {
+    const { service } = makeService({
+      selectResults: [[{ ...fileNode, ownerUserId: 'someone-else' }]],
+      aclCheck: false,
+    });
+    await expect(service.getPreviewUrl('n1', 'small', user)).rejects.toMatchObject({
+      code: 'files.node.access_denied',
+    });
   });
 });

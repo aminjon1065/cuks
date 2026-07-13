@@ -136,6 +136,18 @@ export class StorageService {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
+  /** Used by the preview endpoint (1.3) — the worker may not have generated a
+   *  given size yet, or the file may not be an image at all. */
+  async objectExists(key: string): Promise<boolean> {
+    try {
+      await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return true;
+    } catch (err) {
+      if (isNotFound(err)) return false;
+      throw err;
+    }
+  }
+
   /**
    * Presigned GET with a forced `Content-Disposition: attachment` (docs/09 §2:
    * never expose the bucket for direct listing/inline serving). `filename*`

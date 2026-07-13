@@ -17,6 +17,7 @@ import {
   createFolderSchema,
   initiateUploadSchema,
   patchNodeSchema,
+  previewQuerySchema,
   quotaQuerySchema,
   treeQuerySchema,
   trashQuerySchema,
@@ -27,6 +28,8 @@ import {
   type InitiateUploadInput,
   type InitiateUploadResponse,
   type PatchNodeInput,
+  type PreviewQuery,
+  type PreviewSize,
   type QuotaDto,
   type QuotaQuery,
   type TreeQuery,
@@ -130,6 +133,17 @@ export class FilesController {
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
   ): Promise<{ url: string; statusCode: number }> {
     const url = await this.nodes.getDownloadUrl(id, user);
+    return { url, statusCode: 302 };
+  }
+
+  @Get(':id/preview')
+  @Redirect()
+  async preview(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Query(new ZodValidationPipe(previewQuerySchema)) query: PreviewQuery,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.nodes.getPreviewUrl(id, query.size as PreviewSize, user);
     return { url, statusCode: 302 };
   }
 

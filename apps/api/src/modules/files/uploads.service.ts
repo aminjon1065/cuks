@@ -1,11 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq, max } from 'drizzle-orm';
+import type { Queue } from 'bullmq';
 import { fileUploads, fileVersions, fsNodes, type Database } from '@cuks/db';
 import {
   MAX_FILE_SIZE_BYTES,
+  QUEUE,
   UPLOAD_PART_SIZE_BYTES,
   UPLOAD_STAGING_TTL_HOURS,
   type CompleteUploadInput,
+  type FileVersionJobData,
   type FsNodeDto,
   type InitiateUploadInput,
   type InitiateUploadResponse,
@@ -28,11 +32,14 @@ import { FsNodesService, type FsNode } from './fs-nodes.service';
  */
 @Injectable()
 export class UploadsService {
+  private readonly logger = new Logger(UploadsService.name);
+
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly nodes: FsNodesService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    @InjectQueue(QUEUE.avScan) private readonly avScanQueue: Queue<FileVersionJobData>,
   ) {}
 
   async initiate(input: InitiateUploadInput, user: AuthUser): Promise<InitiateUploadResponse> {
@@ -263,7 +270,10 @@ export class UploadsService {
         entityType: 'file',
         entityId: result.id,
       });
-      return this.nodes.toDto(result);
+      await this.enqueueAvScan(result, claimed.storageKey, claimed.mime);
+      // The version just inserted always starts 'pending' (schema default) — no
+      // extra query needed to know that.
+      return this.nodes.toDto(result, 'pending');
     } catch (err) {
       // The storage merge already committed (irreversible) — clean up rather than
       // leave a MinIO object unreferenced by any fs_node/file_version.
@@ -280,6 +290,26 @@ export class UploadsService {
       .returning();
     if (!claimed) return; // already completed/aborted by a concurrent call
     await this.storage.abortUpload(staging.storageKey, staging.s3UploadId);
+  }
+
+  /**
+   * Best-effort but loud: the fs_node/file_version are already committed at this
+   * point (the upload genuinely succeeded), so a queue failure doesn't fail the
+   * request — the version just stays `pending` until reprocessed. Logged at error
+   * (not mail's warn) since an un-scanned file silently staying downloadable is
+   * a real security-relevant miss, not a cosmetic one.
+   */
+  private async enqueueAvScan(node: FsNode, storageKey: string, mime: string): Promise<void> {
+    try {
+      await this.avScanQueue.add('scan', {
+        nodeId: node.id,
+        versionId: node.currentVersionId!,
+        storageKey,
+        mime,
+      });
+    } catch (err) {
+      this.logger.error({ err, nodeId: node.id }, 'failed to enqueue av-scan');
+    }
   }
 
   private async requireStaging(

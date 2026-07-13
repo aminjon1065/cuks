@@ -1,7 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, max } from 'drizzle-orm';
+import type { Queue } from 'bullmq';
 import { fileVersions, fsNodes, type Database } from '@cuks/db';
-import type { FileVersionDto, FsNodeDto } from '@cuks/shared';
+import { QUEUE, type FileVersionDto, type FileVersionJobData, type FsNodeDto } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -16,10 +18,13 @@ import { FsNodesService } from './fs-nodes.service';
  */
 @Injectable()
 export class FileVersionsService {
+  private readonly logger = new Logger(FileVersionsService.name);
+
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly nodes: FsNodesService,
     private readonly audit: AuditService,
+    @InjectQueue(QUEUE.avScan) private readonly avScanQueue: Queue<FileVersionJobData>,
   ) {}
 
   async list(nodeId: string, user: AuthUser): Promise<FileVersionDto[]> {
@@ -63,8 +68,12 @@ export class FileVersionsService {
           mime: old.mime,
           checksumSha256: old.checksumSha256,
           uploadedBy: user.id,
-          avStatus: old.avStatus,
-          extractedText: old.extractedText,
+          // Re-scan rather than trust a historical verdict (signature DBs move on,
+          // and this also re-chains preview/text-extract for the new version id —
+          // both are keyed by version id, so a restored version starts with
+          // neither until av-scan regenerates them on a clean verdict).
+          avStatus: 'pending',
+          extractedText: null,
         })
         .returning();
       const [updated] = await tx
@@ -72,7 +81,7 @@ export class FileVersionsService {
         .set({ currentVersionId: versionRow!.id, sizeCached: old.size, mime: old.mime })
         .where(eq(fsNodes.id, nodeId))
         .returning();
-      return updated!;
+      return { node: updated!, versionId: versionRow!.id };
     });
 
     this.audit.log({
@@ -82,7 +91,27 @@ export class FileVersionsService {
       entityId: nodeId,
       meta: { fromVersion: version },
     });
-    return this.nodes.toDto(result);
+    await this.enqueueAvScan(result.node.id, result.versionId, old.storageKey, old.mime);
+    return this.nodes.toDto(result.node, 'pending');
+  }
+
+  /** Same fire-and-log-don't-fail contract as UploadsService.enqueueAvScan — the
+   *  new version row is already committed, so a queue failure doesn't fail the
+   *  request; retention's stale-pending reconciliation sweep picks it up later. */
+  private async enqueueAvScan(
+    nodeId: string,
+    versionId: string,
+    storageKey: string,
+    mime: string,
+  ): Promise<void> {
+    try {
+      await this.avScanQueue.add('scan', { nodeId, versionId, storageKey, mime });
+    } catch (err) {
+      this.logger.error(
+        { err, nodeId, versionId },
+        'failed to enqueue av-scan for restored version',
+      );
+    }
   }
 }
 

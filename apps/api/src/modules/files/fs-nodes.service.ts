@@ -3,10 +3,13 @@ import { and, eq, inArray, isNull, ne, sql, sum } from 'drizzle-orm';
 import { fileVersions, fsNodes, orgUnits, users, type Database } from '@cuks/db';
 import {
   DEFAULT_PERSONAL_QUOTA_BYTES,
+  previewObjectKey,
   type AclLevel,
+  type AvStatus,
   type BreadcrumbDto,
   type FsNodeDto,
   type FsSpace,
+  type PreviewSize,
   type QuotaDto,
 } from '@cuks/shared';
 import { uuidv7 } from 'uuidv7';
@@ -231,6 +234,11 @@ export class FsNodesService {
     return ids.map((id) => ({ id, name: byId.get(id) ?? '?' }));
   }
 
+  /**
+   * Blocks `infected` verdicts (docs/09 §2: "infected → карантин"); `pending`
+   * (not yet scanned) and `clean` both download — a pending-file warning, if the
+   * platform wants one, is a UI-level concern reading the same status.
+   */
   async getDownloadUrl(id: string, user: AuthUser): Promise<string> {
     const node = await this.requireNode(id);
     await this.assertAccess(node, user, 'viewer');
@@ -238,11 +246,17 @@ export class FsNodesService {
       throw AppException.badRequest('files.node.not_a_file', 'Not a downloadable file');
     }
     const [version] = await this.db
-      .select({ storageKey: fileVersions.storageKey })
+      .select({ storageKey: fileVersions.storageKey, avStatus: fileVersions.avStatus })
       .from(fileVersions)
       .where(eq(fileVersions.id, node.currentVersionId))
       .limit(1);
     if (!version) throw new Error('current_version_id points to a missing file_versions row');
+    if (version.avStatus === 'infected') {
+      throw AppException.forbidden(
+        'files.file.infected',
+        'This file was flagged by the antivirus scan and cannot be downloaded',
+      );
+    }
     this.audit.log({
       action: 'files.file.downloaded',
       actorId: user.id,
@@ -250,6 +264,35 @@ export class FsNodesService {
       entityId: id,
     });
     return this.storage.getDownloadUrl(version.storageKey, node.name);
+  }
+
+  /** The `preview` job (worker, task 1.3) only ever generates previews for a
+   *  `clean`-verdict image; a missing object means "not generated yet" (still
+   *  scanning, non-image file, or scan hasn't reached this version) — a plain
+   *  404, not an error, since it's an expected, common state right after upload. */
+  async getPreviewUrl(id: string, size: PreviewSize, user: AuthUser): Promise<string> {
+    const node = await this.requireNode(id);
+    await this.assertAccess(node, user, 'viewer');
+    if (node.kind !== 'file' || !node.currentVersionId) {
+      throw AppException.badRequest('files.node.not_a_file', 'Not a previewable file');
+    }
+    const [version] = await this.db
+      .select({ avStatus: fileVersions.avStatus })
+      .from(fileVersions)
+      .where(eq(fileVersions.id, node.currentVersionId))
+      .limit(1);
+    if (!version) throw new Error('current_version_id points to a missing file_versions row');
+    if (version.avStatus === 'infected') {
+      throw AppException.forbidden(
+        'files.file.infected',
+        'This file was flagged by the antivirus scan',
+      );
+    }
+    const key = previewObjectKey(node.currentVersionId, size);
+    if (!(await this.storage.objectExists(key))) {
+      throw AppException.notFound('files.preview.not_found', 'Preview not available');
+    }
+    return this.storage.getDownloadUrl(key, `${node.name}-${size}.webp`);
   }
 
   /** Live SUM over `size_cached` — trashed files still occupy storage, so they
@@ -337,7 +380,11 @@ export class FsNodesService {
     };
   }
 
-  toDto(node: FsNode): FsNodeDto {
+  /** `avStatus` is on `file_versions`, not this row — callers that already have
+   *  the current version in hand (upload complete, version restore) pass it
+   *  through; list/tree/trash endpoints don't join for it per-row (deferred,
+   *  docs/plan/STATUS.md 1.3 decision) and get `null`. */
+  toDto(node: FsNode, avStatus: AvStatus | null = null): FsNodeDto {
     return {
       id: node.id,
       parentId: node.parentId,
@@ -347,6 +394,7 @@ export class FsNodesService {
       ownerUserId: node.ownerUserId,
       ownerOrgUnitId: node.ownerOrgUnitId,
       currentVersionId: node.currentVersionId,
+      avStatus,
       sizeCached: node.sizeCached,
       mime: node.mime,
       tags: node.tags,

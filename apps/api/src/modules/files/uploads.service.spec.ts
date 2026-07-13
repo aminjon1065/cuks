@@ -30,6 +30,7 @@ describe('UploadsService.initiate', () => {
       nodes as never,
       storage as never,
       { log: vi.fn() } as never,
+      { add: vi.fn() } as never,
     );
 
     await expect(
@@ -63,6 +64,7 @@ describe('UploadsService staging ownership', () => {
       nodes as never,
       storage as never,
       { log: vi.fn() } as never,
+      { add: vi.fn() } as never,
     );
 
     await expect(
@@ -81,6 +83,7 @@ describe('UploadsService staging ownership', () => {
       {} as never,
       {} as never,
       { log: vi.fn() } as never,
+      { add: vi.fn() } as never,
     );
     await expect(service.abort('missing', user)).rejects.toMatchObject({
       code: 'files.upload.not_found',

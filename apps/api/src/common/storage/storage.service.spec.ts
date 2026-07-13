@@ -90,6 +90,26 @@ describe('StorageService.deleteObject', () => {
   });
 });
 
+describe('StorageService.objectExists', () => {
+  it('returns true when HeadObject succeeds', async () => {
+    const send = vi.fn().mockResolvedValue({});
+    const service = new StorageService({ send } as never, fakeConfig);
+    await expect(service.objectExists('k')).resolves.toBe(true);
+  });
+
+  it('returns false on a 404, without throwing', async () => {
+    const send = vi.fn().mockRejectedValue(notFoundError());
+    const service = new StorageService({ send } as never, fakeConfig);
+    await expect(service.objectExists('k')).resolves.toBe(false);
+  });
+
+  it('rethrows non-404 errors', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('access denied'));
+    const service = new StorageService({ send } as never, fakeConfig);
+    await expect(service.objectExists('k')).rejects.toThrow('access denied');
+  });
+});
+
 describe('StorageService.getDownloadUrl', () => {
   it('sets a forced attachment Content-Disposition, encoding non-ASCII filenames', async () => {
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
