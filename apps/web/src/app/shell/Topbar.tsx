@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@cuks/ui';
 import { useLogout } from '@/features/auth/api/queries';
+import { useForcedLogout } from '@/features/auth/useForcedLogout';
 import { useNotificationStream } from '@/features/notifications/useNotificationStream';
 import { ADMIN_NAV, MAIN_NAV } from './nav-items';
 import { NotificationsPopover } from './NotificationsPopover';
@@ -45,6 +46,7 @@ export function Topbar({
   const logout = useLogout();
   const title = useSectionTitle();
   useNotificationStream();
+  useForcedLogout();
 
   const onLogout = (): void => {
     logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) });

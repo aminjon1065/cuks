@@ -30,7 +30,7 @@ void i18n.use(initReactI18next).init({
   lng: DEFAULT_LOCALE,
   fallbackLng: DEFAULT_LOCALE,
   defaultNS: 'common',
-  ns: ['common', 'auth', 'nav', 'dashboard'],
+  ns: ['common', 'auth', 'nav', 'dashboard', 'notifications', 'admin'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });
