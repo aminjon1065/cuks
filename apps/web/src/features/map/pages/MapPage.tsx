@@ -1,15 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MapPinned, TriangleAlert } from 'lucide-react';
 import { Button, EmptyState, Skeleton } from '@cuks/ui';
 import { useCan } from '@/lib/ability';
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
-import { useMartinCatalog, useTileToken } from '../api/queries';
+import { useIncidentMapFilterOptions, useMartinCatalog, useTileToken } from '../api/queries';
 import { defaultLayerStates, type LayerState } from '../lib/layers';
+import {
+  buildIncidentTileQuery,
+  defaultIncidentFilters,
+  type IncidentFilterState,
+} from '../lib/incident-filters';
 import { modeToOverride, type BasemapMode } from '../lib/basemap';
 import { MapView, type MapViewHandle } from '../components/MapView';
 import { LayersPanel } from '../components/LayersPanel';
 import { BasemapSwitcher } from '../components/BasemapSwitcher';
+import { IncidentFilterBar } from '../components/IncidentFilterBar';
+import { IncidentTimeline } from '../components/IncidentTimeline';
 
 const PANEL_KEY = 'cuks-map-panel-collapsed';
 
@@ -17,7 +24,8 @@ const PANEL_KEY = 'cuks-map-panel-collapsed';
  * Map explorer (`/app/map`, docs/modules/10 §4). Full-bleed MapLibre map with a
  * layer panel and basemap switcher. Vector layers come from Martin; the tile
  * token is fetched up front so every tile request is authorized (dev skips the
- * gate, prod enforces via Caddy). The incidents layer + timeline arrive in 2.4.
+ * gate, prod enforces via Caddy). The operational incident layer is filtered by
+ * reference-data controls and the bottom timeline without recreating the map.
  */
 export function MapPage(): React.JSX.Element {
   const { t } = useTranslation('map');
@@ -25,6 +33,7 @@ export function MapPage(): React.JSX.Element {
 
   const tokenQuery = useTileToken();
   const catalogQuery = useMartinCatalog(tokenQuery.data?.token);
+  const filterOptionsQuery = useIncidentMapFilterOptions();
 
   // Keep the freshest token in a ref (read per tile request). Assigned during
   // render — not in an effect — so it is already set when MapView's init effect
@@ -36,6 +45,16 @@ export function MapPage(): React.JSX.Element {
 
   const [states, setStates] = useState<Record<string, LayerState>>(() => defaultLayerStates());
   const [basemapMode, setBasemapMode] = useState<BasemapMode>('auto');
+  const [incidentFilters, setIncidentFilters] = useState<IncidentFilterState>(() =>
+    defaultIncidentFilters(),
+  );
+  const incidentTileQuery = useMemo(
+    () => buildIncidentTileQuery(incidentFilters),
+    [incidentFilters],
+  );
+  const resetIncidentFilters = useCallback(() => {
+    setIncidentFilters(defaultIncidentFilters());
+  }, []);
   const [panelCollapsed, setPanelCollapsed] = useState<boolean>(
     () => typeof localStorage !== 'undefined' && localStorage.getItem(PANEL_KEY) === '1',
   );
@@ -98,6 +117,7 @@ export function MapPage(): React.JSX.Element {
             states={states}
             availableSources={catalogQuery.data}
             getToken={getToken}
+            incidentTileQuery={incidentTileQuery}
           />
           <LayersPanel
             states={states}
@@ -109,6 +129,21 @@ export function MapPage(): React.JSX.Element {
             onZoom={zoomToLayer}
           />
           <BasemapSwitcher value={basemapMode} onChange={setBasemapMode} />
+          {catalogQuery.data.has('incidents_mvt') && (
+            <>
+              <IncidentFilterBar
+                value={incidentFilters}
+                options={filterOptionsQuery.data}
+                loading={filterOptionsQuery.isPending}
+                error={filterOptionsQuery.isError}
+                panelCollapsed={panelCollapsed}
+                onChange={setIncidentFilters}
+                onReset={resetIncidentFilters}
+                onRetry={() => void filterOptionsQuery.refetch()}
+              />
+              <IncidentTimeline value={incidentFilters} onChange={setIncidentFilters} />
+            </>
+          )}
           {catalogQuery.data.size === 0 && (
             <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
               <div className="pointer-events-auto flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-xs text-text-muted shadow-[var(--shadow-1)]">

@@ -1,10 +1,27 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Map as MlMap, NavigationControl, ScaleControl } from 'maplibre-gl';
+import type { MapLayerMouseEvent, VectorTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { cssToken, INITIAL_CENTER, INITIAL_ZOOM, TAJIKISTAN_BOUNDS } from '../lib/map-config';
+import {
+  cssToken,
+  INITIAL_CENTER,
+  INITIAL_ZOOM,
+  TAJIKISTAN_BOUNDS,
+  tileUrl,
+} from '../lib/map-config';
 import { fetchSourceBounds, makeTransformRequest } from '../lib/tiles';
-import { applyOpacity, applyVisibility, SYSTEM_LAYERS, type LayerState } from '../lib/layers';
+import {
+  applyOpacity,
+  applyVisibility,
+  INCIDENT_CLUSTERS_LAYER_ID,
+  INCIDENT_PULSE_LAYER_ID,
+  INCIDENTS_LAYER_ID,
+  incidentPulseFrame,
+  SYSTEM_LAYERS,
+  type LayerState,
+} from '../lib/layers';
 import { buildStyle, type BasemapFlavor } from '../lib/basemap';
+import { createIncidentRuntimeImage } from '../lib/incident-symbols';
 
 /** Imperative controls the page drives (zoom-to-layer, reset view). */
 export interface MapViewHandle {
@@ -20,6 +37,15 @@ export interface MapViewProps {
   availableSources: ReadonlySet<string> | null;
   /** Latest tile token (read per-request, so refreshes need no rebuild). */
   getToken: () => string | null;
+  /** Filter/timeline query for the incident vector source (without token). */
+  incidentTileQuery: string;
+}
+
+declare global {
+  interface Window {
+    /** Dev/e2e diagnostic handle; never exposed by production builds. */
+    __cuksMap?: MlMap;
+  }
 }
 
 /** The Protomaps flavor implied by the current app theme (`.dark` on <html>). */
@@ -37,7 +63,7 @@ function themeFlavor(): BasemapFlavor {
  * restyles with the values actually in effect (no effect-ordering races).
  */
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { basemapOverride, states, availableSources, getToken },
+  { basemapOverride, states, availableSources, getToken, incidentTileQuery },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -57,6 +83,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   availableSourcesRef.current = availableSources;
   const getTokenRef = useRef(getToken);
   getTokenRef.current = getToken;
+  const incidentTileQueryRef = useRef(incidentTileQuery);
+  incidentTileQueryRef.current = incidentTileQuery;
 
   function currentStyle() {
     return buildStyle({
@@ -64,6 +92,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       token: cssToken,
       states: statesRef.current,
       availableSources: availableSourcesRef.current,
+      incidentTileQuery: incidentTileQueryRef.current,
     });
   }
 
@@ -97,11 +126,38 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     });
     map.addControl(new NavigationControl({ showCompass: true }), 'bottom-right');
     map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left');
+    const addRuntimeImage = (event: { id: string }): void => {
+      if (map.hasImage(event.id)) return;
+      const image = createIncidentRuntimeImage(event.id, cssToken);
+      if (image) map.addImage(event.id, image.data, { pixelRatio: image.pixelRatio });
+    };
+    map.on('styleimagemissing', addRuntimeImage);
     map.on('load', () => {
       readyRef.current = true;
       setReady(true);
     });
+    const zoomCluster = (event: MapLayerMouseEvent): void => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry.type !== 'Point') return;
+      const coordinates = feature.geometry.coordinates;
+      map.easeTo({
+        center: [coordinates[0], coordinates[1]],
+        zoom: Math.min(map.getZoom() + 2, 11),
+        duration: 500,
+      });
+    };
+    const showPointer = (): void => {
+      map.getCanvas().style.cursor = 'pointer';
+    };
+    const hidePointer = (): void => {
+      map.getCanvas().style.cursor = '';
+    };
+    map.on('click', INCIDENT_CLUSTERS_LAYER_ID, zoomCluster);
+    map.on('mouseenter', INCIDENT_CLUSTERS_LAYER_ID, showPointer);
+    map.on('mouseleave', INCIDENT_CLUSTERS_LAYER_ID, hidePointer);
     mapRef.current = map;
+
+    if (import.meta.env.DEV) window.__cuksMap = map;
 
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(container);
@@ -117,8 +173,13 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     return () => {
       resizeObserver.disconnect();
       themeObserver.disconnect();
+      map.off('click', INCIDENT_CLUSTERS_LAYER_ID, zoomCluster);
+      map.off('mouseenter', INCIDENT_CLUSTERS_LAYER_ID, showPointer);
+      map.off('mouseleave', INCIDENT_CLUSTERS_LAYER_ID, hidePointer);
+      map.off('styleimagemissing', addRuntimeImage);
       map.remove();
       mapRef.current = null;
+      if (import.meta.env.DEV && window.__cuksMap === map) delete window.__cuksMap;
       setReady(false);
     };
     // Init once; prop/theme changes are handled by the dedicated effects and the
@@ -138,6 +199,66 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     if (!map || !ready) return;
     applyAllStates(map);
   }, [states, ready]);
+
+  // Filters and timeline only replace the incident source's tile template. This
+  // keeps the camera, basemap and all other source caches intact during playback.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const source = map.getSource('incidents_mvt') as VectorTileSource | undefined;
+    source?.setTiles([tileUrl('incidents_mvt', incidentTileQuery)]);
+  }, [incidentTileQuery, ready]);
+
+  // Active incidents get a restrained halo. The loop exists only while an
+  // active marker is rendered; hidden/empty/reduced-motion maps stay idle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frameId = 0;
+    let lastPaint = 0;
+    const stop = (): void => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = 0;
+    };
+    const paint = (time: number): void => {
+      if (time - lastPaint >= 33 && map.getLayer(INCIDENT_PULSE_LAYER_ID)) {
+        const progress = (time % 1400) / 1400;
+        const frame = incidentPulseFrame(progress);
+        const opacity = statesRef.current[INCIDENTS_LAYER_ID]?.opacity ?? 1;
+        map.setPaintProperty(INCIDENT_PULSE_LAYER_ID, 'circle-radius', frame.radius);
+        map.setPaintProperty(INCIDENT_PULSE_LAYER_ID, 'circle-opacity', frame.opacity * opacity);
+        lastPaint = time;
+      }
+      frameId = window.requestAnimationFrame(paint);
+    };
+    const sync = (): void => {
+      stop();
+      const state = statesRef.current[INCIDENTS_LAYER_ID];
+      if (
+        reducedMotion.matches ||
+        !state?.visible ||
+        state.opacity <= 0 ||
+        !map.getLayer(INCIDENT_PULSE_LAYER_ID)
+      ) {
+        return;
+      }
+      const hasActiveMarker =
+        map.queryRenderedFeatures({ layers: [INCIDENT_PULSE_LAYER_ID] }).length > 0;
+      if (hasActiveMarker) frameId = window.requestAnimationFrame(paint);
+    };
+
+    map.on('idle', sync);
+    map.on('moveend', sync);
+    reducedMotion.addEventListener('change', sync);
+    sync();
+    return () => {
+      stop();
+      map.off('idle', sync);
+      map.off('moveend', sync);
+      reducedMotion.removeEventListener('change', sync);
+    };
+  }, [incidentTileQuery, ready, states]);
 
   useImperativeHandle(ref, () => ({
     async zoomToLayer(source: string) {

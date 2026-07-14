@@ -39,6 +39,8 @@ export interface BuildStyleOptions {
   states: Record<string, LayerState>;
   /** Martin source ids present in the catalog; `null` = assume all available. */
   availableSources: ReadonlySet<string> | null;
+  /** Query string for the filtered incident MVT source (without `?`/token). */
+  incidentTileQuery?: string;
 }
 
 /** The unique Martin sources referenced by the available system layers. */
@@ -60,7 +62,8 @@ export function buildStyle(opts: BuildStyleOptions): StyleSpecification {
 
   const sources: StyleSpecification['sources'] = {};
   for (const source of gisSources(availableSources)) {
-    sources[source] = { type: 'vector', tiles: [tileUrl(source)], minzoom: 0, maxzoom: 18 };
+    const query = source === 'incidents_mvt' ? (opts.incidentTileQuery ?? '') : '';
+    sources[source] = { type: 'vector', tiles: [tileUrl(source, query)], minzoom: 0, maxzoom: 18 };
   }
   if (basemap) {
     sources[PROTOMAPS_SOURCE] = {

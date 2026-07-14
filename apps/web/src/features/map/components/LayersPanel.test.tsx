@@ -5,7 +5,13 @@ import i18n from '@/lib/i18n';
 import { defaultLayerStates } from '../lib/layers';
 import { LayersPanel, type LayersPanelProps } from './LayersPanel';
 
-const ALL_SOURCES = new Set(['admin_units', 'facilities', 'risk_zones', 'layer_features']);
+const ALL_SOURCES = new Set([
+  'admin_units',
+  'facilities',
+  'risk_zones',
+  'layer_features',
+  'incidents_mvt',
+]);
 
 function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
   const props: LayersPanelProps = {
@@ -31,16 +37,19 @@ describe('LayersPanel', () => {
 
   it('renders each group with its layers', () => {
     renderPanel();
+    expect(screen.getByText('Оперативная обстановка')).toBeInTheDocument();
     expect(screen.getByText('Границы')).toBeInTheDocument();
     expect(screen.getByText('Инфраструктура')).toBeInTheDocument();
     expect(screen.getByText('Риски')).toBeInTheDocument();
     expect(screen.getByText('Мои слои')).toBeInTheDocument();
     expect(screen.getByText('Административные границы')).toBeInTheDocument();
+    expect(screen.getByText('Чрезвычайные ситуации')).toBeInTheDocument();
   });
 
   it('reflects default visibility on the checkboxes', () => {
     renderPanel();
     expect(screen.getByRole('checkbox', { name: 'Административные границы' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Чрезвычайные ситуации' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Зоны риска' })).not.toBeChecked();
   });
 
@@ -64,6 +73,11 @@ describe('LayersPanel', () => {
     expect(screen.getByText('Границы регионов')).toBeInTheDocument();
     // risk_zones is hidden by default → its legend label does not.
     expect(screen.queryByText('Зона риска')).not.toBeInTheDocument();
+    expect(screen.getByText('Донесение')).toBeInTheDocument();
+    expect(screen.getByText('В работе')).toBeInTheDocument();
+    expect(screen.getByText('Локализована')).toBeInTheDocument();
+    expect(screen.getByText('Ликвидирована')).toBeInTheDocument();
+    expect(screen.getByText('Закрыта')).toBeInTheDocument();
     expect(screen.getAllByRole('slider').length).toBeGreaterThan(0);
   });
 

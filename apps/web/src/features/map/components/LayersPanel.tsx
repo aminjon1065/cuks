@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Crosshair, Layers, PanelLeftClose } from 'lucide-react';
 import { Button, Checkbox, cn, Slider } from '@cuks/ui';
 import {
-  LAYER_GROUP_ORDER,
+  PANEL_GROUP_ORDER,
   SYSTEM_LAYERS,
   type LayerState,
   type LegendItem,
@@ -27,13 +27,26 @@ function LegendSwatch({ item }: { item: LegendItem }): React.JSX.Element {
     <li className="flex items-center gap-2 text-xs text-text-muted">
       {item.shape === 'line' ? (
         <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: color }} />
+      ) : item.shape === 'cross' ? (
+        <span
+          className="inline-flex size-3 items-center justify-center text-base leading-none"
+          style={{ color }}
+        >
+          ×
+        </span>
       ) : (
         <span
           className={cn(
-            'inline-block size-3',
+            'inline-block size-3 border-current',
             item.shape === 'circle' ? 'rounded-full' : 'rounded-sm',
+            item.shape === 'active' && 'rounded-full border-[3px] bg-transparent',
+            item.shape === 'diamond' && 'rotate-45 rounded-[1px]',
           )}
-          style={{ background: color, opacity: item.shape === 'fill' ? 0.55 : 1 }}
+          style={{
+            background: item.shape === 'active' ? 'transparent' : color,
+            borderColor: color,
+            opacity: item.shape === 'fill' ? 0.55 : 1,
+          }}
         />
       )}
       <span>{t(item.labelKey)}</span>
@@ -129,7 +142,7 @@ export function LayersPanel({
 
   if (collapsed) {
     return (
-      <div className="absolute left-3 top-3 z-10">
+      <div className="absolute left-3 top-3 z-20">
         <Button
           variant="secondary"
           size="icon"
@@ -146,13 +159,13 @@ export function LayersPanel({
   const available = SYSTEM_LAYERS.filter(
     (def) => !availableSources || availableSources.has(def.source),
   );
-  const groups = LAYER_GROUP_ORDER.map((group) => ({
+  const groups = PANEL_GROUP_ORDER.map((group) => ({
     group,
     layers: available.filter((def) => def.group === group),
   })).filter((entry) => entry.layers.length > 0);
 
   return (
-    <div className="absolute left-3 top-3 z-10 flex max-h-[calc(100%-1.5rem)] w-72 flex-col overflow-hidden rounded border border-border bg-surface shadow-[var(--shadow-2)]">
+    <div className="absolute left-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-[calc(100%-1.5rem)] max-w-72 flex-col overflow-hidden rounded border border-border bg-surface shadow-[var(--shadow-2)]">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2 text-sm font-medium text-text">
           <Layers className="size-4 text-text-muted" />

@@ -1,5 +1,9 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { TILE_TOKEN_TTL_SECONDS, type TileTokenResponse } from '@cuks/shared';
+import {
+  TILE_TOKEN_TTL_SECONDS,
+  type IncidentMapFilterOptionsResponse,
+  type TileTokenResponse,
+} from '@cuks/shared';
 import { api } from '@/lib/api-client';
 import { appendTileToken } from '../lib/tiles';
 
@@ -20,6 +24,15 @@ export function useTileToken(): UseQueryResult<TileTokenResponse> {
     staleTime: TOKEN_REFRESH_MS,
     refetchInterval: TOKEN_REFRESH_MS,
     refetchIntervalInBackground: true,
+  });
+}
+
+/** Dictionary/admin-boundary options for the operational incident filters. */
+export function useIncidentMapFilterOptions(): UseQueryResult<IncidentMapFilterOptionsResponse> {
+  return useQuery({
+    queryKey: [...mapKey, 'incident-filter-options'],
+    queryFn: () => api.get<IncidentMapFilterOptionsResponse>('/v1/gis/incidents/filter-options'),
+    staleTime: 30 * 60 * 1000,
   });
 }
 

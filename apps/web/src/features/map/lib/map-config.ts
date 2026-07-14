@@ -19,8 +19,8 @@ export const BASEMAP_SOURCE = 'region';
 
 /** Tile-URL template for a Martin source, resolved same-origin. The tile token
  *  is appended per-request by {@link makeTransformRequest}, not baked in here. */
-export function tileUrl(source: string): string {
-  return `/tiles/${source}/{z}/{x}/{y}`;
+export function tileUrl(source: string, query = ''): string {
+  return `/tiles/${source}/{z}/{x}/{y}${query ? `?${query}` : ''}`;
 }
 
 /** Read a design-system color token (docs/06 §2) off the document root so map

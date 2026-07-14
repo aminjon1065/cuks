@@ -4,7 +4,7 @@ import { defaultLayerStates } from './layers';
 
 const token = (name: string): string => `color(${name})`;
 const states = defaultLayerStates();
-const GIS_SOURCES = ['admin_units', 'facilities', 'risk_zones', 'layer_features'];
+const GIS_SOURCES = ['admin_units', 'facilities', 'risk_zones', 'layer_features', 'incidents_mvt'];
 
 describe('hasBasemap', () => {
   it('is true only when the region source is published', () => {
@@ -37,6 +37,25 @@ describe('buildStyle — neutral basemap (no PMTiles)', () => {
   it('includes compiled gis layers on top of the background', () => {
     expect(style.layers.some((l) => l.id === 'admin_units')).toBe(true);
     expect(style.layers.some((l) => l.id === 'facilities')).toBe(true);
+    expect(style.layers.some((l) => l.id === 'incidents')).toBe(true);
+  });
+
+  it('places the filter query only on the incident source', () => {
+    const filtered = buildStyle({
+      flavor: 'light',
+      token,
+      states,
+      availableSources: new Set(GIS_SOURCES),
+      incidentTileQuery: 'status=active&from=1&to=2',
+    });
+    const source = filtered.sources.incidents_mvt;
+    expect(source).toMatchObject({
+      type: 'vector',
+      tiles: ['/tiles/incidents_mvt/{z}/{x}/{y}?status=active&from=1&to=2'],
+    });
+    expect(filtered.sources.admin_units).toMatchObject({
+      tiles: ['/tiles/admin_units/{z}/{x}/{y}'],
+    });
   });
 });
 

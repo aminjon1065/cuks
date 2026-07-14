@@ -13,6 +13,7 @@ export interface FilterBarProps {
   chips?: FilterChip[];
   onReset?: () => void;
   resetLabel?: React.ReactNode;
+  removeLabel?: (chip: FilterChip) => string;
   children?: React.ReactNode;
   className?: string;
 }
@@ -21,6 +22,7 @@ export function FilterBar({
   chips = [],
   onReset,
   resetLabel = 'Reset',
+  removeLabel = () => 'Remove filter',
   children,
   className,
 }: FilterBarProps): React.JSX.Element {
@@ -38,7 +40,7 @@ export function FilterBar({
               type="button"
               onClick={c.onRemove}
               className="text-text-muted transition-colors hover:text-text"
-              aria-label="remove filter"
+              aria-label={removeLabel(c)}
             >
               <X className="size-3" />
             </button>

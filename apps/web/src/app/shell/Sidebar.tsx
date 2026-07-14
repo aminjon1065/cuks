@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -43,11 +44,23 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }): Rea
 export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
   const { t } = useTranslation('nav');
   const { t: tc } = useTranslation('common');
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  const storedCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggle = useUiStore((s) => s.toggleSidebar);
+  const [compactViewport, setCompactViewport] = useState(
+    () => window.matchMedia('(max-width: 1023px)').matches,
+  );
+  const collapsed = storedCollapsed || compactViewport;
   const adminItems = useVisibleByPermission(ADMIN_NAV);
 
   const primaryOrg = me.orgContext.find((o) => o.isPrimary) ?? me.orgContext[0];
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const sync = (): void => setCompactViewport(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   return (
     <aside
@@ -122,7 +135,7 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
                 type="button"
                 onClick={toggle}
                 aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
-                className="flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-2 hover:text-text"
+                className="hidden size-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-2 hover:text-text lg:flex"
               >
                 {collapsed ? (
                   <PanelLeftOpen className="size-4" />

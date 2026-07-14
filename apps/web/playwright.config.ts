@@ -31,7 +31,11 @@ export default defineConfig({
     {
       name: 'authed',
       testIgnore: /login\.spec\.ts$/,
-      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: STORAGE_STATE,
+        launchOptions: { args: ['--enable-unsafe-swiftshader'] },
+      },
     },
   ],
   webServer: [

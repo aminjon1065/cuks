@@ -1,4 +1,9 @@
-import type { LayerSpecification, Map as MlMap } from 'maplibre-gl';
+import type {
+  ExpressionSpecification,
+  FilterSpecification,
+  LayerSpecification,
+  Map as MlMap,
+} from 'maplibre-gl';
 import type { TokenResolver } from './map-config';
 
 /**
@@ -7,11 +12,11 @@ import type { TokenResolver } from './map-config';
  * to one or more MapLibre layers via {@link compileLayers}; visibility and
  * opacity are applied imperatively so dragging the opacity slider never rebuilds
  * the style. Colors are design-system tokens (docs/06 §2) resolved at compile
- * time, so light/dark themes are honored. Data-driven styling by severity/level
- * lands with the incidents layer (task 2.4).
+ * time, so light/dark themes are honored. Incident markers use the fixed
+ * severity-token scale and server-provided cluster/status properties.
  */
 
-export type LayerGroup = 'boundaries' | 'infrastructure' | 'risk' | 'mine';
+export type LayerGroup = 'operational' | 'boundaries' | 'infrastructure' | 'risk' | 'mine';
 
 /** Panel + on-map z-order (first = bottom). Polygons under points under drawn. */
 export const LAYER_GROUP_ORDER: readonly LayerGroup[] = [
@@ -19,12 +24,23 @@ export const LAYER_GROUP_ORDER: readonly LayerGroup[] = [
   'infrastructure',
   'risk',
   'mine',
+  'operational',
 ] as const;
 
-export type LayerKind = 'fill' | 'circle' | 'mixed';
+/** Operational data is the primary panel group even though it renders last on
+ * the map so incident markers stay above polygon and infrastructure layers. */
+export const PANEL_GROUP_ORDER: readonly LayerGroup[] = [
+  'operational',
+  'boundaries',
+  'infrastructure',
+  'risk',
+  'mine',
+] as const;
+
+export type LayerKind = 'fill' | 'circle' | 'mixed' | 'incident';
 
 export interface LegendItem {
-  shape: 'fill' | 'line' | 'circle';
+  shape: 'fill' | 'line' | 'circle' | 'active' | 'diamond' | 'square' | 'cross';
   /** Design-token variable name (e.g. `--sev-3`). */
   token: string;
   /** i18n key in the `map` namespace. */
@@ -63,7 +79,43 @@ const CIRCLE_BASE = 0.85;
 const LINE_BASE = 0.85;
 const STROKE_BASE = 1;
 
+export const INCIDENTS_LAYER_ID = 'incidents';
+export const INCIDENT_CLUSTERS_LAYER_ID = `${INCIDENTS_LAYER_ID}-clusters`;
+export const INCIDENT_CLUSTER_COUNT_LAYER_ID = `${INCIDENTS_LAYER_ID}-cluster-count`;
+export const INCIDENT_PULSE_LAYER_ID = `${INCIDENTS_LAYER_ID}-active-pulse`;
+
+/** Paint frame for the active-incident halo. `progress` is normalized 0..1. */
+export function incidentPulseFrame(progress: number): { radius: number; opacity: number } {
+  const phase = Math.max(0, Math.min(1, progress));
+  return { radius: 9 + phase * 9, opacity: (1 - phase) * 0.28 };
+}
+
+const INCIDENT_LEGEND: LegendItem[] = [1, 2, 3, 4, 5].map((level) => ({
+  shape: 'circle',
+  token: `--sev-${level}`,
+  labelKey: `legend.severity${level}`,
+}));
+
+INCIDENT_LEGEND.push(
+  { shape: 'circle', token: '--text-muted', labelKey: 'legend.statusReported' },
+  { shape: 'active', token: '--text-muted', labelKey: 'legend.statusActive' },
+  { shape: 'diamond', token: '--text-muted', labelKey: 'legend.statusLocalized' },
+  { shape: 'square', token: '--text-muted', labelKey: 'legend.statusEliminated' },
+  { shape: 'cross', token: '--text-muted', labelKey: 'legend.statusClosed' },
+);
+
 export const SYSTEM_LAYERS: readonly SystemLayerDef[] = [
+  {
+    id: INCIDENTS_LAYER_ID,
+    source: 'incidents_mvt',
+    sourceLayer: 'incidents',
+    group: 'operational',
+    titleKey: 'layers.incidents',
+    kind: 'incident',
+    colorToken: '--sev-3',
+    legend: INCIDENT_LEGEND,
+    defaultVisible: true,
+  },
   {
     id: 'admin_units',
     source: 'admin_units',
@@ -130,6 +182,13 @@ export function sublayerIds(def: SystemLayerDef): string[] {
       return [def.id];
     case 'mixed':
       return [`${def.id}-fill`, `${def.id}-line`, `${def.id}-point`];
+    case 'incident':
+      return [
+        INCIDENT_CLUSTERS_LAYER_ID,
+        INCIDENT_CLUSTER_COUNT_LAYER_ID,
+        INCIDENT_PULSE_LAYER_ID,
+        INCIDENTS_LAYER_ID,
+      ];
   }
 }
 
@@ -158,6 +217,26 @@ export function opacityTargets(def: SystemLayerDef): OpacityTarget[] {
         { layerId: `${def.id}-line`, prop: 'line-opacity', base: LINE_BASE },
         { layerId: `${def.id}-point`, prop: 'circle-opacity', base: CIRCLE_BASE },
         { layerId: `${def.id}-point`, prop: 'circle-stroke-opacity', base: STROKE_BASE },
+      ];
+    case 'incident':
+      return [
+        {
+          layerId: INCIDENT_CLUSTERS_LAYER_ID,
+          prop: 'circle-opacity',
+          base: 0.92,
+        },
+        {
+          layerId: INCIDENT_CLUSTERS_LAYER_ID,
+          prop: 'circle-stroke-opacity',
+          base: STROKE_BASE,
+        },
+        {
+          layerId: INCIDENT_CLUSTER_COUNT_LAYER_ID,
+          prop: 'icon-opacity',
+          base: 1,
+        },
+        { layerId: INCIDENT_PULSE_LAYER_ID, prop: 'circle-opacity', base: 0.25 },
+        { layerId: INCIDENTS_LAYER_ID, prop: 'icon-opacity', base: 0.95 },
       ];
   }
 }
@@ -244,6 +323,102 @@ export function compileLayers(
           },
         }),
       ];
+    case 'incident': {
+      const severityColor: ExpressionSpecification = [
+        'match',
+        ['get', 'severity'],
+        1,
+        token('--sev-1'),
+        2,
+        token('--sev-2'),
+        3,
+        token('--sev-3'),
+        4,
+        token('--sev-4'),
+        5,
+        token('--sev-5'),
+        token('--text-muted'),
+      ];
+      const clusterFilter: FilterSpecification = ['>', ['get', 'cluster_count'], 1];
+      const markerFilter: FilterSpecification = ['<=', ['get', 'cluster_count'], 1];
+      return [
+        {
+          id: INCIDENT_CLUSTERS_LAYER_ID,
+          type: 'circle',
+          ...shared,
+          filter: clusterFilter,
+          layout: { visibility },
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['get', 'cluster_count'],
+              2,
+              12,
+              20,
+              18,
+              100,
+              24,
+            ],
+            'circle-color': severityColor,
+            'circle-opacity': 0.92 * op,
+            'circle-stroke-color': stroke,
+            'circle-stroke-width': 2,
+            'circle-stroke-opacity': STROKE_BASE * op,
+          },
+        },
+        {
+          id: INCIDENT_CLUSTER_COUNT_LAYER_ID,
+          type: 'symbol',
+          ...shared,
+          filter: clusterFilter,
+          layout: {
+            visibility,
+            'icon-image': [
+              'concat',
+              'incident-cluster-count-',
+              ['to-string', ['get', 'cluster_count']],
+            ],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+          paint: { 'icon-opacity': op },
+        },
+        {
+          id: INCIDENT_PULSE_LAYER_ID,
+          type: 'circle',
+          ...shared,
+          filter: ['all', markerFilter, ['==', ['get', 'status'], 'active']],
+          layout: { visibility },
+          paint: {
+            'circle-radius': 10,
+            'circle-color': severityColor,
+            'circle-opacity': 0.25 * op,
+          },
+        },
+        {
+          id: INCIDENTS_LAYER_ID,
+          type: 'symbol',
+          ...shared,
+          filter: markerFilter,
+          layout: {
+            visibility,
+            'icon-image': [
+              'concat',
+              'incident-status-',
+              ['get', 'status'],
+              '-sev-',
+              ['to-string', ['get', 'severity']],
+            ],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+          paint: {
+            'icon-opacity': 0.95 * op,
+          },
+        },
+      ];
+    }
   }
 }
 

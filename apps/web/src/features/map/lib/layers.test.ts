@@ -7,6 +7,7 @@ import {
   defaultLayerStates,
   opacityTargets,
   orderedLayers,
+  incidentPulseFrame,
   sublayerIds,
   SYSTEM_LAYERS,
   type SystemLayerDef,
@@ -23,6 +24,7 @@ function def(id: string): SystemLayerDef {
 type Fill = Extract<LayerSpecification, { type: 'fill' }>;
 type Line = Extract<LayerSpecification, { type: 'line' }>;
 type Circle = Extract<LayerSpecification, { type: 'circle' }>;
+type SymbolLayer = Extract<LayerSpecification, { type: 'symbol' }>;
 
 describe('defaultLayerStates', () => {
   it('seeds one state per system layer using its default visibility', () => {
@@ -35,10 +37,10 @@ describe('defaultLayerStates', () => {
 });
 
 describe('orderedLayers', () => {
-  it('sorts by group z-order (boundaries first, mine last)', () => {
+  it('sorts by group z-order (boundaries first, operational markers last)', () => {
     const groups = orderedLayers().map((d) => d.group);
     expect(groups[0]).toBe('boundaries');
-    expect(groups[groups.length - 1]).toBe('mine');
+    expect(groups[groups.length - 1]).toBe('operational');
   });
 });
 
@@ -81,6 +83,39 @@ describe('compileLayers', () => {
       expect(layer).toMatchObject({ source: 'risk_zones', 'source-layer': 'risk_zones' });
     }
   });
+
+  it('compiles counted clusters and status-shaped severity markers', () => {
+    const layers = compileLayers(def('incidents'), token, { visible: true, opacity: 1 });
+    expect(layers.map((layer) => layer.id)).toEqual([
+      'incidents-clusters',
+      'incidents-cluster-count',
+      'incidents-active-pulse',
+      'incidents',
+    ]);
+    expect(layers.every((layer) => 'source' in layer && layer.source === 'incidents_mvt')).toBe(
+      true,
+    );
+    const count = layers[1] as SymbolLayer;
+    expect(count.filter).toEqual(['>', ['get', 'cluster_count'], 1]);
+    expect(count.layout?.['icon-image']).toEqual([
+      'concat',
+      'incident-cluster-count-',
+      ['to-string', ['get', 'cluster_count']],
+    ]);
+    const marker = layers[3] as SymbolLayer;
+    expect(marker.layout?.['icon-image']).toEqual(
+      expect.arrayContaining(['concat', 'incident-status-']),
+    );
+    expect(def('incidents').legend.map((item) => item.labelKey)).toEqual(
+      expect.arrayContaining([
+        'legend.statusReported',
+        'legend.statusActive',
+        'legend.statusLocalized',
+        'legend.statusEliminated',
+        'legend.statusClosed',
+      ]),
+    );
+  });
 });
 
 describe('sublayerIds / opacityTargets', () => {
@@ -106,6 +141,24 @@ describe('sublayerIds / opacityTargets', () => {
       'circle-opacity',
       'circle-stroke-opacity',
     ]);
+  });
+
+  it('targets cluster, pulse, marker, and strokes for the incident layer', () => {
+    expect(opacityTargets(def('incidents')).map((target) => target.layerId)).toEqual([
+      'incidents-clusters',
+      'incidents-clusters',
+      'incidents-cluster-count',
+      'incidents-active-pulse',
+      'incidents',
+    ]);
+  });
+});
+
+describe('incidentPulseFrame', () => {
+  it('expands and fades the halo while clamping progress', () => {
+    expect(incidentPulseFrame(0)).toEqual({ radius: 9, opacity: 0.28 });
+    expect(incidentPulseFrame(1)).toEqual({ radius: 18, opacity: 0 });
+    expect(incidentPulseFrame(2)).toEqual({ radius: 18, opacity: 0 });
   });
 });
 
