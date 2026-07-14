@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.3 готовы
-- **Последняя сессия**: 2026-07-14 — задача 2.3 (карта-компонент MapLibre + панель слоёв)
+- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.4 готовы
+- **Последняя сессия**: 2026-07-14 — задача 2.4 (слой ЧС: MVT-кластеры, фильтры и таймлайн)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -16,7 +16,7 @@
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
-| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.3 готовы       | —                  |
+| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.4 готовы       | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
 | 5 Чат             | ⬜                           | —                  |
@@ -26,6 +26,98 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-14 — Фаза 2: задача 2.4 (слой ЧС: фильтры, кластеры, status-маркеры, таймлайн)
+
+**Сделано** (по `docs/modules/10` §4, `docs/06` §6–7, `docs/04`):
+
+- **MVT/БД**: миграция `0014_incidents_mvt_clustered` заменяет `gis.incidents_mvt`:
+  server-side фильтры `status/type/severity/region/from/to`, fail-closed для некорректного ввода,
+  soft-delete+bbox; на `z<11` — стабильная глобальная WebMercator-сетка (48 px) с полной агрегацией
+  edge-bucket, centroid, `cluster_count`, max-severity; на `z>=11` — отдельные маркеры через
+  `ST_PointOnSurface`. Hardening-миграция `0015` ограничивает epoch диапазоном PostgreSQL
+  `timestamptz` и задаёт half-open владение seam-точками (ровно один соседний тайл).
+- **Сиды**: demo — 50 детерминированных ЧС по 5 регионам/45 дням; e2e — 12 компактных ЧС со всеми
+  5 статусами и seam-fixture. `occurredAt/reportedAt` формируются парой (донесение +15 мин), upsert
+  обновляет оба; post-seed invariant запрещает `occurred_at > reported_at`.
+- **API/shared**: защищённый `GET /api/v1/gis/incidents/filter-options` (`gis.view`, Swagger) —
+  активные листовые виды ЧС с родительскими названиями + регионы; DTO в `@cuks/shared`, DB-backed
+  сервис и unit-тест.
+- **Карта/UI**:
+  - источник `incidents_mvt` подключён к реестру слоёв; фильтры меняют только tile-template через
+    `VectorTileSource.setTiles` (камера/остальные source-cache не пересоздаются);
+  - `IncidentFilterBar`: DB-backed вид/статус/регион, chips/reset, loading/error/retry, RU/TG;
+  - `IncidentTimeline`: период и cumulative play по календарным дням Asia/Dushanbe, default 30 дней,
+    inclusive cursor → exclusive SQL `to`; one-day диапазон блокирует slider;
+  - severity 1–5 задаёт цвет; статус — 5 разных offline runtime-sprites (circle/bullseye/diamond/
+    square/cross), active дополнительно пульсирует; числовые cluster-count sprites генерируются
+    через `styleimagemissing` без CDN/внешних glyphs;
+  - pulse RAF работает только при видимом active marker; hidden/empty/reduced-motion карта не
+    получает постоянных `setPaintProperty`/repaint;
+  - tablet `<1024` принудительно использует компактный app-sidebar без изменения desktop preference;
+    FilterBar/timeline адаптивны, панель слоёв — overlay, viewport 768/375 без overflow.
+- **i18n/a11y**: RU/TG parity; локализованные labels/remove-actions; статусная легенда; native form
+  controls/slider доступны с клавиатуры. Новых зависимостей нет.
+
+**Тесты/проверка**:
+
+- Корневой gate `corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build`
+  — зелёный: typecheck 8/8, lint 8/8, build 5/5; API 140, web 65, worker 45, shared 27, UI 17,
+  DB 2 теста. Vite: map chunk 302.38 КБ gzip, основной 391.74 КБ gzip (только существующий warning
+  о chunk >500 КБ).
+- Playwright authed после свежего `seed:e2e`: `map.spec.ts` **4/4** — настоящий MVT render,
+  cluster-count image/layer, mouse click→zoom, 5 status-sprites, seam feature ровно 1 раз,
+  комбинированный `status+type+region` с реальным HTTP 200 и проверкой rendered properties,
+  timeline tick+новый `to`-тайл, RAF stop, viewports 768×800/375×800.
+- Live curl после полного build→dev restart: health 200; filter-options `32` вида/`5` регионов;
+  all/active MVT 200 (325/193 Б); invalid-region и extreme-epoch — 204/0 Б. SQL-транзакция с точкой
+  ровно на z11 seam: соседние tiles `0` и `253` Б (не дубль).
+- Реальный Chromium `--enable-unsafe-swiftshader`: `styleLoaded=true`, 6 clusters + 6 числовых labels,
+  max `cluster_count=19`; на z12 отрисовано 19 status-маркеров; обе темы, console errors `[]`.
+  Скриншоты: `cuks-map-2.4-final-light.png`, `cuks-map-2.4-final-dark-statuses.png`.
+
+**Adversarial-review** (3 независимых измерения: SQL/MVT+API, MapLibre lifecycle/render,
+UI/i18n/a11y; **каждая** находка отдельно проверена другим refuter-agent): **11 находок →
+9 подтверждено, 2 рефутировано**. Все подтверждённые исправлены с регрессиями:
+
+- **[high]** fixed-width overlays и раскрытый 240 px sidebar делали карту недоступной на 768/375 →
+  responsive sidebar/filter/timeline + viewport e2e.
+- **[medium]** bigint-valid extreme epoch проходил `pg_input_is_valid`, затем `to_timestamp` бросал
+  и Martin отдавал 500 → `0015` range guard, live 204.
+- **[medium]** `ST_Intersects` включал seam point в два закрытых envelope → half-open ownership,
+  SQL+Playwright seam regressions.
+- **[medium]** statuses рисовались одинаковым circle (3 статуса неразличимы) → 5 offline shapes +
+  legend + unit/e2e.
+- **[medium]** cluster count влиял лишь на radius, обещанный числовой счётчик отсутствовал →
+  runtime count sprite + symbol-layer + unit/e2e.
+- **[medium]** pulse RAF делал 2 style writes ~30 fps даже hidden/reduced/no-active → event-driven
+  start/stop + Playwright spy regression.
+- **[medium]** e2e проверял только serialized URL/label кнопки и пропускал поломку server filter,
+  tile reload, timeline tick, cluster click → реальный combined render/network/camera сценарий.
+- **[low]** one-day timeline имел `max=1` и мог ArrowRight включить лишние сутки → disabled+clamp,
+  keyboard/query regression.
+- **[low]** повторный `seed:e2e` обновлял `occurredAt`, но оставлял старый `reportedAt` → paired
+  timestamp upsert + invariant + unit.
+- **[рефутировано корректно]** global «нет результатов»/ошибка MVT нельзя надёжно вывести из
+  viewport tile events (`queryRenderedFeatures=0` не означает global empty; нужен отдельный
+  count-contract, которого нет в 2.4). Существующие token/catalog/options loading/error/empty
+  состояния достаточны; ложный empty-state не добавлен.
+- **[рефутировано корректно]** отдельный Enter/Space handler для cluster feature не требуется:
+  MapLibre canvas focusable и даёт keyboard pan/zoom, NavigationControl — focusable buttons;
+  click-to-zoom по спеке выполнен, per-feature inspector относится к 2.7.
+
+**Решения**:
+
+- Кластеризация — **server-side MVT**, не клиентский GeoJSON: меньше payload, единая фильтрация,
+  стабильные buckets между tiles; threshold `z=11`, cell 48 px.
+- Временной фильтр — локальные даты Asia/Dushanbe (UTC+05 без DST), default 30 дней; playback
+  cumulative, SQL `to` exclusive.
+- Runtime canvas sprites выбраны вместо MapLibre `text-field`/внешнего sprite: neutral dev style
+  намеренно без glyph URL, а self-hosted `/basemap-fonts` — пока prod-only deferred path.
+- Территориальный row-scope не добавлен: в текущей модели нет достоверного org→admin_unit mapping;
+  enforcement остаётся явно отложен до 2.13. Endpoint только read-only reference data, отдельное
+  audit-event не требуется. Имеющиеся GiST geom + btree status/type/region/occurred покрывают
+  optional bitmap-combination на целевом масштабе; новых индексов/зависимостей нет.
 
 ### 2026-07-14 — Фаза 2: задача 2.3 (карта-компонент MapLibre + панель слоёв + легенды)
 
