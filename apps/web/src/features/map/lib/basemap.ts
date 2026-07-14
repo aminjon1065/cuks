@@ -1,7 +1,13 @@
 import { DARK, layers as protomapsLayers, LIGHT } from '@protomaps/basemaps';
 import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { BASEMAP_SOURCE, tileUrl, type TokenResolver } from './map-config';
-import { compileAllLayers, SYSTEM_LAYERS, type LayerState } from './layers';
+import {
+  compileAllLayers,
+  DRAWN_SOURCE,
+  SYSTEM_LAYERS,
+  type LayerState,
+  type MapLayerDef,
+} from './layers';
 
 /**
  * MapLibre style builder (docs/modules/10 §4). Two flavors — `light`/`dark` —
@@ -41,12 +47,21 @@ export interface BuildStyleOptions {
   availableSources: ReadonlySet<string> | null;
   /** Query string for the filtered incident MVT source (without `?`/token). */
   incidentTileQuery?: string;
+  /** The user's drawn layers (task 2.7); all share the `layer_features` source. */
+  drawnDefs?: readonly MapLayerDef[];
+  /** Cache-buster for the drawn source, bumped after every feature write. */
+  drawnTileQuery?: string;
+  /** Feature open in the geometry editor — hidden from tiles while it is edited. */
+  hiddenFeatureId?: string | null;
 }
 
-/** The unique Martin sources referenced by the available system layers. */
-function gisSources(availableSources: ReadonlySet<string> | null): string[] {
+/** The unique Martin sources referenced by the available layers. */
+function gisSources(
+  availableSources: ReadonlySet<string> | null,
+  drawnDefs: readonly MapLayerDef[],
+): string[] {
   const sources = new Set<string>();
-  for (const def of SYSTEM_LAYERS) {
+  for (const def of [...SYSTEM_LAYERS, ...drawnDefs]) {
     if (!availableSources || availableSources.has(def.source)) sources.add(def.source);
   }
   return [...sources];
@@ -58,11 +73,17 @@ export function hasBasemap(availableSources: ReadonlySet<string> | null): boolea
 
 export function buildStyle(opts: BuildStyleOptions): StyleSpecification {
   const { flavor, token, states, availableSources } = opts;
+  const drawnDefs = opts.drawnDefs ?? [];
   const basemap = hasBasemap(availableSources);
 
   const sources: StyleSpecification['sources'] = {};
-  for (const source of gisSources(availableSources)) {
-    const query = source === 'incidents_mvt' ? (opts.incidentTileQuery ?? '') : '';
+  for (const source of gisSources(availableSources, drawnDefs)) {
+    const query =
+      source === 'incidents_mvt'
+        ? (opts.incidentTileQuery ?? '')
+        : source === DRAWN_SOURCE
+          ? (opts.drawnTileQuery ?? '')
+          : '';
     sources[source] = { type: 'vector', tiles: [tileUrl(source, query)], minzoom: 0, maxzoom: 18 };
   }
   if (basemap) {
@@ -91,7 +112,10 @@ export function buildStyle(opts: BuildStyleOptions): StyleSpecification {
   const style: StyleSpecification = {
     version: 8,
     sources,
-    layers: [...basemapLayers, ...compileAllLayers(token, states, availableSources)],
+    layers: [
+      ...basemapLayers,
+      ...compileAllLayers(token, states, availableSources, drawnDefs, opts.hiddenFeatureId),
+    ],
   };
   if (basemap) style.glyphs = GLYPHS_URL;
   return style;

@@ -1,27 +1,58 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { GisLayerDto } from '@cuks/shared';
 import i18n from '@/lib/i18n';
-import { defaultLayerStates } from '../lib/layers';
+import { defaultLayerStates, drawnLayerDefs } from '../lib/layers';
 import { LayersPanel, type LayersPanelProps } from './LayersPanel';
 
 const ALL_SOURCES = new Set([
   'admin_units',
   'facilities',
   'risk_zones',
-  'layer_features',
+  'layer_features_mvt',
   'incidents_mvt',
 ]);
+
+function layer(overrides: Partial<GisLayerDto> = {}): GisLayerDto {
+  return {
+    id: 'l1',
+    slug: 'oceplenie',
+    title: 'Оцепление',
+    kind: 'drawn',
+    geometryType: 'Polygon',
+    style: { color: '#b91c1c' },
+    description: null,
+    minZoom: null,
+    maxZoom: null,
+    createdBy: 'u1',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    canEdit: true,
+    canManage: true,
+    ...overrides,
+  };
+}
 
 function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
   const props: LayersPanelProps = {
     states: defaultLayerStates(),
     availableSources: ALL_SOURCES,
+    drawnDefs: [],
+    activeLayerId: null,
+    canCreateLayer: false,
+    editLocked: false,
+    layersLoading: false,
+    layersError: false,
+    onRetryLayers: vi.fn(),
     collapsed: false,
     onCollapsedChange: vi.fn(),
     onToggle: vi.fn(),
     onOpacity: vi.fn(),
     onZoom: vi.fn(),
+    onActiveLayerChange: vi.fn(),
+    onCreateLayer: vi.fn(),
+    onDeleteLayer: vi.fn(),
     ...overrides,
   };
   render(
@@ -36,7 +67,7 @@ describe('LayersPanel', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('renders each group with its layers', () => {
-    renderPanel();
+    renderPanel({ canCreateLayer: true });
     expect(screen.getByText('Оперативная обстановка')).toBeInTheDocument();
     expect(screen.getByText('Границы')).toBeInTheDocument();
     expect(screen.getByText('Инфраструктура')).toBeInTheDocument();
@@ -59,12 +90,12 @@ describe('LayersPanel', () => {
     expect(props.onToggle).toHaveBeenCalledWith('admin_units', false);
   });
 
-  it('requests zoom-to-layer with the layer source', () => {
+  it('requests zoom-to-layer with the layer definition', () => {
     const props = renderPanel();
     fireEvent.click(
       screen.getByRole('button', { name: /Приблизить к слою «Объекты инфраструктуры»/ }),
     );
-    expect(props.onZoom).toHaveBeenCalledWith('facilities');
+    expect(props.onZoom).toHaveBeenCalledWith(expect.objectContaining({ source: 'facilities' }));
   });
 
   it('shows opacity + legend only for visible layers', () => {
@@ -101,5 +132,52 @@ describe('LayersPanel', () => {
     fireEvent.click(expand);
     expect(props.onCollapsedChange).toHaveBeenCalledWith(false);
     expect(screen.queryByText('Границы')).not.toBeInTheDocument();
+  });
+
+  describe('drawn layers', () => {
+    it('lists a drawn layer and makes it the drawing target', () => {
+      const props = renderPanel({ drawnDefs: drawnLayerDefs([layer()]) });
+      expect(screen.getByText('Оцепление')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Рисовать в слое «Оцепление»' }));
+      expect(props.onActiveLayerChange).toHaveBeenCalledWith('l1');
+    });
+
+    it('clears the drawing target when the active layer is toggled off', () => {
+      const props = renderPanel({ drawnDefs: drawnLayerDefs([layer()]), activeLayerId: 'l1' });
+      fireEvent.click(screen.getByRole('button', { name: 'Рисовать в слое «Оцепление»' }));
+      expect(props.onActiveLayerChange).toHaveBeenCalledWith(null);
+    });
+
+    it('offers editing and deletion only where the ACL allows it', () => {
+      renderPanel({
+        drawnDefs: drawnLayerDefs([layer({ canEdit: false, canManage: false })]),
+      });
+      expect(
+        screen.queryByRole('button', { name: 'Рисовать в слое «Оцепление»' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Удалить слой «Оцепление»' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('locks target-switching and deletion while a geometry edit is unsaved', () => {
+      renderPanel({ drawnDefs: drawnLayerDefs([layer()]), activeLayerId: 'l1', editLocked: true });
+      expect(screen.getByRole('button', { name: 'Рисовать в слое «Оцепление»' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Удалить слой «Оцепление»' })).toBeDisabled();
+    });
+
+    it('shows the registry error with a retry instead of an empty «Мои слои»', () => {
+      const props = renderPanel({ layersError: true, canCreateLayer: true });
+      expect(screen.getByText('Не удалось загрузить слои')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+      expect(props.onRetryLayers).toHaveBeenCalled();
+    });
+
+    it('hides the create action without `gis.layers.manage`', () => {
+      renderPanel({ canCreateLayer: false });
+      expect(screen.queryByRole('button', { name: 'Новый слой' })).not.toBeInTheDocument();
+      renderPanel({ canCreateLayer: true });
+      expect(screen.getByRole('button', { name: 'Новый слой' })).toBeInTheDocument();
+    });
   });
 });

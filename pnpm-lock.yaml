@@ -222,6 +222,12 @@ importers:
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
+      terra-draw:
+        specifier: ^1.32.0
+        version: 1.32.0
+      terra-draw-maplibre-gl-adapter:
+        specifier: ^1.4.1
+        version: 1.4.1(maplibre-gl@5.24.0)(terra-draw@1.32.0)
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.17)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
@@ -5702,6 +5708,15 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
+  terra-draw-maplibre-gl-adapter@1.4.1:
+    resolution: {integrity: sha512-qZ/bc9bVPnyt0keLVTofV8xiTPkdkbO6RzqrfNLe9zH/edW5PsjvJw97m1EksPZeXNJtFxsVbhi12cPaoNiWfg==}
+    peerDependencies:
+      maplibre-gl: '>=4'
+      terra-draw: ^1.0.0
+
+  terra-draw@1.32.0:
+    resolution: {integrity: sha512-G/LmiDSL+oAzMuVO7uOaTWs5Vm9NX2l4/wI6/mSbY24uNwi6o9xcGrfo+X3nuwUEbTwRiIrJ4YtHYMTRfdbv7w==}
+
   terser-webpack-plugin@5.6.1:
     resolution: {integrity: sha512-201R5j+sJpK8nFWwKVyNfZot8FaJbLZDq5evriVzbV1wDtSXDjRUDRfJzHpAaxFDMEhsZL1QkeqM61wgsS3KaQ==}
     engines: {node: '>= 10.13.0'}
@@ -11180,6 +11195,13 @@ snapshots:
   tailwindcss@4.3.2: {}
 
   tapable@2.3.3: {}
+
+  terra-draw-maplibre-gl-adapter@1.4.1(maplibre-gl@5.24.0)(terra-draw@1.32.0):
+    dependencies:
+      maplibre-gl: 5.24.0
+      terra-draw: 1.32.0
+
+  terra-draw@1.32.0: {}
 
   terser-webpack-plugin@5.6.1(@swc/core@1.15.43)(lightningcss@1.32.0)(webpack@5.106.2(@swc/core@1.15.43)(lightningcss@1.32.0)):
     dependencies:

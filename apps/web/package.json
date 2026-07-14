@@ -28,6 +28,8 @@
     "react-i18next": "^17.0.9",
     "react-router-dom": "^7.18.1",
     "socket.io-client": "^4.8.3",
+    "terra-draw": "^1.32.0",
+    "terra-draw-maplibre-gl-adapter": "^1.4.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

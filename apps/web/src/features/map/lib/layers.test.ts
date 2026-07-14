@@ -1,21 +1,25 @@
 import type { LayerSpecification, Map as MlMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
+import type { GisLayerDto } from '@cuks/shared';
 import {
+  applyFilter,
   applyOpacity,
   applyVisibility,
   compileLayers,
   defaultLayerStates,
+  drawnLayerDefs,
+  layerFilter,
   opacityTargets,
   orderedLayers,
   incidentPulseFrame,
   sublayerIds,
   SYSTEM_LAYERS,
-  type SystemLayerDef,
+  type MapLayerDef,
 } from './layers';
 
 const token = (name: string): string => (name === '--primary' ? '#111111' : '#222222');
 
-function def(id: string): SystemLayerDef {
+function def(id: string): MapLayerDef {
   const found = SYSTEM_LAYERS.find((d) => d.id === id);
   if (!found) throw new Error(`no such layer ${id}`);
   return found;
@@ -70,11 +74,12 @@ describe('compileLayers', () => {
   });
 
   it('compiles a mixed (drawn) layer into fill + line + point sublayers', () => {
-    const layers = compileLayers(def('layer_features'), token, { visible: true, opacity: 1 });
+    const [drawn] = drawnLayerDefs([drawnLayer()]);
+    const layers = compileLayers(drawn!, token, { visible: true, opacity: 1 });
     expect(layers.map((l) => l.id)).toEqual([
-      'layer_features-fill',
-      'layer_features-line',
-      'layer_features-point',
+      'drawn:layer-1-fill',
+      'drawn:layer-1-line',
+      'drawn:layer-1-point',
     ]);
   });
 
@@ -135,7 +140,8 @@ describe('sublayerIds / opacityTargets', () => {
   });
 
   it('dims the point stroke of a mixed layer (fill/line/circle + stroke)', () => {
-    expect(opacityTargets(def('layer_features')).map((t) => t.prop)).toEqual([
+    const [drawn] = drawnLayerDefs([drawnLayer()]);
+    expect(opacityTargets(drawn!).map((t) => t.prop)).toEqual([
       'fill-opacity',
       'line-opacity',
       'circle-opacity',
@@ -190,5 +196,93 @@ describe('applyVisibility / applyOpacity', () => {
     map.getLayer.mockReturnValue(undefined as unknown);
     applyVisibility(map as unknown as MlMap, def('facilities'), true);
     expect(map.setLayoutProperty).not.toHaveBeenCalled();
+  });
+});
+
+function drawnLayer(overrides: Partial<GisLayerDto> = {}): GisLayerDto {
+  return {
+    id: 'layer-1',
+    slug: 'cordon',
+    title: 'Оцепление',
+    kind: 'drawn',
+    geometryType: 'Polygon',
+    style: { color: '#b91c1c' },
+    description: null,
+    minZoom: null,
+    maxZoom: null,
+    createdBy: null,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    canEdit: true,
+    canManage: true,
+    ...overrides,
+  };
+}
+
+describe('drawnLayerDefs', () => {
+  it('scopes each drawn layer to its own features in the shared source', () => {
+    const [def] = drawnLayerDefs([drawnLayer()]);
+    expect(def).toMatchObject({
+      id: 'drawn:layer-1',
+      source: 'layer_features_mvt',
+      sourceLayer: 'layer_features',
+      group: 'mine',
+      title: 'Оцепление',
+      color: '#b91c1c',
+    });
+    expect(def!.filter).toEqual(['==', ['get', 'layer_id'], 'layer-1']);
+  });
+
+  it('falls back to the design token when the stored color is not a hex', () => {
+    const [def] = drawnLayerDefs([drawnLayer({ style: { color: 'red; drop table' } })]);
+    expect(def!.color).toBeUndefined();
+    expect(def!.colorToken).toBe('--success');
+  });
+
+  it('renders drawn layers above the polygon layers but below the incidents', () => {
+    const ordered = orderedLayers(drawnLayerDefs([drawnLayer()])).map((def) => def.id);
+    expect(ordered.indexOf('drawn:layer-1')).toBeGreaterThan(ordered.indexOf('risk_zones'));
+    expect(ordered.indexOf('drawn:layer-1')).toBeLessThan(ordered.indexOf('incidents'));
+  });
+});
+
+describe('layerFilter', () => {
+  it('keeps the layer scope and hides the feature open in the geometry editor', () => {
+    const [def] = drawnLayerDefs([drawnLayer()]);
+    expect(layerFilter(def!, 'f-1')).toEqual([
+      'all',
+      ['==', ['get', 'layer_id'], 'layer-1'],
+      ['!=', ['get', 'id'], 'f-1'],
+    ]);
+  });
+
+  it('leaves system layers alone (their filters are structural)', () => {
+    expect(layerFilter(def('admin_units'), 'f-1')).toBeNull();
+    const map = { getLayer: vi.fn(() => ({}) as unknown), setFilter: vi.fn() };
+    applyFilter(map as unknown as MlMap, def('admin_units'), 'f-1');
+    expect(map.setFilter).not.toHaveBeenCalled();
+  });
+
+  it('applies the edit filter to every sublayer of a drawn layer', () => {
+    const [layer] = drawnLayerDefs([drawnLayer()]);
+    const map = { getLayer: vi.fn(() => ({}) as unknown), setFilter: vi.fn() };
+    applyFilter(map as unknown as MlMap, layer!, 'f-1');
+    expect(map.setFilter).toHaveBeenCalledTimes(3);
+    expect(map.setFilter).toHaveBeenCalledWith('drawn:layer-1-fill', [
+      'all',
+      ['==', ['get', 'layer_id'], 'layer-1'],
+      ['!=', ['get', 'id'], 'f-1'],
+    ]);
+  });
+});
+
+describe('compileLayers (drawn)', () => {
+  it('paints the layer in its own color and filters the shared source', () => {
+    const [layer] = drawnLayerDefs([drawnLayer()]);
+    const compiled = compileLayers(layer!, token, { visible: true, opacity: 1 });
+    const fill = compiled[0] as Fill;
+    expect(fill.id).toBe('drawn:layer-1-fill');
+    expect(fill.paint?.['fill-color']).toBe('#b91c1c');
+    expect(fill.filter).toEqual(['==', ['get', 'layer_id'], 'layer-1']);
   });
 });

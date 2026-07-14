@@ -1,28 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-interface DiagnosticFeature {
-  geometry: { type: string; coordinates: [number, number] };
-  properties: Record<string, string | number | null>;
+// `window.__cuksMap` (the dev/e2e handle on the MapLibre instance) is declared by
+// MapView; only the pulse-write counter this spec installs is extra.
+declare global {
+  interface Window {
+    __incidentPulseWrites?: number;
+  }
 }
-
-interface DiagnosticMap {
-  getCanvas(): HTMLCanvasElement;
-  getZoom(): number;
-  hasImage(id: string): boolean;
-  isSourceLoaded(id: string): boolean;
-  isStyleLoaded(): boolean;
-  jumpTo(options: { center: [number, number]; zoom: number }): void;
-  once(event: string, callback: () => void): void;
-  project(coordinates: [number, number]): { x: number; y: number };
-  queryRenderedFeatures(options: { layers: string[] }): DiagnosticFeature[];
-  querySourceFeatures(source: string, options: { sourceLayer: string }): DiagnosticFeature[];
-  setPaintProperty(layerId: string, property: string, value: unknown): unknown;
-}
-
-type DiagnosticWindow = Window & {
-  __cuksMap?: DiagnosticMap;
-  __incidentPulseWrites?: number;
-};
 
 function shiftDate(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -87,7 +71,10 @@ test('map screen: layers panel, basemap switcher, and layer toggle', async ({ pa
 test('incident layer: API options, clustered render, filters, and timeline playback', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  // Longest spec in the suite (tiles, cluster zoom, timeline playback). 60s was
+  // enough standalone but not under `fullyParallel`, where the workers share one
+  // dev server and tile server — it timed out waiting for the map to go idle.
+  test.setTimeout(120_000);
   await page.goto('/app/map');
   await expect(page.getByTestId('map-canvas')).toBeVisible();
 
@@ -103,14 +90,14 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   expect(regionId).toBeTruthy();
 
   await page.waitForFunction(() => {
-    const map = (window as DiagnosticWindow).__cuksMap;
+    const map = window.__cuksMap;
     return map?.isStyleLoaded() === true;
   });
   await page.getByRole('button', { name: 'Свернуть панель' }).click();
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         return map?.queryRenderedFeatures({ layers: ['incidents-clusters'] }).length ?? 0;
       }),
     )
@@ -119,7 +106,7 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         const clusters = map?.queryRenderedFeatures({ layers: ['incidents-cluster-count'] }) ?? [];
         return clusters.some((feature) =>
           map?.hasImage(`incident-cluster-count-${feature.properties.cluster_count}`),
@@ -129,13 +116,17 @@ test('incident layer: API options, clustered render, filters, and timeline playb
     .toBe(true);
 
   const clusterPoint = await page.evaluate(() => {
-    const map = (window as DiagnosticWindow).__cuksMap;
+    const map = window.__cuksMap;
     if (!map) return null;
     const canvas = map.getCanvas();
     const candidates = map
       .queryRenderedFeatures({ layers: ['incidents-clusters'] })
-      .filter((feature) => feature.geometry.type === 'Point')
-      .map((feature) => map.project(feature.geometry.coordinates));
+      .flatMap((feature) => {
+        if (feature.geometry.type !== 'Point') return [];
+        const [lon, lat] = feature.geometry.coordinates;
+        if (typeof lon !== 'number' || typeof lat !== 'number') return [];
+        return [map.project([lon, lat])];
+      });
     const point =
       candidates.find(
         (candidate) =>
@@ -151,13 +142,13 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   expect(canvasBox).not.toBeNull();
   await page.mouse.click(canvasBox!.x + clusterPoint!.x, canvasBox!.y + clusterPoint!.y);
   await expect
-    .poll(() => page.evaluate(() => (window as DiagnosticWindow).__cuksMap?.getZoom() ?? 0))
+    .poll(() => page.evaluate(() => window.__cuksMap?.getZoom() ?? 0))
     .toBeGreaterThan(clusterPoint!.zoom + 1.5);
 
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         if (!map) return resolve();
         map.once('idle', resolve);
         map.jumpTo({ center: [68.787, 38.559], zoom: 12 });
@@ -174,7 +165,7 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   await expect
     .poll(() =>
       page.evaluate((ids) => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         return ids.every((id) => map?.hasImage(id));
       }, expectedStatusImages),
     )
@@ -182,7 +173,7 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         return (
           map
             ?.querySourceFeatures('incidents_mvt', { sourceLayer: 'incidents' })
@@ -206,14 +197,12 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   });
   await page.getByRole('combobox', { name: 'Регион' }).selectOption(regionId!);
   await filteredTile;
-  await page.waitForFunction(
-    () => (window as DiagnosticWindow).__cuksMap?.isSourceLoaded('incidents_mvt') === true,
-  );
+  await page.waitForFunction(() => window.__cuksMap?.isSourceLoaded('incidents_mvt') === true);
   await expect
     .poll(() =>
       page.evaluate(() => {
         const features =
-          (window as DiagnosticWindow).__cuksMap?.queryRenderedFeatures({
+          window.__cuksMap?.queryRenderedFeatures({
             layers: ['incidents'],
           }) ?? [];
         return {
@@ -232,7 +221,7 @@ test('incident layer: API options, clustered render, filters, and timeline playb
     await page.evaluate(
       () =>
         (
-          (window as DiagnosticWindow).__cuksMap?.queryRenderedFeatures({
+          window.__cuksMap?.queryRenderedFeatures({
             layers: ['incidents'],
           }) ?? []
         ).length,
@@ -240,42 +229,35 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   ).toBeGreaterThan(0);
 
   await page.evaluate(() => {
-    const targetWindow = window as DiagnosticWindow;
-    const map = targetWindow.__cuksMap;
+    const map = window.__cuksMap;
     if (!map) return;
     const original = map.setPaintProperty.bind(map);
-    targetWindow.__incidentPulseWrites = 0;
-    map.setPaintProperty = (layerId, property, value) => {
+    window.__incidentPulseWrites = 0;
+    // Count the pulse repaints. The cast keeps the spy on MapLibre's overloaded
+    // signature without restating it.
+    map.setPaintProperty = ((layerId: string, property: string, value: unknown) => {
       if (layerId === 'incidents-active-pulse') {
-        targetWindow.__incidentPulseWrites = (targetWindow.__incidentPulseWrites ?? 0) + 1;
+        window.__incidentPulseWrites = (window.__incidentPulseWrites ?? 0) + 1;
       }
       return original(layerId, property, value);
-    };
+    }) as typeof map.setPaintProperty;
   });
   await expect
-    .poll(() => page.evaluate(() => (window as DiagnosticWindow).__incidentPulseWrites ?? 0))
+    .poll(() => page.evaluate(() => window.__incidentPulseWrites ?? 0))
     .toBeGreaterThan(0);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.waitForTimeout(80);
-  const reducedMotionWrites = await page.evaluate(
-    () => (window as DiagnosticWindow).__incidentPulseWrites ?? 0,
-  );
+  const reducedMotionWrites = await page.evaluate(() => window.__incidentPulseWrites ?? 0);
   await page.waitForTimeout(160);
-  expect(await page.evaluate(() => (window as DiagnosticWindow).__incidentPulseWrites ?? 0)).toBe(
-    reducedMotionWrites,
-  );
+  expect(await page.evaluate(() => window.__incidentPulseWrites ?? 0)).toBe(reducedMotionWrites);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
   await page.getByRole('button', { name: 'Показать слои' }).click();
   await page.getByRole('checkbox', { name: 'Чрезвычайные ситуации' }).click();
   await page.waitForTimeout(80);
-  const hiddenLayerWrites = await page.evaluate(
-    () => (window as DiagnosticWindow).__incidentPulseWrites ?? 0,
-  );
+  const hiddenLayerWrites = await page.evaluate(() => window.__incidentPulseWrites ?? 0);
   await page.waitForTimeout(160);
-  expect(await page.evaluate(() => (window as DiagnosticWindow).__incidentPulseWrites ?? 0)).toBe(
-    hiddenLayerWrites,
-  );
+  expect(await page.evaluate(() => window.__incidentPulseWrites ?? 0)).toBe(hiddenLayerWrites);
   await page.getByRole('checkbox', { name: 'Чрезвычайные ситуации' }).click();
   await page.getByRole('button', { name: 'Свернуть панель' }).click();
 
@@ -303,7 +285,7 @@ test('incident layer: API options, clustered render, filters, and timeline playb
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const map = (window as DiagnosticWindow).__cuksMap;
+        const map = window.__cuksMap;
         return map?.queryRenderedFeatures({ layers: ['incidents'] }).length ?? 0;
       }),
     )

@@ -4,16 +4,21 @@ import type {
   LayerSpecification,
   Map as MlMap,
 } from 'maplibre-gl';
+import type { GisLayerDto } from '@cuks/shared';
 import type { TokenResolver } from './map-config';
 
 /**
- * System layer registry (docs/modules/10 §3/§4). These are the always-present
- * `gis.*` layers served by Martin. Each definition is declarative and compiles
- * to one or more MapLibre layers via {@link compileLayers}; visibility and
- * opacity are applied imperatively so dragging the opacity slider never rebuilds
- * the style. Colors are design-system tokens (docs/06 §2) resolved at compile
- * time, so light/dark themes are honored. Incident markers use the fixed
- * severity-token scale and server-provided cluster/status properties.
+ * Layer registry (docs/modules/10 §3/§4). Two kinds of definition share one
+ * shape: the always-present system layers served by Martin from `gis.*`, and the
+ * user's drawn layers (`gis.layers` rows of kind `drawn`), which all live in the
+ * single `layer_features` source and are told apart by a `layer_id` filter. Each
+ * definition is declarative and compiles to one or more MapLibre layers via
+ * {@link compileLayers}; visibility and opacity are applied imperatively so
+ * dragging the opacity slider never rebuilds the style. Colors are design-system
+ * tokens (docs/06 §2) resolved at compile time, so light/dark themes are honored;
+ * a drawn layer may override its color from its stored style. Incident markers
+ * use the fixed severity-token scale and server-provided cluster/status
+ * properties.
  */
 
 export type LayerGroup = 'operational' | 'boundaries' | 'infrastructure' | 'risk' | 'mine';
@@ -47,7 +52,7 @@ export interface LegendItem {
   labelKey: string;
 }
 
-export interface SystemLayerDef {
+export interface MapLayerDef {
   /** Stable id; also the base of every compiled MapLibre layer id. */
   id: string;
   /** Martin source id (auto-published from schema `gis`). */
@@ -55,16 +60,24 @@ export interface SystemLayerDef {
   /** Vector-tile layer name inside the source (Martin names it after the source). */
   sourceLayer: string;
   group: LayerGroup;
-  /** i18n key in the `map` namespace. */
-  titleKey: string;
+  /** i18n key in the `map` namespace (system layers). */
+  titleKey?: string;
+  /** Literal title — drawn layers are named by their author. */
+  title?: string;
   kind: LayerKind;
   /** Design-token variable for the primary color. */
   colorToken: string;
+  /** Literal color from the layer's stored style, overriding `colorToken`. */
+  color?: string;
+  /** Narrows the layer to a subset of its source — drawn layers share one. */
+  filter?: ExpressionSpecification;
   legend: LegendItem[];
   defaultVisible: boolean;
   minzoom?: number;
   /** Override base fill-opacity (fill/mixed layers). */
   fillOpacity?: number;
+  /** The `gis.layers` row behind a drawn layer; absent for system layers. */
+  drawn?: GisLayerDto;
 }
 
 export interface LayerState {
@@ -104,7 +117,7 @@ INCIDENT_LEGEND.push(
   { shape: 'cross', token: '--text-muted', labelKey: 'legend.statusClosed' },
 );
 
-export const SYSTEM_LAYERS: readonly SystemLayerDef[] = [
+export const SYSTEM_LAYERS: readonly MapLayerDef[] = [
   {
     id: INCIDENTS_LAYER_ID,
     source: 'incidents_mvt',
@@ -151,30 +164,77 @@ export const SYSTEM_LAYERS: readonly SystemLayerDef[] = [
     legend: [{ shape: 'fill', token: '--sev-3', labelKey: 'legend.riskZones' }],
     defaultVisible: false,
   },
-  {
-    id: 'layer_features',
-    source: 'layer_features',
-    sourceLayer: 'layer_features',
-    group: 'mine',
-    titleKey: 'layers.drawn',
-    kind: 'mixed',
-    colorToken: '--success',
-    legend: [{ shape: 'fill', token: '--success', labelKey: 'legend.drawn' }],
-    defaultVisible: false,
-  },
 ];
+
+/**
+ * Martin source holding every drawn layer's features (`gis.layer_features_mvt`,
+ * migration 0021). It is a *function* source rather than the plain table: Martin
+ * caches table tiles by (source, z, x, y) alone, so a freshly drawn feature would
+ * keep hitting a stale tile. A function source's cache key includes its query
+ * params, so bumping `?v=` after a write always returns fresh geometry.
+ */
+export const DRAWN_SOURCE = 'layer_features_mvt';
+/** The MVT layer name inside that source (what `ST_AsMVT` names it). */
+export const DRAWN_SOURCE_LAYER = 'layer_features';
+/** Prefix of a drawn layer's def id, so it never collides with a system layer. */
+export const DRAWN_PREFIX = 'drawn:';
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/** The drawn layer a def belongs to, or `null` for system layers. */
+export function drawnLayerIdOf(def: MapLayerDef): string | null {
+  return def.drawn?.id ?? null;
+}
+
+/**
+ * Compile the user's drawn layers (`GET /gis/layers`) into map definitions. They
+ * all read the same `layer_features` source, so each is narrowed by its
+ * `layer_id`; the color comes from the layer's stored style when it is a valid
+ * hex, otherwise from the design token.
+ */
+export function drawnLayerDefs(layers: readonly GisLayerDto[]): MapLayerDef[] {
+  return layers
+    .filter((layer) => layer.kind === 'drawn')
+    .map((layer) => {
+      const styleColor = layer.style['color'];
+      const color =
+        typeof styleColor === 'string' && HEX_COLOR.test(styleColor) ? styleColor : undefined;
+      const filter: ExpressionSpecification = ['==', ['get', 'layer_id'], layer.id];
+      return {
+        id: `${DRAWN_PREFIX}${layer.id}`,
+        source: DRAWN_SOURCE,
+        sourceLayer: DRAWN_SOURCE_LAYER,
+        group: 'mine' as const,
+        title: layer.title,
+        kind: 'mixed' as const,
+        colorToken: '--success',
+        ...(color ? { color } : {}),
+        filter,
+        legend: [],
+        defaultVisible: true,
+        ...(layer.minZoom !== null ? { minzoom: layer.minZoom } : {}),
+        drawn: layer,
+      };
+    });
+}
 
 /** The default per-layer state map (used to seed the page). */
 export function defaultLayerStates(
-  defs: readonly SystemLayerDef[] = SYSTEM_LAYERS,
+  defs: readonly MapLayerDef[] = SYSTEM_LAYERS,
 ): Record<string, LayerState> {
   const states: Record<string, LayerState> = {};
   for (const def of defs) states[def.id] = { visible: def.defaultVisible, opacity: 1 };
   return states;
 }
 
+/** The state a def is rendered with when the page has no entry for it yet
+ *  (drawn layers appear after their API fetch resolves). */
+export function layerState(states: Record<string, LayerState>, def: MapLayerDef): LayerState {
+  return states[def.id] ?? { visible: def.defaultVisible, opacity: 1 };
+}
+
 /** The MapLibre layer ids a definition compiles to (for visibility toggling). */
-export function sublayerIds(def: SystemLayerDef): string[] {
+export function sublayerIds(def: MapLayerDef): string[] {
   switch (def.kind) {
     case 'fill':
       return [def.id, `${def.id}-outline`];
@@ -199,7 +259,7 @@ interface OpacityTarget {
 }
 
 /** The paint props that carry opacity for a definition, with their base values. */
-export function opacityTargets(def: SystemLayerDef): OpacityTarget[] {
+export function opacityTargets(def: MapLayerDef): OpacityTarget[] {
   switch (def.kind) {
     case 'fill':
       return [
@@ -241,17 +301,47 @@ export function opacityTargets(def: SystemLayerDef): OpacityTarget[] {
   }
 }
 
+/**
+ * The MapLibre filter a definition renders with. `hiddenFeatureId` removes the
+ * feature currently open in the geometry editor, which draws it itself — without
+ * this it would show twice (stale tile copy under the editable one).
+ */
+export function layerFilter(
+  def: MapLayerDef,
+  hiddenFeatureId?: string | null,
+): FilterSpecification | null {
+  const clauses: ExpressionSpecification[] = [];
+  if (def.filter) clauses.push(def.filter);
+  if (hiddenFeatureId && def.drawn) clauses.push(['!=', ['get', 'id'], hiddenFeatureId]);
+  if (clauses.length === 0) return null;
+  if (clauses.length === 1) return clauses[0]!;
+  return ['all', ...clauses];
+}
+
+/** Imperatively re-apply a drawn layer's filter (no style rebuild). System
+ *  layers are skipped: their filters are structural (clusters vs. markers). */
+export function applyFilter(map: MlMap, def: MapLayerDef, hiddenFeatureId?: string | null): void {
+  if (!def.drawn) return;
+  const filter = layerFilter(def, hiddenFeatureId);
+  for (const id of sublayerIds(def)) {
+    if (map.getLayer(id)) map.setFilter(id, filter);
+  }
+}
+
 /** Compile a definition to MapLibre layer specs for the given theme + state. */
 export function compileLayers(
-  def: SystemLayerDef,
+  def: MapLayerDef,
   token: TokenResolver,
   state: LayerState,
+  hiddenFeatureId?: string | null,
 ): LayerSpecification[] {
   const visibility: 'visible' | 'none' = state.visible ? 'visible' : 'none';
   const op = state.opacity;
-  const color = token(def.colorToken);
+  const color = def.color ?? token(def.colorToken);
   const stroke = token('--surface');
   const shared = { source: def.source, 'source-layer': def.sourceLayer } as const;
+  const featureFilter = layerFilter(def, hiddenFeatureId);
+  const scoped = featureFilter ? { filter: featureFilter } : {};
   const withZoom = <T extends object>(spec: T): T =>
     def.minzoom === undefined ? spec : { ...spec, minzoom: def.minzoom };
 
@@ -262,6 +352,7 @@ export function compileLayers(
           id: def.id,
           type: 'fill',
           ...shared,
+          ...scoped,
           layout: { visibility },
           paint: { 'fill-color': color, 'fill-opacity': (def.fillOpacity ?? FILL_BASE) * op },
         }),
@@ -269,6 +360,7 @@ export function compileLayers(
           id: `${def.id}-outline`,
           type: 'line',
           ...shared,
+          ...scoped,
           layout: { visibility, 'line-join': 'round' },
           paint: { 'line-color': color, 'line-width': 1.4, 'line-opacity': OUTLINE_BASE * op },
         }),
@@ -279,6 +371,7 @@ export function compileLayers(
           id: def.id,
           type: 'circle',
           ...shared,
+          ...scoped,
           layout: { visibility },
           paint: {
             'circle-radius': 5,
@@ -291,13 +384,15 @@ export function compileLayers(
         }),
       ];
     case 'mixed':
-      // No filters: MapLibre draws only geometry-compatible features per layer
-      // type (fill→polygons, line→lines+polygon rings, circle→points).
+      // Beyond the def's own filter MapLibre draws only geometry-compatible
+      // features per layer type (fill→polygons, line→lines+polygon rings,
+      // circle→points), so one def covers a mixed-geometry layer.
       return [
         withZoom({
           id: `${def.id}-fill`,
           type: 'fill',
           ...shared,
+          ...scoped,
           layout: { visibility },
           paint: { 'fill-color': color, 'fill-opacity': FILL_BASE * op },
         }),
@@ -305,6 +400,7 @@ export function compileLayers(
           id: `${def.id}-line`,
           type: 'line',
           ...shared,
+          ...scoped,
           layout: { visibility, 'line-join': 'round' },
           paint: { 'line-color': color, 'line-width': 1.6, 'line-opacity': LINE_BASE * op },
         }),
@@ -312,6 +408,7 @@ export function compileLayers(
           id: `${def.id}-point`,
           type: 'circle',
           ...shared,
+          ...scoped,
           layout: { visibility },
           paint: {
             'circle-radius': 4,
@@ -422,36 +519,37 @@ export function compileLayers(
   }
 }
 
-/** All system layers compiled in group/z order, filtered to available sources. */
+/** All layers (system + drawn) compiled in group/z order, filtered to available
+ *  sources. */
 export function compileAllLayers(
   token: TokenResolver,
   states: Record<string, LayerState>,
   availableSources: ReadonlySet<string> | null,
+  drawnDefs: readonly MapLayerDef[] = [],
+  hiddenFeatureId?: string | null,
 ): LayerSpecification[] {
-  const defs = orderedLayers().filter(
+  const defs = orderedLayers(drawnDefs).filter(
     (def) => !availableSources || availableSources.has(def.source),
   );
-  return defs.flatMap((def) =>
-    compileLayers(def, token, states[def.id] ?? { visible: def.defaultVisible, opacity: 1 }),
-  );
+  return defs.flatMap((def) => compileLayers(def, token, layerState(states, def), hiddenFeatureId));
 }
 
-/** System layers sorted by group z-order (bottom → top). */
-export function orderedLayers(): SystemLayerDef[] {
-  return [...SYSTEM_LAYERS].sort(
+/** System + drawn layers sorted by group z-order (bottom → top). */
+export function orderedLayers(drawnDefs: readonly MapLayerDef[] = []): MapLayerDef[] {
+  return [...SYSTEM_LAYERS, ...drawnDefs].sort(
     (a, b) => LAYER_GROUP_ORDER.indexOf(a.group) - LAYER_GROUP_ORDER.indexOf(b.group),
   );
 }
 
 /** Imperatively apply a layer's visibility to an initialized map (no rebuild). */
-export function applyVisibility(map: MlMap, def: SystemLayerDef, visible: boolean): void {
+export function applyVisibility(map: MlMap, def: MapLayerDef, visible: boolean): void {
   for (const id of sublayerIds(def)) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   }
 }
 
 /** Imperatively apply a layer's opacity to an initialized map (no rebuild). */
-export function applyOpacity(map: MlMap, def: SystemLayerDef, opacity: number): void {
+export function applyOpacity(map: MlMap, def: MapLayerDef, opacity: number): void {
   for (const target of opacityTargets(def)) {
     if (map.getLayer(target.layerId)) {
       map.setPaintProperty(target.layerId, target.prop, target.base * opacity);

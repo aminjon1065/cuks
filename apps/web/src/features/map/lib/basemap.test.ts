@@ -1,10 +1,39 @@
 import { describe, expect, it } from 'vitest';
+import type { GisLayerDto } from '@cuks/shared';
 import { buildStyle, hasBasemap } from './basemap';
-import { defaultLayerStates } from './layers';
+import { defaultLayerStates, drawnLayerDefs } from './layers';
 
 const token = (name: string): string => `color(${name})`;
 const states = defaultLayerStates();
-const GIS_SOURCES = ['admin_units', 'facilities', 'risk_zones', 'layer_features', 'incidents_mvt'];
+// What Martin publishes. `layer_features` only enters the style once the user has
+// a drawn layer to render from it — the source alone carries no layer.
+const GIS_SOURCES = [
+  'admin_units',
+  'facilities',
+  'risk_zones',
+  'layer_features_mvt',
+  'incidents_mvt',
+];
+const SYSTEM_SOURCES = GIS_SOURCES.filter((source) => source !== 'layer_features_mvt');
+
+const drawnDefs = drawnLayerDefs([
+  {
+    id: 'layer-1',
+    slug: 'cordon',
+    title: 'Оцепление',
+    kind: 'drawn',
+    geometryType: 'Polygon',
+    style: { color: '#b91c1c' },
+    description: null,
+    minZoom: null,
+    maxZoom: null,
+    createdBy: null,
+    createdAt: '2026-07-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    canEdit: true,
+    canManage: true,
+  } satisfies GisLayerDto,
+]);
 
 describe('hasBasemap', () => {
   it('is true only when the region source is published', () => {
@@ -30,7 +59,7 @@ describe('buildStyle — neutral basemap (no PMTiles)', () => {
   });
 
   it('publishes the available gis sources but not the basemap', () => {
-    expect(Object.keys(style.sources).sort()).toEqual([...GIS_SOURCES].sort());
+    expect(Object.keys(style.sources).sort()).toEqual([...SYSTEM_SOURCES].sort());
     expect(style.sources.protomaps).toBeUndefined();
   });
 
@@ -102,5 +131,38 @@ describe('buildStyle — source availability', () => {
     expect(Object.keys(style.sources)).toEqual(['admin_units']);
     expect(style.layers.some((l) => l.id === 'facilities')).toBe(false);
     expect(style.layers.some((l) => l.id === 'admin_units')).toBe(true);
+  });
+});
+
+describe('buildStyle — drawn layers (task 2.7)', () => {
+  it('publishes the drawn source and one filtered layer set per drawn layer', () => {
+    const style = buildStyle({
+      flavor: 'light',
+      token,
+      states,
+      availableSources: new Set(GIS_SOURCES),
+      drawnDefs,
+      drawnTileQuery: 'v=3',
+    });
+    expect(style.sources['layer_features_mvt']).toMatchObject({
+      tiles: ['/tiles/layer_features_mvt/{z}/{x}/{y}?v=3'],
+    });
+    const fill = style.layers.find((layer) => layer.id === 'drawn:layer-1-fill');
+    expect(fill).toMatchObject({ filter: ['==', ['get', 'layer_id'], 'layer-1'] });
+  });
+
+  it('hides the feature open in the geometry editor (terra-draw draws it instead)', () => {
+    const style = buildStyle({
+      flavor: 'light',
+      token,
+      states,
+      availableSources: new Set(GIS_SOURCES),
+      drawnDefs,
+      hiddenFeatureId: 'feature-9',
+    });
+    const fill = style.layers.find((layer) => layer.id === 'drawn:layer-1-fill');
+    expect(fill).toMatchObject({
+      filter: ['all', ['==', ['get', 'layer_id'], 'layer-1'], ['!=', ['get', 'id'], 'feature-9']],
+    });
   });
 });
