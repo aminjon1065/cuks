@@ -97,6 +97,10 @@ export interface GisLayerDto {
   description: string | null;
   minZoom: number | null;
   maxZoom: number | null;
+  /** Published to GeoServer WMS/WFS (task 2.9). */
+  isPublishedWms: boolean;
+  /** GeoServer layer name (`workspace:table`) once published, else null. */
+  geoserverLayer: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;

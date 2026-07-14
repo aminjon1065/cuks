@@ -156,3 +156,12 @@ export const GEOMETRY_TYPES = [
   'Geometry',
 ] as const;
 export type GeometryType = (typeof GEOMETRY_TYPES)[number];
+
+/** PostGIS access accounts for QGIS/ArcGIS (docs/modules/10 §7, task 2.9). A
+ *  `reader` gets SELECT on schema `gis`; an `editor` also gets write (WFS-T). */
+export const GIS_DB_ACCOUNT_KINDS = ['reader', 'editor'] as const;
+export type GisDbAccountKind = (typeof GIS_DB_ACCOUNT_KINDS)[number];
+
+/** Publication state of a registry layer to GeoServer WMS/WFS (docs/modules/10 §7). */
+export const GIS_PUBLISH_STATES = ['unpublished', 'published', 'error'] as const;
+export type GisPublishState = (typeof GIS_PUBLISH_STATES)[number];

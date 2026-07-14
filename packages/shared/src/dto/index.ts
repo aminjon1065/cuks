@@ -9,5 +9,6 @@ export * from './audit';
 export * from './users';
 export * from './files';
 export * from './gis';
+export * from './gis-integration';
 export * from './directory';
 export * from './incidents';
