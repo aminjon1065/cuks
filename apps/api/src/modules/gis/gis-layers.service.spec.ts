@@ -33,6 +33,9 @@ function layerRow(overrides: Record<string, unknown> = {}) {
 }
 
 const audit = { log: vi.fn() } as never;
+// GeoServer is not exercised by these tests (they cover ACL + slug), so a stub that
+// reports 'not configured' is enough.
+const geoserver = { configured: false, unpublish: vi.fn() } as never;
 
 describe('slugify', () => {
   it('transliterates a Russian title into an ASCII slug', () => {
@@ -56,7 +59,7 @@ describe('slugify', () => {
 
 describe('GisLayersService.assertAccess', () => {
   const acl = { check: vi.fn() };
-  const service = new GisLayersService({} as never, acl as never, audit);
+  const service = new GisLayersService({} as never, acl as never, audit, geoserver);
 
   it('refuses to edit a system layer through the drawn-layer surface', async () => {
     await expect(
@@ -101,7 +104,12 @@ describe('GisLayersService.requireLayer', () => {
         from: () => ({ where: () => ({ limit: () => Promise.resolve([]) }) }),
       }),
     };
-    const service = new GisLayersService(db as never, { check: vi.fn() } as never, audit);
+    const service = new GisLayersService(
+      db as never,
+      { check: vi.fn() } as never,
+      audit,
+      geoserver,
+    );
     await expect(service.requireLayer('gone')).rejects.toMatchObject({
       code: 'gis.layer.not_found',
     });
@@ -110,7 +118,7 @@ describe('GisLayersService.requireLayer', () => {
 
 describe('GisLayersService.assertManage (task 2.8)', () => {
   const acl = { check: vi.fn() };
-  const service = new GisLayersService({} as never, acl as never, audit);
+  const service = new GisLayersService({} as never, acl as never, audit, geoserver);
 
   it('lets the manager of an imported layer delete it — a wrong import must be removable', async () => {
     acl.check.mockResolvedValueOnce(true);

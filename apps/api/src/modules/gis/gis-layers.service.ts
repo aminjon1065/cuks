@@ -1,5 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull, like, or, type SQL } from 'drizzle-orm';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { and, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import { gisLayers, resourceAcl, type Database } from '@cuks/db';
 import {
   aclLevelSatisfies,
@@ -14,6 +14,8 @@ import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
+import { GeoServerService } from './geoserver.service';
+import { drawnViewName, publishedSourceName } from './gis-source-name';
 
 type GisLayer = typeof gisLayers.$inferSelect;
 
@@ -41,10 +43,13 @@ export { slugify };
  */
 @Injectable()
 export class GisLayersService {
+  private readonly logger = new Logger(GisLayersService.name);
+
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly acl: AclService,
     private readonly audit: AuditService,
+    private readonly geoserver: GeoServerService,
   ) {}
 
   async list(user: AuthUser): Promise<GisLayerDto[]> {
@@ -157,7 +162,30 @@ export class GisLayersService {
   async remove(id: string, user: AuthUser): Promise<void> {
     const layer = await this.requireLayer(id);
     await this.assertManage(layer, user);
-    await this.db.update(gisLayers).set({ deletedAt: new Date() }).where(eq(gisLayers.id, id));
+
+    // A published layer must leave GeoServer with the delete — otherwise deleted
+    // data keeps being served over WMS/WFS while the web map has stopped showing it
+    // (task 2.9 review). Best-effort: a GeoServer hiccup must not block the delete.
+    if (layer.isPublishedWms && this.geoserver.configured) {
+      const source = publishedSourceName(layer);
+      if (source) {
+        await this.geoserver
+          .unpublish(source)
+          .catch((error: unknown) =>
+            this.logger.warn(`could not unpublish ${layer.slug} on delete: ${String(error)}`),
+          );
+      }
+      if (layer.kind === 'drawn') {
+        await this.db
+          .execute(sql`DROP VIEW IF EXISTS gis.${sql.identifier(drawnViewName(layer))}`)
+          .catch(() => undefined);
+      }
+    }
+
+    await this.db
+      .update(gisLayers)
+      .set({ deletedAt: new Date(), isPublishedWms: false, geoserverLayer: null })
+      .where(eq(gisLayers.id, id));
     this.audit.log({
       action: 'gis.layer.deleted',
       actorId: user.id,
@@ -271,6 +299,14 @@ export class GisLayersService {
     throw AppException.conflict('gis.layer.slug_conflict', 'Too many layers with this title');
   }
 
+  /** DTO for a single layer, resolving the caller's ACL level (used by the
+   *  publication service after it mutates the row — task 2.9). */
+  async toPublicDto(row: GisLayer, user: AuthUser): Promise<GisLayerDto> {
+    const level = (await this.levelsFor(user, [row.id])).get(row.id) ?? null;
+    const elevated = user.isSuperadmin || user.permissions.includes('gis.layers.manage');
+    return this.toDto(row, level, elevated);
+  }
+
   private toDto(row: GisLayer, level: AclLevel | null, elevated: boolean): GisLayerDto {
     const manages = elevated || (level !== null && aclLevelSatisfies(level, 'manager'));
     // `canEdit` is about the layer's *objects* (drawn only); `canManage` is about the
@@ -288,6 +324,8 @@ export class GisLayersService {
       description: row.description,
       minZoom: row.minZoom,
       maxZoom: row.maxZoom,
+      isPublishedWms: row.isPublishedWms,
+      geoserverLayer: row.geoserverLayer,
       createdBy: row.createdBy,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

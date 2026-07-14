@@ -56,8 +56,26 @@ export const envSchema = z
     LIVEKIT_URL: optionalString(),
     LIVEKIT_API_KEY: optionalString(),
     LIVEKIT_API_SECRET: optionalString(),
+    // GeoServer WMS/WFS publication (docs/modules/10 §7, task 2.9). All optional:
+    // when GEOSERVER_URL is unset, publication is simply unavailable and the map
+    // works as before. The datastore reaches PostGIS from inside the docker network
+    // (its own host, not the public one below).
     GEOSERVER_URL: optionalString(),
+    GEOSERVER_ADMIN_USER: z.string().default('admin'),
     GEOSERVER_ADMIN_PASSWORD: optionalString(),
+    GEOSERVER_WORKSPACE: z.string().default('cuks'),
+    GEOSERVER_PG_HOST: z.string().default('postgres'),
+    GEOSERVER_PG_PORT: z.coerce.number().int().positive().default(5432),
+    // The DB user GeoServer's datastore connects as — a gis_reader-scoped role in
+    // production (docs/09 §Права PG); the dev default is the platform user.
+    GEOSERVER_PG_USER: z.string().default('cuks'),
+    GEOSERVER_PG_PASSWORD: z.string().default('cuks'),
+    // Public PostGIS connection shown to GIS specialists (QGIS → PostGIS direct).
+    // The host clients actually reach — a VPN/LAN address in production, localhost
+    // in dev (docs/modules/10 §7).
+    GIS_PG_PUBLIC_HOST: z.string().default('localhost'),
+    GIS_PG_PUBLIC_PORT: z.coerce.number().int().positive().default(5432),
+    GIS_PG_PUBLIC_DATABASE: z.string().default('cuks'),
     MARTIN_URL: optionalString(),
     CA_KEY_PATH: optionalString(),
   })
