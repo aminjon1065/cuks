@@ -1,10 +1,11 @@
 import { Controller, Get, Headers, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import type { TileTokenResponse } from '@cuks/shared';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { IncidentMapFilterOptionsResponse, TileTokenResponse } from '@cuks/shared';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { AppException } from '../../common/exceptions/app.exception';
 import { TileTokenService } from './tile-token.service';
+import { IncidentMapOptionsService } from './incident-map-options.service';
 
 /** Extract `?token=` from the original request URI that Caddy's forward_auth
  *  forwards in `X-Forwarded-Uri` (e.g. `/tiles/incidents/8/1/2?token=…`). */
@@ -23,7 +24,19 @@ function tokenFromForwardedUri(uri: string | undefined): string | undefined {
 @ApiTags('gis')
 @Controller('gis')
 export class GisController {
-  constructor(private readonly tiles: TileTokenService) {}
+  constructor(
+    private readonly tiles: TileTokenService,
+    private readonly mapOptions: IncidentMapOptionsService,
+  ) {}
+
+  /** Active leaf incident types + administrative regions for the map filters. */
+  @Get('incidents/filter-options')
+  @RequirePermission('gis.view')
+  @ApiOperation({ summary: 'Get reference options for incident map filters' })
+  @ApiOkResponse({ description: 'Incident type and region options' })
+  incidentFilterOptions(): Promise<IncidentMapFilterOptionsResponse> {
+    return this.mapOptions.getOptions();
+  }
 
   /** Issue a tile token for the current map session (requires `gis.view`). */
   @Get('tile-token')

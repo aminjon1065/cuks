@@ -4,10 +4,11 @@ import { config as loadEnv } from 'dotenv';
 loadEnv({ path: ['.env', '../../.env'] });
 
 import argon2 from 'argon2';
-import { eq } from 'drizzle-orm';
-import { ARGON2_OPTIONS } from '@cuks/shared';
+import { eq, sql } from 'drizzle-orm';
+import { ARGON2_OPTIONS, type IncidentStatus } from '@cuks/shared';
 import { createDb, type Database } from './client';
-import { roles, userRoles, users } from './schema/index';
+import { adminUnits, incidents, roles, userRoles, users } from './schema/index';
+import { mapIncidentTimes } from './seed-e2e-fixtures';
 
 /**
  * Provisions the dedicated Playwright e2e admin (docs/plan 0.14). It gets the
@@ -47,7 +48,7 @@ async function provisionUser(
     fullName: string;
     shortName: string;
   },
-): Promise<void> {
+): Promise<string> {
   const [role] = await db.select().from(roles).where(eq(roles.code, opts.roleCode));
   if (!role) throw new Error(`Role "${opts.roleCode}" is missing — run \`pnpm db:seed\` first`);
 
@@ -91,10 +92,78 @@ async function provisionUser(
   // Reset role assignments to exactly the intended one (deterministic across reruns).
   await db.delete(userRoles).where(eq(userRoles.userId, userId));
   await db.insert(userRoles).values({ userId, roleId: role.id, orgUnitId: null });
+  return userId;
+}
+
+/** Stable incident fixtures for the committed map smoke. They intentionally sit
+ * close together around Dushanbe so z6 emits a cluster and z11 emits individual
+ * severity/status markers. */
+async function provisionMapIncidents(db: Database, actorId: string): Promise<void> {
+  const [region] = await db
+    .select({ id: adminUnits.id })
+    .from(adminUnits)
+    .where(eq(adminUnits.code, 'TJ-DU'));
+  if (!region) throw new Error('E2E map fixtures require the seeded TJ-DU region');
+
+  const now = Date.now();
+  const fixtureStatuses: IncidentStatus[] = [
+    'active',
+    'reported',
+    'localized',
+    'eliminated',
+    'closed',
+  ];
+  for (let i = 0; i < 12; i++) {
+    const number = `ЧС-E2E-${String(i + 1).padStart(3, '0')}`;
+    const { occurredAt, reportedAt } = mapIncidentTimes(now, i);
+    const status = fixtureStatuses[i % fixtureStatuses.length]!;
+    const severity = i < fixtureStatuses.length ? 3 : (i % 5) + 1;
+    // E2E-001 is exactly on a z11/z12 vertical tile seam. The MVT function
+    // must publish it from one adjacent tile only (0015 regression fixture).
+    const lon = i === 0 ? 68.73046875 : 68.787 + ((i % 4) - 1.5) * 0.004;
+    const lat = 38.559 + ((Math.floor(i / 4) % 3) - 1) * 0.004;
+    await db
+      .insert(incidents)
+      .values({
+        number,
+        typeCode: i % 2 === 0 ? 'nat.hydro.flood' : 'tech.fire_explosion',
+        severity,
+        status,
+        occurredAt,
+        reportedAt,
+        regionId: region.id,
+        geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+        source: 'monitoring',
+        createdBy: actorId,
+      })
+      .onConflictDoUpdate({
+        target: incidents.number,
+        set: {
+          severity,
+          status,
+          occurredAt,
+          reportedAt,
+          regionId: region.id,
+          geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+          updatedAt: new Date(),
+          deletedAt: null,
+        },
+      });
+  }
+
+  const invalidChronology = await db.execute<{ invalid_count: number }>(sql`
+    select count(*)::integer as invalid_count
+    from app.incidents
+    where number like 'ЧС-E2E-%'
+      and occurred_at > reported_at
+  `);
+  if (Number(invalidChronology.rows[0]?.invalid_count ?? 0) > 0) {
+    throw new Error('E2E map fixtures violate occurred_at <= reported_at');
+  }
 }
 
 async function provision(db: Database): Promise<void> {
-  await provisionUser(db, {
+  const adminId = await provisionUser(db, {
     username: E2E_USERNAME,
     password: E2E_PASSWORD,
     roleCode: E2E_ROLE_CODE,
@@ -115,9 +184,11 @@ async function provision(db: Database): Promise<void> {
     fullName: 'E2E Пользователь 2',
     shortName: 'E2E Юзер 2',
   });
+  await provisionMapIncidents(db, adminId);
   console.log(
     `e2e users ready: "${E2E_USERNAME}" (${E2E_ROLE_CODE}, 2FA reset for enrollment) + ` +
-      `"${E2E_USER_USERNAME}"/"${E2E_USER2_USERNAME}" (${E2E_USER_ROLE_CODE}).`,
+      `"${E2E_USER_USERNAME}"/"${E2E_USER2_USERNAME}" (${E2E_USER_ROLE_CODE}); ` +
+      '12 clustered map incidents.',
   );
 }
 

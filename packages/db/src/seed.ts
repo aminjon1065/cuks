@@ -12,6 +12,7 @@ import { createDb, type Database } from './client';
 import {
   adminUnits,
   dictionaries,
+  incidents,
   notifications,
   orgUnits,
   positions,
@@ -579,6 +580,86 @@ async function seedDemoNotifications(db: Database, adminId: string): Promise<voi
   ]);
 }
 
+const DEMO_INCIDENT_TYPES = [
+  'nat.geo.landslide',
+  'nat.hydro.flood',
+  'nat.meteo.hail',
+  'nat.geophys.earthquake',
+  'tech.transport.road',
+  'tech.fire_explosion',
+  'bio.epidemic',
+] as const;
+
+const DEMO_INCIDENT_STATUSES = ['reported', 'active', 'localized', 'eliminated', 'closed'] as const;
+
+const DEMO_REGION_CENTERS: Record<string, readonly [number, number]> = {
+  'TJ-DU': [68.787, 38.559],
+  'TJ-GB': [71.55, 38.3],
+  'TJ-KT': [69.75, 37.85],
+  'TJ-RA': [69.35, 39.05],
+  'TJ-SU': [69.62, 40.28],
+};
+
+/** Fifty deterministic, spatially clustered incidents required by docs/07's
+ * demo dataset. Dates are kept within the latest 45 days on every demo reseed
+ * so the operational timeline always has useful out-of-the-box content. */
+async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
+  const regions = await db
+    .select({ id: adminUnits.id, code: adminUnits.code })
+    .from(adminUnits)
+    .where(eq(adminUnits.level, 'region'));
+  const usable = regions.filter((region) => DEMO_REGION_CENTERS[region.code]);
+  if (usable.length === 0) throw new Error('Demo incidents require seeded administrative regions');
+
+  const now = Date.now();
+  for (let i = 0; i < 50; i++) {
+    const region = usable[i % usable.length]!;
+    const center = DEMO_REGION_CENTERS[region.code]!;
+    // Small deterministic offsets form visible low-zoom clusters without random
+    // seed drift. Every fifth point stays at the exact regional centre.
+    const ring = i % 5;
+    const lon = center[0] + (ring === 0 ? 0 : ((i % 3) - 1) * 0.018);
+    const lat = center[1] + (ring === 0 ? 0 : (((i + 1) % 3) - 1) * 0.014);
+    const number = `ЧС-DEMO-${String(i + 1).padStart(3, '0')}`;
+    const occurredAt = new Date(now - (i % 45) * 86_400_000 - (i % 12) * 3_600_000);
+    const severity = (i % 5) + 1;
+    const status = DEMO_INCIDENT_STATUSES[i % DEMO_INCIDENT_STATUSES.length]!;
+    const typeCode = DEMO_INCIDENT_TYPES[i % DEMO_INCIDENT_TYPES.length]!;
+
+    await db
+      .insert(incidents)
+      .values({
+        number,
+        typeCode,
+        severity,
+        status,
+        occurredAt,
+        reportedAt: new Date(occurredAt.getTime() + 15 * 60_000),
+        regionId: region.id,
+        geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+        addressText: `Демо-точка ${region.code}`,
+        description: 'Демонстрационное происшествие для карты оперативной обстановки',
+        source: 'monitoring',
+        createdBy: adminId,
+      })
+      .onConflictDoUpdate({
+        target: incidents.number,
+        set: {
+          typeCode,
+          severity,
+          status,
+          occurredAt,
+          reportedAt: new Date(occurredAt.getTime() + 15 * 60_000),
+          regionId: region.id,
+          geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+          updatedAt: new Date(),
+          deletedAt: null,
+        },
+      });
+  }
+  console.log('Demo incident seed complete: 50 clustered incidents across Tajikistan.');
+}
+
 /**
  * Demo roster (Phase-0 acceptance: "two employees from the seeds see a different
  * UI by permissions" — docs/plan/ROADMAP.md §Фаза 0). Fixed usernames/ids keep the
@@ -911,7 +992,10 @@ async function main(): Promise<void> {
         `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries, ` +
         `admin boundaries (regions).`,
     );
-    if (isDemo) await seedDemoUsers(db);
+    if (isDemo) {
+      await seedDemoUsers(db);
+      await seedDemoIncidents(db, adminId);
+    }
   } finally {
     await pool.end();
   }
