@@ -13,15 +13,22 @@ import {
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
+  createGisExportSchema,
   createGisFeatureSchema,
+  createGisImportSchema,
   createGisLayerSchema,
   gisFeaturesQuerySchema,
   patchGisFeatureSchema,
   patchGisLayerSchema,
+  type CreateGisExportInput,
   type CreateGisFeatureInput,
+  type CreateGisImportInput,
+  type CreateGisImportResponse,
   type CreateGisLayerInput,
+  type GisExportDto,
   type GisFeatureDto,
   type GisFeaturesQuery,
+  type GisImportDto,
   type GisLayerDto,
   type IncidentMapFilterOptionsResponse,
   type PatchGisFeatureInput,
@@ -34,7 +41,9 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { AppException } from '../../common/exceptions/app.exception';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { GisExportsService } from './gis-exports.service';
 import { GisFeaturesService } from './gis-features.service';
+import { GisImportsService } from './gis-imports.service';
 import { GisLayersService } from './gis-layers.service';
 import { TileTokenService } from './tile-token.service';
 import { IncidentMapOptionsService } from './incident-map-options.service';
@@ -68,6 +77,8 @@ export class GisController {
     private readonly mapOptions: IncidentMapOptionsService,
     private readonly layers: GisLayersService,
     private readonly features: GisFeaturesService,
+    private readonly imports: GisImportsService,
+    private readonly exports: GisExportsService,
   ) {}
 
   /** Active leaf incident types + administrative regions for the map filters. */
@@ -194,5 +205,83 @@ export class GisController {
   ): Promise<{ ok: true }> {
     await this.features.remove(id, user);
     return { ok: true };
+  }
+
+  // --- Import of geodata (docs/modules/10 §6, task 2.8) ---
+
+  /** Wizard step 1: reserve the record, hand back a presigned PUT for the source. */
+  @Post('imports')
+  @RequirePermission('gis.import')
+  @ApiOperation({ summary: 'Start a geodata import (returns a presigned upload URL)' })
+  createImport(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(createGisImportSchema)) body: CreateGisImportInput,
+  ): Promise<CreateGisImportResponse> {
+    return this.imports.create(body, user);
+  }
+
+  /** Wizard step 2: the upload landed — queue the worker. */
+  @Post('imports/:id/start')
+  @RequirePermission('gis.import')
+  @ApiOperation({ summary: 'Queue the uploaded source for import' })
+  startImport(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<GisImportDto> {
+    return this.imports.start(id, user);
+  }
+
+  @Get('imports')
+  @RequirePermission('gis.import')
+  listImports(@CurrentUser() user: AuthUser): Promise<GisImportDto[]> {
+    return this.imports.list(user);
+  }
+
+  /** Wizard step 3: status, per-row error log, and the preview the worker built. */
+  @Get('imports/:id')
+  @RequirePermission('gis.import')
+  @ApiOkResponse({ description: 'Import status with its preview and error log' })
+  getImport(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<GisImportDto> {
+    return this.imports.getOne(id, user);
+  }
+
+  // --- Export of geodata (docs/modules/10 §6, task 2.8) ---
+
+  @Post('exports')
+  @RequirePermission('gis.export')
+  @ApiOperation({ summary: 'Export a layer or an incident selection' })
+  createExport(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(createGisExportSchema)) body: CreateGisExportInput,
+  ): Promise<GisExportDto> {
+    return this.exports.create(body, user);
+  }
+
+  @Get('exports')
+  @RequirePermission('gis.export')
+  listExports(@CurrentUser() user: AuthUser): Promise<GisExportDto[]> {
+    return this.exports.list(user);
+  }
+
+  @Get('exports/:id')
+  @RequirePermission('gis.export')
+  getExport(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<GisExportDto> {
+    return this.exports.getOne(id, user);
+  }
+
+  /** Short-lived presigned download of a finished export. */
+  @Get('exports/:id/download')
+  @RequirePermission('gis.export')
+  async downloadExport(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<{ url: string }> {
+    return { url: await this.exports.downloadUrl(id, user) };
   }
 }

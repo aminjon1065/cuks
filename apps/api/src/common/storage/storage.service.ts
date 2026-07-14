@@ -8,6 +8,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
   UploadPartCommand,
 } from '@aws-sdk/client-s3';
@@ -146,6 +147,36 @@ export class StorageService {
       if (isNotFound(err)) return false;
       throw err;
     }
+  }
+
+  /** Size of an uploaded object, or `null` if it isn't there. The geo-import
+   *  checks the object it is about to queue actually arrived (2.8). */
+  async objectSize(key: string): Promise<number | null> {
+    try {
+      const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return head.ContentLength ?? 0;
+    } catch (err) {
+      if (isNotFound(err)) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Presigned single-shot PUT. The multipart flow above exists for files up to
+   * 2 GiB; a geo-import source is one bounded object (docs/modules/10 §6), so the
+   * browser uploads it in one request without a staging record to reconcile.
+   */
+  async getUploadUrl(
+    key: string,
+    contentType: string,
+    expiresIn = UPLOAD_PART_URL_EXPIRY_SECONDS,
+  ): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+    return getSignedUrl(this.s3, command, { expiresIn });
   }
 
   /**

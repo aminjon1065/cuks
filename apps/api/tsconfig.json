@@ -3,7 +3,11 @@
   "compilerOptions": {
     "outDir": "dist",
     "types": ["node"],
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@cuks/shared/*": ["../../packages/shared/dist/*"]
+    }
   },
   "include": ["src", "test"]
 }

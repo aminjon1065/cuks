@@ -107,3 +107,27 @@ describe('GisLayersService.requireLayer', () => {
     });
   });
 });
+
+describe('GisLayersService.assertManage (task 2.8)', () => {
+  const acl = { check: vi.fn() };
+  const service = new GisLayersService({} as never, acl as never, audit);
+
+  it('lets the manager of an imported layer delete it — a wrong import must be removable', async () => {
+    acl.check.mockResolvedValueOnce(true);
+    await expect(
+      service.assertManage(layerRow({ kind: 'imported', tableName: 'l_roads' }) as never, user()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('still refuses to edit the *objects* of an imported layer (it is a file snapshot)', async () => {
+    await expect(
+      service.assertAccess(layerRow({ kind: 'imported' }) as never, user(), 'editor'),
+    ).rejects.toMatchObject({ code: 'gis.layer.not_editable' });
+  });
+
+  it('never lets a system layer be changed through this surface', async () => {
+    await expect(
+      service.assertManage(layerRow({ kind: 'system' }) as never, user({ isSuperadmin: true })),
+    ).rejects.toMatchObject({ code: 'gis.layer.not_editable' });
+  });
+});

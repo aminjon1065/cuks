@@ -3,7 +3,9 @@
   "compilerOptions": {
     "noEmit": false,
     "rootDir": "src",
-    "paths": {}
+    "paths": {
+      "@cuks/shared/*": ["../../packages/shared/dist/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "test", "dist"]

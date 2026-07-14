@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, like, or, type SQL } from 'drizzle-orm';
 import { gisLayers, resourceAcl, type Database } from '@cuks/db';
 import {
   aclLevelSatisfies,
+  slugify,
   type AclLevel,
   type CreateGisLayerInput,
   type GisLayerDto,
@@ -16,51 +17,6 @@ import { AppException } from '../../common/exceptions/app.exception';
 
 type GisLayer = typeof gisLayers.$inferSelect;
 
-// Russian + the six Tajik-specific letters (ғ ӣ қ ӯ ҳ ҷ) — a Tajik title must not
-// lose characters on its way to the slug (docs/04 §i18n: both languages are first
-// class, only the identifiers are English).
-const CYRILLIC: Record<string, string> = {
-  а: 'a',
-  б: 'b',
-  в: 'v',
-  г: 'g',
-  ғ: 'gh',
-  д: 'd',
-  е: 'e',
-  ё: 'e',
-  ж: 'zh',
-  з: 'z',
-  и: 'i',
-  ӣ: 'i',
-  й: 'i',
-  к: 'k',
-  қ: 'q',
-  л: 'l',
-  м: 'm',
-  н: 'n',
-  о: 'o',
-  п: 'p',
-  р: 'r',
-  с: 's',
-  т: 't',
-  у: 'u',
-  ӯ: 'u',
-  ф: 'f',
-  х: 'h',
-  ҳ: 'h',
-  ц: 'c',
-  ч: 'ch',
-  ҷ: 'ch',
-  ш: 'sh',
-  щ: 'sch',
-  ъ: '',
-  ы: 'y',
-  ь: '',
-  э: 'e',
-  ю: 'yu',
-  я: 'ya',
-};
-
 /** How many times a create retries when a concurrent create steals its slug. */
 const SLUG_ATTEMPTS = 3;
 /** Upper bound of the `slug-2`, `slug-3`… suffix search. */
@@ -71,16 +27,9 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 }
 
-/** URL-safe slug from a (usually Russian or Tajik) title — layers are addressed by
- *  slug in the tile/WMS surface, so it must be ASCII. */
-export function slugify(title: string): string {
-  const latin = [...title.toLowerCase()].map((ch) => CYRILLIC[ch] ?? ch).join('');
-  const slug = latin
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  return slug || 'layer';
-}
+/** Re-exported: the geo-import worker (2.8) derives an imported layer's slug — and
+ *  its physical table name — with the same function (`@cuks/shared`). */
+export { slugify };
 
 /**
  * Layer registry (docs/modules/10 §3/§9, task 2.7). Phase 2.7 manages `drawn`
@@ -175,7 +124,7 @@ export class GisLayersService {
 
   async patch(id: string, input: PatchGisLayerInput, user: AuthUser): Promise<GisLayerDto> {
     const layer = await this.requireLayer(id);
-    await this.assertAccess(layer, user, 'manager');
+    await this.assertManage(layer, user);
 
     const [updated] = await this.db
       .update(gisLayers)
@@ -198,17 +147,23 @@ export class GisLayersService {
     return this.toDto(updated!, 'manager', user.isSuperadmin);
   }
 
-  /** Soft-delete: the partial unique index frees the slug for reuse. */
+  /**
+   * Soft-delete: the partial unique index frees the slug for reuse. An imported
+   * layer's physical table (`gis.l_<slug>`) is deliberately left in place — the row
+   * is only soft-deleted (CLAUDE.md §2), the tiles stop serving it (the tile
+   * function filters `deleted_at`), and dropping the table is a retention decision,
+   * not a click (QGIS may be reading it — docs/modules/10 §7).
+   */
   async remove(id: string, user: AuthUser): Promise<void> {
     const layer = await this.requireLayer(id);
-    await this.assertAccess(layer, user, 'manager');
+    await this.assertManage(layer, user);
     await this.db.update(gisLayers).set({ deletedAt: new Date() }).where(eq(gisLayers.id, id));
     this.audit.log({
       action: 'gis.layer.deleted',
       actorId: user.id,
       entityType: 'layer',
       entityId: id,
-      meta: { slug: layer.slug },
+      meta: { slug: layer.slug, kind: layer.kind, tableName: layer.tableName },
     });
   }
 
@@ -222,8 +177,12 @@ export class GisLayersService {
     return layer;
   }
 
-  /** Superadmin and `gis.layers.manage` holders bypass the per-layer ACL; system
-   *  layers (admin_units/incidents/…) are never editable through this surface. */
+  /**
+   * Access to the *objects* of a layer (drawing, editing, deleting features). Only
+   * a `drawn` layer has objects that are editable here: an imported one is a
+   * snapshot of a file (re-import it to change it), and a system layer is not ours
+   * to touch.
+   */
   async assertAccess(layer: GisLayer, user: AuthUser, minLevel: AclLevel): Promise<void> {
     if (layer.kind !== 'drawn') {
       throw AppException.badRequest(
@@ -231,6 +190,26 @@ export class GisLayersService {
         'Only drawn layers can be edited here',
       );
     }
+    await this.assertLevel(layer, user, minLevel);
+  }
+
+  /**
+   * Access to the *layer itself* (rename, restyle, delete). This covers imported
+   * layers too (task 2.8) — a wrongly imported file has to be removable, and its
+   * importer is its manager. System layers stay off-limits.
+   */
+  async assertManage(layer: GisLayer, user: AuthUser): Promise<void> {
+    if (layer.kind === 'system') {
+      throw AppException.badRequest(
+        'gis.layer.not_editable',
+        'System layers cannot be changed here',
+      );
+    }
+    await this.assertLevel(layer, user, 'manager');
+  }
+
+  /** Superadmin and `gis.layers.manage` holders bypass the per-layer ACL. */
+  private async assertLevel(layer: GisLayer, user: AuthUser, minLevel: AclLevel): Promise<void> {
     if (user.isSuperadmin || user.permissions.includes('gis.layers.manage')) return;
     if (await this.acl.check(user, 'layer', layer.id, minLevel)) return;
     throw AppException.forbidden('gis.layer.access_denied', 'No access to this layer');
@@ -293,9 +272,12 @@ export class GisLayersService {
   }
 
   private toDto(row: GisLayer, level: AclLevel | null, elevated: boolean): GisLayerDto {
-    const canManage = elevated || (level !== null && aclLevelSatisfies(level, 'manager'));
+    const manages = elevated || (level !== null && aclLevelSatisfies(level, 'manager'));
+    // `canEdit` is about the layer's *objects* (drawn only); `canManage` is about the
+    // layer itself, which includes an imported one — it has to be removable.
+    const canManage = manages && row.kind !== 'system';
     const canEdit =
-      row.kind === 'drawn' && (canManage || (level !== null && aclLevelSatisfies(level, 'editor')));
+      row.kind === 'drawn' && (manages || (level !== null && aclLevelSatisfies(level, 'editor')));
     return {
       id: row.id,
       slug: row.slug,
@@ -310,7 +292,7 @@ export class GisLayersService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       canEdit,
-      canManage: canManage && row.kind === 'drawn',
+      canManage,
     };
   }
 }
