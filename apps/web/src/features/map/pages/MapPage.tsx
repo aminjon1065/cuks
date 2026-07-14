@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { MapPinned, TriangleAlert } from 'lucide-react';
 import { Button, EmptyState, Skeleton } from '@cuks/ui';
 import { useCan } from '@/lib/ability';
+import { useSocketEvent } from '@/lib/socket';
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { useIncidentMapFilterOptions, useMartinCatalog, useTileToken } from '../api/queries';
 import { defaultLayerStates, type LayerState } from '../lib/layers';
@@ -48,9 +49,14 @@ export function MapPage(): React.JSX.Element {
   const [incidentFilters, setIncidentFilters] = useState<IncidentFilterState>(() =>
     defaultIncidentFilters(),
   );
+  const [incidentRevision, setIncidentRevision] = useState(0);
   const incidentTileQuery = useMemo(
-    () => buildIncidentTileQuery(incidentFilters),
-    [incidentFilters],
+    () => `${buildIncidentTileQuery(incidentFilters)}&revision=${incidentRevision}`,
+    [incidentFilters, incidentRevision],
+  );
+  useSocketEvent(
+    'incidents.updated',
+    useCallback(() => setIncidentRevision((value) => value + 1), []),
   );
   const resetIncidentFilters = useCallback(() => {
     setIncidentFilters(defaultIncidentFilters());

@@ -22,10 +22,18 @@ import { FilesPage } from '@/features/files/pages/FilesPage';
 const MapPage = lazy(() =>
   import('@/features/map/pages/MapPage').then((m) => ({ default: m.MapPage })),
 );
+const IncidentsPage = lazy(() =>
+  import('@/features/incidents/pages/IncidentsPage').then((m) => ({ default: m.IncidentsPage })),
+);
+const IncidentDetailPage = lazy(() =>
+  import('@/features/incidents/pages/IncidentDetailPage').then((m) => ({
+    default: m.IncidentDetailPage,
+  })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['incidents', 'analytics', 'docs', 'tasks', 'chat', 'meet'];
+const PLACEHOLDER_PATHS = ['analytics', 'docs', 'tasks', 'chat', 'meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -70,6 +78,22 @@ export const router = createBrowserRouter([
       { path: 'admin/org', element: <OrgPage /> },
       { path: 'admin/audit', element: <AuditPage /> },
       { path: 'files', element: <FilesPage /> },
+      {
+        path: 'incidents',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <IncidentsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'incidents/:id',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <IncidentDetailPage />
+          </Suspense>
+        ),
+      },
       {
         path: 'map',
         element: (

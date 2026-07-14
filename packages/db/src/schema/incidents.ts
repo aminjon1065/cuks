@@ -83,6 +83,7 @@ export const incidents = appSchema.table(
     index('incidents_geom_gix').using('gist', t.geom),
     index('incidents_search_tsv_idx').using('gin', t.searchTsv),
     check('incidents_severity_chk', sql`${t.severity} between 1 and 5`),
+    check('incidents_reported_after_occurrence_chk', sql`${t.reportedAt} >= ${t.occurredAt}`),
     check(
       'incidents_status_chk',
       sql`${t.status} in ('reported', 'active', 'localized', 'eliminated', 'closed')`,
@@ -109,6 +110,8 @@ export const incidentReports = appSchema.table(
     injured: integer('injured'),
     evacuated: integer('evacuated'),
     affected: integer('affected'),
+    damageEst: numeric('damage_est', { precision: 18, scale: 2 }),
+    damageNote: text('damage_note'),
     authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },

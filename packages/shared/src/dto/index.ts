@@ -10,3 +10,4 @@ export * from './users';
 export * from './files';
 export * from './gis';
 export * from './directory';
+export * from './incidents';

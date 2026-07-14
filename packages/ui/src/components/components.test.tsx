@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Badge } from './badge';
 import { Button } from './button';
 import { DataTable } from './data-table';
@@ -74,5 +74,24 @@ describe('DataTable', () => {
     const rows = screen.getAllByRole('row');
     // rows[0] is the header; first data row should now be 'Анна' (asc).
     expect(within(rows[1] as HTMLElement).getByText('Анна')).toBeInTheDocument();
+  });
+
+  it('focuses an interactive row and invokes the Enter callback', async () => {
+    const user = userEvent.setup();
+    const onRowEnter = vi.fn();
+    render(
+      <DataTable
+        columns={columns}
+        data={[{ name: 'Анна', age: 20 }]}
+        onRowClick={() => undefined}
+        onRowEnter={onRowEnter}
+      />,
+    );
+
+    const row = screen.getAllByRole('row')[1] as HTMLElement;
+    expect(row).toHaveAttribute('tabindex', '0');
+    row.focus();
+    await user.keyboard('{Enter}');
+    expect(onRowEnter).toHaveBeenCalledWith({ name: 'Анна', age: 20 });
   });
 });

@@ -12,6 +12,8 @@ export interface WsEventPayloads {
   'notify.new': { id: string; type: string; createdAt: string };
   /** The server ended this user's sessions (blocked / revoked) — client logs out. */
   'auth.forced_logout': { reason: string };
+  /** Registry/map clients refetch the incident tile source after a mutation. */
+  'incidents.updated': { id: string; action: 'created' | 'reported' | 'resource_added' };
   'presence.changed': { userId: string; online: boolean };
 }
 
@@ -25,5 +27,6 @@ export const wsRooms = {
   user: (userId: string): string => `user:${userId}`,
   channel: (channelId: string): string => `channel:${channelId}`,
   board: (boardId: string): string => `board:${boardId}`,
+  gis: (): string => 'gis',
   entity: (type: string, id: string): string => `entity:${type}:${id}`,
 } as const;

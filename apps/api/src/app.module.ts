@@ -26,6 +26,7 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { FilesModule } from './modules/files/files.module';
 import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
+import { IncidentsModule } from './modules/incidents/incidents.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
@@ -82,6 +83,7 @@ import { UsersModule } from './modules/users/users.module';
     NotificationsModule,
     FilesModule,
     GisModule,
+    IncidentsModule,
     DirectoryModule,
     HealthModule,
   ],

@@ -34,7 +34,12 @@ export interface DataTableProps<T> {
   error?: React.ReactNode;
   onRetry?: () => void;
   empty?: React.ReactNode;
+  /** Single click: select/peek the row without navigating away. */
   onRowClick?: (row: T) => void;
+  /** Double click: open the full detail route when a consumer provides one. */
+  onRowDoubleClick?: (row: T) => void;
+  /** Enter on a focused interactive row. */
+  onRowEnter?: (row: T) => void;
   enableSelection?: boolean;
   onSelectionChange?: (rows: T[]) => void;
   pageSize?: number;
@@ -48,6 +53,8 @@ export function DataTable<T>({
   onRetry,
   empty,
   onRowClick,
+  onRowDoubleClick,
+  onRowEnter,
   enableSelection = false,
   onSelectionChange,
   pageSize = 25,
@@ -183,7 +190,22 @@ export function DataTable<T>({
                 key={row.id}
                 data-selected={row.getIsSelected()}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                className={cn(onRowClick && 'cursor-pointer')}
+                onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row.original) : undefined}
+                onKeyDown={
+                  onRowEnter
+                    ? (event) => {
+                        if (event.key !== 'Enter') return;
+                        event.preventDefault();
+                        onRowEnter(row.original);
+                      }
+                    : undefined
+                }
+                tabIndex={onRowEnter ? 0 : undefined}
+                className={cn(
+                  (onRowClick || onRowDoubleClick || onRowEnter) && 'cursor-pointer',
+                  onRowEnter &&
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50',
+                )}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>

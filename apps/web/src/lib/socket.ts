@@ -10,6 +10,15 @@ import { WS_NAMESPACE, type WsEventName, type WsEventPayloads } from '@cuks/shar
 type ServerEvents = { [E in WsEventName]: (payload: WsEventPayloads[E]) => void };
 export type AppSocket = Socket<ServerEvents>;
 
+declare global {
+  interface Window {
+    /** Dev/e2e handle for verifying authenticated realtime delivery. */
+    __cuksSocket?: AppSocket;
+    /** True only after the gateway has authorized the socket and joined its rooms. */
+    __cuksSocketReady?: boolean;
+  }
+}
+
 interface SocketContextValue {
   socket: AppSocket | null;
   connected: boolean;
@@ -27,15 +36,34 @@ export function SocketProvider({ children }: { children: React.ReactNode }): Rea
       autoConnect: true,
       transports: ['websocket', 'polling'],
     });
+    if (import.meta.env.DEV) {
+      window.__cuksSocket = s;
+      window.__cuksSocketReady = false;
+    }
     setSocket(s);
-    const onConnect = (): void => setConnected(true);
-    const onDisconnect = (): void => setConnected(false);
+    const onConnect = (): void => {
+      setConnected(true);
+      if (import.meta.env.DEV) window.__cuksSocketReady = false;
+    };
+    const onDisconnect = (): void => {
+      setConnected(false);
+      if (import.meta.env.DEV) window.__cuksSocketReady = false;
+    };
+    const onReady = (): void => {
+      if (import.meta.env.DEV) window.__cuksSocketReady = true;
+    };
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
+    s.on('connection.ready', onReady);
     return () => {
       s.off('connect', onConnect);
       s.off('disconnect', onDisconnect);
+      s.off('connection.ready', onReady);
       s.disconnect();
+      if (import.meta.env.DEV && window.__cuksSocket === s) {
+        delete window.__cuksSocket;
+        delete window.__cuksSocketReady;
+      }
     };
   }, []);
 

@@ -1,0 +1,1 @@
+ALTER TABLE "app"."incidents" ADD CONSTRAINT "incidents_reported_after_occurrence_chk" CHECK ("app"."incidents"."reported_at" >= "app"."incidents"."occurred_at");

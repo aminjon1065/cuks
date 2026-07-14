@@ -15,7 +15,10 @@ function makeSocket(cookie?: string) {
 
 function makeGateway() {
   const sessions = { get: vi.fn() };
-  const users = { findActiveById: vi.fn() };
+  const users = {
+    findActiveById: vi.fn(),
+    getPermissions: vi.fn().mockResolvedValue({ permissions: [], isSuperadmin: false }),
+  };
   const realtime = { bind: vi.fn() };
   const gateway = new EventsGateway(sessions as never, users as never, realtime as never);
   return { gateway, sessions, users };
@@ -43,11 +46,13 @@ describe('EventsGateway.handleConnection', () => {
   it('joins the user room and acks when the session is valid', async () => {
     g.sessions.get.mockResolvedValue({ userId: 'u1' });
     g.users.findActiveById.mockResolvedValue({ id: 'u1', status: 'active' });
+    g.users.getPermissions.mockResolvedValue({ permissions: ['gis.view'], isSuperadmin: false });
     const socket = makeSocket('cuks_session=s1');
 
     await g.gateway.handleConnection(socket as never);
 
     expect(socket.join).toHaveBeenCalledWith(wsRooms.user('u1'));
+    expect(socket.join).toHaveBeenCalledWith(wsRooms.gis());
     expect(socket.emit).toHaveBeenCalledWith('connection.ready', { userId: 'u1' });
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(socket.data.userId).toBe('u1');

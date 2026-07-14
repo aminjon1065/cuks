@@ -12,3 +12,4 @@ export * from './notifications';
 export * from './fs';
 export * from './gis';
 export * from './incidents';
+export * from './saved-filters';

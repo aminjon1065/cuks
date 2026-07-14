@@ -52,6 +52,10 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
     client.data.userId = userId;
     await client.join(wsRooms.user(userId));
+    const permissions = await this.users.getPermissions(userId);
+    if (permissions.isSuperadmin || permissions.permissions.includes('gis.view')) {
+      await client.join(wsRooms.gis());
+    }
     client.emit('connection.ready', { userId });
   }
 
