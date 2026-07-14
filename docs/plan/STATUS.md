@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.5 готовы
-- **Последняя сессия**: 2026-07-14 — задача 2.5 (реестр ЧС и карточка)
+- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.6 готовы
+- **Последняя сессия**: 2026-07-14 — задача 2.6 (статусная модель и матрица уведомлений)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -16,7 +16,7 @@
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
-| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.5 готовы       | —                  |
+| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.6 готовы       | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
 | 5 Чат             | ⬜                           | —                  |
@@ -26,6 +26,93 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-14 — Фаза 2: задача 2.6 (статусная модель и матрица уведомлений)
+
+**Сделано** (по `docs/modules/10` §2/§5/§9–10, `docs/04`, `docs/06`, `docs/07`):
+
+- **Lifecycle/API/БД**: `POST /api/v1/incidents/:id/status` с Zod, Swagger и
+  `incidents.manage`; переход вперёд только на один шаг, откат на любой предыдущий статус только
+  с причиной. `expectedStatus` + `SELECT … FOR UPDATE` дают optimistic concurrency и 409 при
+  stale-команде. Закрытие атомарно ставит `closed_at/closed_by`, повторное донесение или ресурс
+  запрещены до явного reopening; каждый переход попадает в audit и `incidents.updated`.
+  Миграция `0018` нормализует старые строки, добавляет closed-инвариант и per-user/event dedupe.
+- **Карточка ЧС**: статус-степпер, доступный modal смены статуса, обязательная причина отката,
+  блокировка повторной отправки до завершения refetch, closure metadata и локализованная запись
+  перехода в хронологии. Stale 409 обновляет карточку, не закрывая диалог. RU/TG parity сохранена;
+  закрытая карточка скрывает добавление донесений и ресурсов. Global toaster остаётся доступен
+  ассистивным технологиям даже при открытом Radix modal (`aria-live`-изоляция + assertive/polite
+  semantics).
+- **Матрица уведомлений**: все `duty_officer` получают `created/updated/status_changed`, а все
+  `chief` добавляются при `severity >= 3`; пересечения ролей дедуплицируются, автор события намеренно
+  включён. Payload хранит номер, уровень и from/to status, поэтому realtime/feed дают локализованный
+  контекст и deep-link `/app/incidents/:id`, включая после перезагрузки страницы. Severity 4–5 имеет
+  `critical` priority; severity 1–3 остаётся обычной даже при leadership fan-out.
+- **Доставка email/presence**: Redis heartbeat presence учитывает несколько API-процессов и
+  самовосстанавливается после упавшего socket. Обычный incident email отправляется после 5 минут
+  offline и в тихие часы Asia/Dushanbe 21:00–07:00 откладывается до 07:00; critical отправляется
+  немедленно независимо от presence/quiet hours. BullMQ job id — стабильный SHA-256 dedupe.
+- **Надёжность fan-out**: миграции `0019`/`0020` добавляют structured notification payload и
+  `app.notification_outbox`. Маркер `incidents.notification` пишется в той же транзакции, что
+  create/report/resource/status; быстрый post-commit dispatch дополнен poller'ом с
+  `FOR UPDATE SKIP LOCKED`, bounded batch и retry backoff. Повторная/неоднозначная доставка безопасна
+  благодаря outbox dedupe + уникальности `(user_id, dedupe_key)`.
+
+**Тесты/проверка**:
+
+- Точный корневой gate
+  `corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build` —
+  зелёный: typecheck 8/8, lint 8/8, build 5/5; API 173, shared 32, UI 19, web 74, worker 45,
+  DB 2 теста. Только существующий Vite warning о крупных chunks.
+- Playwright authed, перед **каждым** прогоном свежий `seed:e2e`: `incidents.spec.ts` **7/7** —
+  lifecycle/rollback/closed UI, stale 409+held refetch, realtime notification/deep-link+self-event,
+  multi-context registry, permissions и настоящий MapLibre revision tile +
+  `queryRenderedFeatures(status=active)`; `map.spec.ts` **4/4** — MVT render, clusters, filters,
+  timeline и tablet/phone. Светлая/тёмная карточка визуально проверены в реальном Chromium.
+- Live curl против dev после миграций/сидов: health 200; invalid skip 422, последовательные
+  `reported→active→localized→eliminated→closed` — 200, запись донесения после закрытия — 409;
+  Swagger содержит `/api/v1/incidents/{id}/status`. В PostgreSQL для `ЧС-2026-0039`: 11 уникальных
+  адресатов (4 duty + 7 chief), автор `latifi.z` включён, duplicate user/event rows = 0, все 6
+  audit-событий и соответствующие outbox markers обработаны, closure invariant=true.
+- Live email: для sev-4 `ЧС-2026-0040` сообщение e2e-duty немедленно появилось в MailDev; для
+  offline sev-3 `ЧС-2026-0041` немедленных писем 0 и ровно один job находится в BullMQ delayed.
+  После production build сделан полный dev restart; health снова 200, Martin `/catalog` содержит
+  5 tile sources, включая `incidents_mvt`.
+
+**Adversarial-review** (3 независимых измерения: API/БД, notification delivery, UI/e2e; **каждая**
+находка отдельно проверена другим refuter-agent): исходные **8 находок → 8 подтверждены**, все
+исправлены с регрессиями:
+
+- **[high]** post-commit best-effort fan-out терял событие при падении процесса → transactional
+  outbox, retry poller и idempotent delivery.
+- **[high]** весь incident group ошибочно считался critical → priority отделён от type group;
+  leadership threshold sev-3 не обходит пользовательскую настройку, critical начинается с sev-4.
+- **[high]** email отправлялся немедленно без offline/quiet policy → Redis presence, offline threshold,
+  delayed quiet-hours и critical override.
+- **[medium]** actor исключался из role-derived матрицы → self-notification включён и покрыт e2e.
+- **[medium]** lifecycle planner не имел table-driven unit coverage → stale/no-op/skip/rollback/
+  close/reopen покрыты отдельно от DB orchestration.
+- **[medium]** persisted notification терял динамический номер/уровень/from-to → JSON payload,
+  локализованный renderer и feed/realtime regressions.
+- **[medium]** карта-e2e проверяла только запрос, но не итоговый status-marker → HTTP 200 tile,
+  source-loaded и rendered feature/status assertion.
+- **[medium]** stale dialog снимал pending до завершения invalidation → awaited query refetch и
+  held-network Playwright regression.
+
+Post-fix hypothesis «TanStack теряет per-call callback» отдельно **рефутирована**. При её проверке
+обнаружена самостоятельная a11y-находка: Radix `hideOthers` скрывал toaster portal; отдельный refuter
+её **подтвердил**, исправление покрыто UI unit + исходным stale Playwright.
+
+**Решения**:
+
+- Sev-3 — порог дополнительного руководящего fan-out, sev-4 — порог критического приоритета
+  каналов. Это разные правила; критичность не выводится из названия notification group.
+- Role matrix пока использует глобальные `duty_officer`/`chief`: достоверного org→admin_unit mapping
+  ещё нет, территориальный row-scope остаётся явно отложен до 2.13.
+- Автор получает те же operational alerts, что и остальные адресаты его роли: это подтверждение
+  регистрации/смены статуса и единая feed-семантика, не «уведомление самому себе» по упоминанию.
+- Quiet window в 2.6 — системный default 21:00–07:00 Asia/Dushanbe; in-app/email channel preference
+  остаётся пользовательской. Новых зависимостей и внешних сервисов не добавлено.
 
 ### 2026-07-14 — Фаза 2: задача 2.5 (реестр ЧС, донесения, карточка)
 
