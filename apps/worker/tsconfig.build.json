@@ -2,7 +2,9 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "paths": {}
+    "paths": {
+      "@cuks/shared/*": ["../../packages/shared/dist/*"]
+    }
   },
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "dist"]
 }

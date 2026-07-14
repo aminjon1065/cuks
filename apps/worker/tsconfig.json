@@ -2,7 +2,11 @@
   "extends": "../../packages/config/tsconfig/nest.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@cuks/shared/*": ["../../packages/shared/dist/*"]
+    }
   },
   "include": ["src"]
 }
