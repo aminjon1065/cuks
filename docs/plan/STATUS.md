@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.4 готовы
-- **Последняя сессия**: 2026-07-14 — задача 2.4 (слой ЧС: MVT-кластеры, фильтры и таймлайн)
+- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.5 готовы
+- **Последняя сессия**: 2026-07-14 — задача 2.5 (реестр ЧС и карточка)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -16,7 +16,7 @@
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
-| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.4 готовы       | —                  |
+| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.5 готовы       | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
 | 5 Чат             | ⬜                           | —                  |
@@ -26,6 +26,70 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-14 — Фаза 2: задача 2.5 (реестр ЧС, донесения, карточка)
+
+**Сделано** (по `docs/modules/10` §3/§5, `docs/04`, `docs/06`, `docs/07`):
+
+- **API/БД**: модуль `IncidentsModule` с Swagger-visible, Zod-валидированными и RBAC-защищёнными
+  маршрутами списка, карточки, создания, донесений, сил/средств, сохранённых фильтров и XLSX.
+  Миграция `0016` добавляет `app.saved_filters` и snapshot ущерба в `incident_reports`; `0017`
+  фиксирует инвариант `reported_at >= occurred_at` на ЧС. Нумерация `ЧС-YYYY-NNNN` сериализуется
+  advisory-lock'ом по году; место получает регион/район через `ST_Covers`.
+- **Реестр/UI**: рабочие DataTable-фильтры периода/вида/уровня/статуса/региона/поиска,
+  сохранение/применение/подтверждённое удаление фильтра, XLSX-download, loading/empty/error;
+  доступный SidePanel по клику строки, full card по double-click/Enter. Вкладки карточки — обзор,
+  хронология immutable snapshot-донесений (включая жертвы и ущерб), силы/средства. Форма первого
+  донесения содержит mini MapLibre picker и координаты; RU/TG parity сохранена.
+- **Realtime/audit**: `incidents.updated` публикуется только в авторизованную GIS-комнату;
+  карта обновляет tile-template, открытый реестр invalidates список. Dev/e2e handle ждёт именно
+  gateway `connection.ready`, то есть завершённого room join, а не только transport-connect.
+- **Hardening после review**: донесения append-only по времени: `SELECT … FOR UPDATE` защищает
+  snapshot от lost update, backdated/нестрого позднее донесение получает 422; первое донесение
+  не может иметь будущую дату. Общая schema date-range отвергает `from > to` одинаково для
+  list/export/saved preset; native date min/max не даёт собрать обратный диапазон в UI.
+
+**Тесты/проверка**:
+
+- Корневой gate `corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test && corepack pnpm build`
+  — зелёный: 8/8 typecheck, 8/8 lint, API 144, shared 29, UI 18, web 67, worker 45, DB 2;
+  build 5/5. Только существующий Vite warning о крупных chunks.
+- Playwright после каждого свежего `seed:e2e`: `incidents.spec.ts` **4/4** — форма, snapshot
+  хронологии, ресурсы, authenticated GIS realtime, XLSX `PK`, saved filter apply/delete,
+  SidePanel/Escape/Enter, два браузерных контекста и temporal 422. После build→полного dev restart
+  реальный Chromium `map.spec.ts` **1/1**: MapLibre style+MVT render, кластеры, server filters,
+  timeline, status sprites и seam fixture.
+- Live curl после dev restart: health 200; Martin `/catalog` содержит 5 source, включая
+  `incidents_mvt`; password-only viewer читает реестр, но получает ожидаемый 403 на write/export.
+  e2e-admin создал `ЧС-2026-0017`, добавил `injured=4`, `damage=75.50`; late report — 422;
+  XLSX — `201`, MIME OOXML, ZIP magic `PK`.
+
+**Adversarial-review** (3 независимых измерения: API/DB, UI/a11y, integration; **каждая** находка
+проверена отдельным refuter-agent): **9 находок → 8 подтверждены, 1 рефутирована**. Исправлены с
+регрессиями:
+
+- **[high]** stale/backdated/concurrent report мог перезаписать последний snapshot → row lock,
+  strict chronology, DB-check и e2e 422.
+- **[medium]** future `occurredAt` создавала report раньше происшествия → 422 + shared/DB invariant.
+- **[high]** открытый реестр не обновлялся от другого оператора → socket invalidate + two-context e2e.
+- **[medium]** snapshot-only донесение скрывало цифры/ущерб в хронологии → карточки snapshot + e2e.
+- **[medium]** export/saved filter принимали inverse range, который list позднее отвергал → общая
+  schema + DTO tests.
+- **[medium]** saved-filter deletion не имел confirm/error → ConfirmDialog c именем + danger toast.
+- **[medium]** интерактивные строки были mouse-only и не имели list→peek pattern → SidePanel,
+  focus/Enter/double-click API DataTable + UI/e2e tests.
+- **[medium]** не было browser regression для saved filters/XLSX → один реальный scenario и ZIP check.
+- **[рефутировано]** прежний timeout map realtime не был production-bug: после ожидания server
+  room readiness настоящая socket→revision→MapLibre tile цепочка стабильно проходит; parallel test
+  конфликтовал с shared GIS broadcast и переведён в serial.
+
+**Решения**:
+
+- Хронология 2.5 — строго append-only: ретроспективная коррекция не может переписать карточный
+  snapshot и относится к будущему специализированному workflow, а не к тихому backdate.
+- `click → SidePanel`, `double-click/Enter → full card`, Escape закрывает peek — паттерн `docs/06`.
+- XLSX собирается малым in-process writer'ом без новой тяжёлой зависимости; новые зависимости не
+  добавлялись. Территориальный row-scope остаётся отложенным до 2.13 (нет org→admin_unit mapping).
 
 ### 2026-07-14 — Фаза 2: задача 2.4 (слой ЧС: фильтры, кластеры, status-маркеры, таймлайн)
 
