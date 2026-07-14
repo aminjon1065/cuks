@@ -106,8 +106,33 @@ services:
       timeout: 5s
       retries: 5
 
+  geoserver:
+    # OSGeo official image (multi-arch: works on arm64). Data dir persisted so the
+    # workspace/datastore the api creates via REST survive restarts.
+    image: docker.osgeo.org/geoserver:2.26.1
+    restart: unless-stopped
+    environment:
+      # Dev credentials; docs/09 §7 requires replacing the default in production.
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: geoserver
+      # Only the workspace the platform manages is reachable through the proxy.
+      SKIP_DEMO_DATA: 'true'
+    ports:
+      - '8080:8080'
+    volumes:
+      - geoserverdata:/opt/geoserver_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://127.0.0.1:8080/geoserver/web/']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
 volumes:
   pgdata:
   redisdata:
   miniodata:
   clamavdata:
+  geoserverdata:
