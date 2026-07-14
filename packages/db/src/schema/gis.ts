@@ -137,6 +137,8 @@ export const gisLayers = gisSchema.table(
       .notNull()
       .default(sql`'{}'::jsonb`),
     isPublishedWms: boolean('is_published_wms').notNull().default(false),
+    /** GeoServer layer name once published (task 2.9); null while unpublished. */
+    geoserverLayer: text('geoserver_layer'),
     minZoom: integer('min_zoom'),
     maxZoom: integer('max_zoom'),
     description: text('description'),

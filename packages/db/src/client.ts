@@ -5,6 +5,10 @@ import * as schema from './schema/index';
 
 export type Database = NodePgDatabase<typeof schema>;
 
+/** The raw node-postgres pool. Re-exported so consumers (apps/api role management,
+ *  task 2.9) can type it without adding a direct `pg` dependency. */
+export type PgPool = Pool;
+
 export interface DbHandle {
   db: Database;
   pool: Pool;

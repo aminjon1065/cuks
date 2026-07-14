@@ -169,6 +169,13 @@
       "when": 1784060100603,
       "tag": "0023_imported_layer_mvt",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784067935357,
+      "tag": "0024_reflective_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }

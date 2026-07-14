@@ -12,6 +12,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
+  GIS_DB_ACCOUNT_KINDS,
   GIS_EXPORT_FORMATS,
   GIS_EXPORT_SOURCES,
   GIS_EXPORT_STATUSES,
@@ -220,5 +221,30 @@ export const gisExports = appSchema.table(
     check('gis_exports_source_chk', sql`${t.source} in ('layer', 'incidents')`),
     check('gis_exports_format_chk', sql`${t.format} in ('geojson', 'gpkg', 'shp', 'csv', 'xlsx')`),
     index('gis_exports_created_by_idx').on(t.createdBy, t.createdAt),
+  ],
+);
+
+/**
+ * app.gis_db_accounts — registry of managed PostgreSQL login roles for direct
+ * QGIS/ArcGIS access (docs/modules/10 §7, docs/09 §Права PG; task 2.9). Lives in
+ * `app`, NOT `gis`: the roles it tracks are granted the whole `gis` schema, so
+ * keeping the registry there would let an issued account read (or, for an editor,
+ * tamper with) the list of all accounts. One row per issued role; the password is
+ * never stored — it is shown once and cannot be recovered.
+ */
+export const gisDbAccounts = appSchema.table(
+  'gis_db_accounts',
+  {
+    id: primaryId(),
+    /** The `pg_roles` name — always `cuks_gis_<label>`. */
+    username: text('username').notNull(),
+    kind: text('kind', { enum: GIS_DB_ACCOUNT_KINDS }).notNull(),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('gis_db_accounts_username_uq').on(t.username),
+    check('gis_db_accounts_kind_chk', sql`${t.kind} in ('reader', 'editor')`),
   ],
 );
