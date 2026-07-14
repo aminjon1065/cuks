@@ -21,6 +21,8 @@ export * from './components/dropdown-menu';
 export * from './components/command';
 export * from './components/toast';
 export * from './components/switch';
+export * from './components/checkbox';
+export * from './components/slider';
 export * from './components/file-dropzone';
 export * from './components/attachment-list';
 
