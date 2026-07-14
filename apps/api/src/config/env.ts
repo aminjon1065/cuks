@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LOCKOUT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS } from '@cuks/shared';
 
 /**
  * `FOO=` in `.env` (present, blank) must mean "unset" for an optional field —
@@ -37,6 +38,12 @@ export const envSchema = z
     // SESSION_SECRET when absent; set a dedicated value in production.
     ENCRYPTION_KEY: optionalString(),
 
+    // Anti-bruteforce login lockout (docs/05 §1). Defaults are the strict
+    // production values; a dev environment may loosen them, and 0 disables the
+    // lockout entirely (only outside production — see superRefine below).
+    AUTH_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().min(0).default(LOCKOUT_MAX_ATTEMPTS),
+    AUTH_LOCKOUT_WINDOW_SECONDS: z.coerce.number().int().positive().default(LOCKOUT_WINDOW_SECONDS),
+
     // Object storage (MinIO / S3).
     S3_ENDPOINT: z.string().url(),
     S3_ACCESS_KEY: z.string().min(1),
@@ -62,6 +69,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['ENCRYPTION_KEY'],
         message: 'ENCRYPTION_KEY (min 32 chars) is required in production',
+      });
+    }
+    // The lockout is a security control — it can be relaxed for local dev but never
+    // switched off in production (docs/09 §7, CLAUDE.md §6).
+    if (env.NODE_ENV === 'production' && env.AUTH_LOCKOUT_MAX_ATTEMPTS < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUTH_LOCKOUT_MAX_ATTEMPTS'],
+        message: 'AUTH_LOCKOUT_MAX_ATTEMPTS must be at least 1 in production',
       });
     }
   });

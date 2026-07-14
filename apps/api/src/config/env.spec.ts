@@ -27,4 +27,24 @@ describe('validateEnv', () => {
       /ENCRYPTION_KEY/,
     );
   });
+
+  it('defaults the login lockout to the strict 5 / 15 min values', () => {
+    const env = validateEnv(REQUIRED);
+    expect(env.AUTH_LOCKOUT_MAX_ATTEMPTS).toBe(5);
+    expect(env.AUTH_LOCKOUT_WINDOW_SECONDS).toBe(900);
+  });
+
+  it('allows disabling the lockout in dev but never in production', () => {
+    expect(
+      validateEnv({ ...REQUIRED, AUTH_LOCKOUT_MAX_ATTEMPTS: '0' }).AUTH_LOCKOUT_MAX_ATTEMPTS,
+    ).toBe(0);
+    expect(() =>
+      validateEnv({
+        ...REQUIRED,
+        NODE_ENV: 'production',
+        ENCRYPTION_KEY: 'k'.repeat(32),
+        AUTH_LOCKOUT_MAX_ATTEMPTS: '0',
+      }),
+    ).toThrow(/AUTH_LOCKOUT_MAX_ATTEMPTS/);
+  });
 });
