@@ -22,7 +22,9 @@ test('gis access: an admin issues and revokes a PostGIS account, password shown 
 }) => {
   test.setTimeout(60_000);
   await page.goto('/app/admin/gis-access');
-  await expect(page.getByRole('heading', { name: 'Доступ ГИС' })).toBeVisible();
+  // The title shows in both the topbar and the page header (the nav label resolves to
+  // «Доступ ГИС» too), so scope to the main region to keep the locator unambiguous.
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Доступ ГИС' })).toBeVisible();
 
   // Create a reader account.
   await page.getByTestId('create-db-account').click();
