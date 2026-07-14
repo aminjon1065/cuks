@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import type { NotificationPayload } from '@cuks/shared';
 import { NOTIFICATION_CHANNELS } from '@cuks/shared';
 import { appSchema, createdAt, primaryId, updatedAt } from './_shared';
 import { users } from './users';
@@ -21,11 +31,20 @@ export const notifications = appSchema.table(
     body: text('body').notNull(),
     entityType: text('entity_type'),
     entityId: uuid('entity_id'),
+    payload: jsonb('payload').$type<NotificationPayload>().notNull().default({}),
+    // Optional domain-event identity. A retry may fan out again, but each user
+    // receives at most one row for the same event.
+    dedupeKey: text('dedupe_key'),
     isRead: boolean('is_read').notNull().default(false),
     readAt: timestamp('read_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [index('notifications_user_read_created_idx').on(t.userId, t.isRead, t.createdAt.desc())],
+  (t) => [
+    index('notifications_user_read_created_idx').on(t.userId, t.isRead, t.createdAt.desc()),
+    uniqueIndex('notifications_user_dedupe_uq')
+      .on(t.userId, t.dedupeKey)
+      .where(sql`${t.dedupeKey} is not null`),
+  ],
 );
 
 /**

@@ -10,6 +10,7 @@ import { SESSION_COOKIE, WS_NAMESPACE, wsRooms } from '@cuks/shared';
 import { SessionService } from '../auth/session.service';
 import { UsersService } from '../users/users.service';
 import { RealtimeService } from './realtime.service';
+import { PresenceService } from './presence.service';
 
 /** Minimal cookie-header parser (the WS handshake isn't run through Fastify). */
 export function parseCookieHeader(header: string | undefined): Record<string, string> {
@@ -38,6 +39,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly sessions: SessionService,
     private readonly users: UsersService,
     private readonly realtime: RealtimeService,
+    private readonly presence: PresenceService,
   ) {}
 
   afterInit(server: Server): void {
@@ -52,6 +54,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
     client.data.userId = userId;
     await client.join(wsRooms.user(userId));
+    await this.presence.connect(userId, client.id);
     const permissions = await this.users.getPermissions(userId);
     if (permissions.isSuperadmin || permissions.permissions.includes('gis.view')) {
       await client.join(wsRooms.gis());
@@ -59,10 +62,12 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     client.emit('connection.ready', { userId });
   }
 
-  handleDisconnect(client: Socket): void {
-    // Presence tracking lands with notifications-core (0.10).
+  async handleDisconnect(client: Socket): Promise<void> {
     const userId = (client.data as { userId?: string }).userId;
-    if (userId) this.logger.debug(`socket ${client.id} disconnected (user ${userId})`);
+    if (userId) {
+      await this.presence.disconnect(client.id);
+      this.logger.debug(`socket ${client.id} disconnected (user ${userId})`);
+    }
   }
 
   /** Resolve the session cookie to an active, non-blocked user id, or null. */

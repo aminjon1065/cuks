@@ -88,6 +88,7 @@ export const incidents = appSchema.table(
       'incidents_status_chk',
       sql`${t.status} in ('reported', 'active', 'localized', 'eliminated', 'closed')`,
     ),
+    check('incidents_closed_at_chk', sql`(${t.status} = 'closed') = (${t.closedAt} is not null)`),
     check(
       'incidents_source_chk',
       sql`${t.source} in ('phone', 'report_doc', 'monitoring', 'other')`,

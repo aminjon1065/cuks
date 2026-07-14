@@ -8,6 +8,9 @@
 export const NOTIFICATION_CHANNELS = ['inapp', 'email'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
+export const NOTIFICATION_PRIORITIES = ['normal', 'critical'] as const;
+export type NotificationPriority = (typeof NOTIFICATION_PRIORITIES)[number];
+
 export const NOTIFICATION_GROUPS = [
   'system',
   'docflow',
@@ -19,11 +22,10 @@ export const NOTIFICATION_GROUPS = [
 export type NotificationGroup = (typeof NOTIFICATION_GROUPS)[number];
 
 /**
- * Groups whose in-app channel cannot be turned off (docs/07: document assignments
- * and calls; docs/16 adds incidents). Critical notifications are always delivered
- * in-app regardless of preferences.
+ * Groups whose every event is critical. Incident priority is dynamic (sev >= 4),
+ * so it is supplied per notification instead of locking the whole group.
  */
-export const CRITICAL_GROUPS: readonly NotificationGroup[] = ['docflow', 'meet', 'incidents'];
+export const CRITICAL_GROUPS: readonly NotificationGroup[] = ['docflow', 'meet'];
 
 export function isGroupCritical(group: NotificationGroup): boolean {
   return CRITICAL_GROUPS.includes(group);

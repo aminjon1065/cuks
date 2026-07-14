@@ -1,0 +1,1 @@
+ALTER TABLE "app"."notifications" ADD COLUMN "payload" jsonb DEFAULT '{}'::jsonb NOT NULL;

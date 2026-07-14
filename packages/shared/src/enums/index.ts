@@ -79,6 +79,32 @@ export const INCIDENT_STATUSES = [
 ] as const;
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
+export type IncidentStatusTransition = 'forward' | 'rollback' | 'invalid';
+
+/**
+ * The lifecycle only advances one operational step at a time. A manager may
+ * return to any earlier step, but the command schema requires a reason for that
+ * rollback (docs/modules/10 §2).
+ */
+export function incidentStatusTransition(
+  from: IncidentStatus,
+  to: IncidentStatus,
+): IncidentStatusTransition {
+  const fromIndex = INCIDENT_STATUSES.indexOf(from);
+  const toIndex = INCIDENT_STATUSES.indexOf(to);
+  if (toIndex === fromIndex + 1) return 'forward';
+  if (toIndex < fromIndex) return 'rollback';
+  return 'invalid';
+}
+
+/** Targets shown by the status dialog: the next step plus every earlier step. */
+export function availableIncidentStatusTargets(from: IncidentStatus): IncidentStatus[] {
+  const currentIndex = INCIDENT_STATUSES.indexOf(from);
+  return INCIDENT_STATUSES.filter(
+    (_status, index) => index < currentIndex || index === currentIndex + 1,
+  );
+}
+
 /** How an incident was first reported (docs/modules/10 §3). */
 export const INCIDENT_SOURCES = ['phone', 'report_doc', 'monitoring', 'other'] as const;
 export type IncidentSource = (typeof INCIDENT_SOURCES)[number];

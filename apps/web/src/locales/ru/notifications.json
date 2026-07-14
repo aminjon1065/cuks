@@ -61,8 +61,16 @@
       "body": "Документ поступил вам на рассмотрение."
     },
     "incidents.incident.created": {
-      "title": "Зарегистрирована ЧС",
-      "body": "В системе зарегистрирована новая чрезвычайная ситуация."
+      "title": "Зарегистрирована ЧС {{number}}",
+      "body": "Уровень ЧС: {{severity}}. Откройте карточку для оперативных данных."
+    },
+    "incidents.incident.updated": {
+      "title": "Обновлена ЧС {{number}}",
+      "body": "В карточке появились новые оперативные данные."
+    },
+    "incidents.incident.status_changed": {
+      "title": "Изменён статус ЧС {{number}}",
+      "body": "{{fromStatus}} → {{toStatus}}"
     }
   }
 }

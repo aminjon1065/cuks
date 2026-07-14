@@ -9,6 +9,7 @@ export * from './rbac';
 export * from './dictionaries';
 export * from './auth';
 export * from './notifications';
+export * from './notification-outbox';
 export * from './fs';
 export * from './gis';
 export * from './incidents';

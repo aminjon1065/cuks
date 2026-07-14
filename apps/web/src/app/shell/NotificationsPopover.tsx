@@ -10,7 +10,12 @@ import {
   useNotifications,
   useUnreadCount,
 } from '@/features/notifications/api/queries';
-import { formatRelativeTime, groupIcon, notificationText } from '@/features/notifications/lib';
+import {
+  formatRelativeTime,
+  groupIcon,
+  notificationHref,
+  notificationText,
+} from '@/features/notifications/lib';
 
 function FeedRow({ n, me, onClick }: { n: NotificationDto; me: MeResponse; onClick: () => void }) {
   const { t } = useTranslation('notifications');
@@ -110,6 +115,11 @@ export function NotificationsPopover({ me }: { me: MeResponse }): React.JSX.Elem
                     me={me}
                     onClick={() => {
                       if (!n.isRead) markRead.mutate(n.id);
+                      const href = notificationHref(n);
+                      if (href) {
+                        setOpen(false);
+                        navigate(href);
+                      }
                     }}
                   />
                 </li>

@@ -30,16 +30,34 @@ export class AuditService {
   constructor(@Inject(DB) private readonly db: Database) {}
 
   log(event: AuditEvent): void {
+    const enriched = this.enrich(event);
+    this.writeLog(enriched);
+    void this.persist(enriched);
+  }
+
+  /**
+   * Await the append when the response immediately reads the audit timeline.
+   * Persistence failures remain non-fatal, matching {@link log}.
+   */
+  async logAndWait(event: AuditEvent): Promise<void> {
+    const enriched = this.enrich(event);
+    this.writeLog(enriched);
+    await this.persist(enriched);
+  }
+
+  private enrich(event: AuditEvent): AuditEvent {
     const ctx = getRequestContext();
-    const enriched: AuditEvent = {
+    return {
       ...event,
       actorId: event.actorId ?? ctx?.actorId ?? null,
       ip: event.ip ?? ctx?.ip ?? null,
       userAgent: event.userAgent ?? ctx?.userAgent ?? null,
       orgUnitId: event.orgUnitId ?? null,
     };
-    this.logger.log({ audit: enriched }, `audit ${enriched.action}`);
-    void this.persist(enriched);
+  }
+
+  private writeLog(event: AuditEvent): void {
+    this.logger.log({ audit: event }, `audit ${event.action}`);
   }
 
   private async persist(event: AuditEvent): Promise<void> {

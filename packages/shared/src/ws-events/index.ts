@@ -13,7 +13,10 @@ export interface WsEventPayloads {
   /** The server ended this user's sessions (blocked / revoked) — client logs out. */
   'auth.forced_logout': { reason: string };
   /** Registry/map clients refetch the incident tile source after a mutation. */
-  'incidents.updated': { id: string; action: 'created' | 'reported' | 'resource_added' };
+  'incidents.updated': {
+    id: string;
+    action: 'created' | 'reported' | 'resource_added' | 'status_changed';
+  };
   'presence.changed': { userId: string; online: boolean };
 }
 

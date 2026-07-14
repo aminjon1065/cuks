@@ -33,10 +33,39 @@ export function notificationText(
   t: TFunction,
   n: NotificationDto,
 ): { title: string; body: string } {
-  return {
-    title: t(`types.${n.type}.title`, { defaultValue: n.title }),
-    body: t(`types.${n.type}.body`, { defaultValue: n.body }),
+  const number = typeof n.payload['number'] === 'string' ? n.payload['number'] : null;
+  const severity = typeof n.payload['severity'] === 'number' ? n.payload['severity'] : null;
+  const fromStatus = typeof n.payload['fromStatus'] === 'string' ? n.payload['fromStatus'] : null;
+  const toStatus = typeof n.payload['toStatus'] === 'string' ? n.payload['toStatus'] : null;
+  const isIncident = n.type.startsWith('incidents.incident.');
+  const hasIncidentPayload =
+    !isIncident ||
+    (!!number &&
+      (n.type !== 'incidents.incident.created' || severity !== null) &&
+      (n.type !== 'incidents.incident.status_changed' || (!!fromStatus && !!toStatus)));
+  if (!hasIncidentPayload) return { title: n.title, body: n.body };
+
+  const values = {
+    ...n.payload,
+    number,
+    severity,
+    fromStatus: fromStatus
+      ? t(`incidents:status.${fromStatus}`, { defaultValue: fromStatus })
+      : null,
+    toStatus: toStatus ? t(`incidents:status.${toStatus}`, { defaultValue: toStatus }) : null,
   };
+  return {
+    title: t(`types.${n.type}.title`, { ...values, defaultValue: n.title }),
+    body: t(`types.${n.type}.body`, { ...values, defaultValue: n.body }),
+  };
+}
+
+/** Permanent app route for notification-backed entities. */
+export function notificationHref(notification: NotificationDto): string | null {
+  if (notification.entityType === 'incident' && notification.entityId) {
+    return `/app/incidents/${notification.entityId}`;
+  }
+  return null;
 }
 
 const DIVISIONS: { amount: number; unit: Intl.RelativeTimeFormatUnit }[] = [

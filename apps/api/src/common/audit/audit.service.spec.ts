@@ -57,4 +57,15 @@ describe('AuditService', () => {
     expect(() => service.log({ action: 'x.y.z' })).not.toThrow();
     await flush();
   });
+
+  it('can await timeline-critical persistence without propagating a DB failure', async () => {
+    const ok = makeService();
+    await ok.service.logAndWait({ action: 'incidents.incident.status_changed' });
+    expect(ok.values).toHaveBeenCalledOnce();
+
+    const failing = makeService(true);
+    await expect(
+      failing.service.logAndWait({ action: 'incidents.incident.status_changed' }),
+    ).resolves.toBeUndefined();
+  });
 });

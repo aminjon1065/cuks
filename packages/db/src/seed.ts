@@ -625,6 +625,8 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
     const severity = (i % 5) + 1;
     const status = DEMO_INCIDENT_STATUSES[i % DEMO_INCIDENT_STATUSES.length]!;
     const typeCode = DEMO_INCIDENT_TYPES[i % DEMO_INCIDENT_TYPES.length]!;
+    const reportedAt = new Date(occurredAt.getTime() + 15 * 60_000);
+    const closedAt = status === 'closed' ? reportedAt : null;
 
     await db
       .insert(incidents)
@@ -634,13 +636,15 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
         severity,
         status,
         occurredAt,
-        reportedAt: new Date(occurredAt.getTime() + 15 * 60_000),
+        reportedAt,
         regionId: region.id,
         geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
         addressText: `Демо-точка ${region.code}`,
         description: 'Демонстрационное происшествие для карты оперативной обстановки',
         source: 'monitoring',
         createdBy: adminId,
+        closedAt,
+        closedBy: status === 'closed' ? adminId : null,
       })
       .onConflictDoUpdate({
         target: incidents.number,
@@ -649,9 +653,11 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
           severity,
           status,
           occurredAt,
-          reportedAt: new Date(occurredAt.getTime() + 15 * 60_000),
+          reportedAt,
           regionId: region.id,
           geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+          closedAt,
+          closedBy: status === 'closed' ? adminId : null,
           updatedAt: new Date(),
           deletedAt: null,
         },

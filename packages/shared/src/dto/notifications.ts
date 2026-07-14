@@ -19,6 +19,8 @@ export const listNotificationsQuerySchema = z.object({
 });
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 
+export type NotificationPayload = Record<string, string | number | boolean | null>;
+
 export interface NotificationDto {
   id: string;
   type: string;
@@ -27,6 +29,7 @@ export interface NotificationDto {
   body: string;
   entityType: string | null;
   entityId: string | null;
+  payload: NotificationPayload;
   isRead: boolean;
   readAt: string | null;
   createdAt: string;

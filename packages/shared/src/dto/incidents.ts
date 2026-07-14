@@ -5,6 +5,7 @@ import {
   INCIDENT_STATUSES,
   INCIDENT_SEVERITY_MAX,
   INCIDENT_SEVERITY_MIN,
+  incidentStatusTransition,
   type IncidentResourceKind,
   type IncidentSource,
   type IncidentStatus,
@@ -118,6 +119,27 @@ export const createIncidentReportSchema = z
   });
 export type CreateIncidentReportInput = z.infer<typeof createIncidentReportSchema>;
 
+/** Optimistic status command; the server row-locks and verifies expectedStatus. */
+export const changeIncidentStatusSchema = z
+  .object({
+    expectedStatus: z.enum(INCIDENT_STATUSES),
+    status: z.enum(INCIDENT_STATUSES),
+    reason: z.string().trim().min(1).max(1_000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      incidentStatusTransition(value.expectedStatus, value.status) === 'rollback' &&
+      !value.reason
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A rollback reason is required',
+        path: ['reason'],
+      });
+    }
+  });
+export type ChangeIncidentStatusInput = z.infer<typeof changeIncidentStatusSchema>;
+
 export const createIncidentResourceSchema = z.object({
   kind: z.enum(INCIDENT_RESOURCE_KINDS),
   name: z.string().trim().min(1).max(300),
@@ -177,6 +199,7 @@ export interface IncidentAuditEventDto {
   action: string;
   createdAt: string;
   actorName: string | null;
+  meta: Record<string, unknown> | null;
 }
 
 export interface IncidentDetailDto extends IncidentListItemDto {
@@ -184,6 +207,8 @@ export interface IncidentDetailDto extends IncidentListItemDto {
   addressText: string | null;
   description: string | null;
   source: IncidentSource;
+  closedAt: string | null;
+  closedByName: string | null;
   evacuated: number;
   affected: number;
   damageNote: string | null;

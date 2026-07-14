@@ -7,7 +7,15 @@ import argon2 from 'argon2';
 import { eq, sql } from 'drizzle-orm';
 import { ARGON2_OPTIONS, type IncidentStatus } from '@cuks/shared';
 import { createDb, type Database } from './client';
-import { adminUnits, incidents, roles, userRoles, users } from './schema/index';
+import {
+  adminUnits,
+  incidents,
+  notificationOutbox,
+  notifications,
+  roles,
+  userRoles,
+  users,
+} from './schema/index';
 import { mapIncidentTimes } from './seed-e2e-fixtures';
 
 /**
@@ -38,6 +46,8 @@ const E2E_USER_ROLE_CODE = 'employee';
 // without any superadmin (whose access bypass would defeat the 403 checks).
 const E2E_USER2_USERNAME = 'e2e_user2';
 const E2E_USER2_PASSWORD = 'E2eUser2!Passw0rd';
+const E2E_DUTY_USERNAME = 'e2e_duty';
+const E2E_DUTY_PASSWORD = 'E2eDuty!Passw0rd';
 
 async function provisionUser(
   db: Database,
@@ -47,6 +57,7 @@ async function provisionUser(
     roleCode: string;
     fullName: string;
     shortName: string;
+    email?: string;
   },
 ): Promise<string> {
   const [role] = await db.select().from(roles).where(eq(roles.code, opts.roleCode));
@@ -69,6 +80,7 @@ async function provisionUser(
     totpSecret: null,
     totpEnabled: false,
     deletedAt: null,
+    email: opts.email ?? null,
   };
 
   const [existing] = await db
@@ -92,6 +104,7 @@ async function provisionUser(
   // Reset role assignments to exactly the intended one (deterministic across reruns).
   await db.delete(userRoles).where(eq(userRoles.userId, userId));
   await db.insert(userRoles).values({ userId, roleId: role.id, orgUnitId: null });
+  await db.delete(notifications).where(eq(notifications.userId, userId));
   return userId;
 }
 
@@ -118,6 +131,7 @@ async function provisionMapIncidents(db: Database, actorId: string): Promise<voi
     const { occurredAt, reportedAt } = mapIncidentTimes(now, i);
     const status = fixtureStatuses[i % fixtureStatuses.length]!;
     const severity = i < fixtureStatuses.length ? 3 : (i % 5) + 1;
+    const closedAt = status === 'closed' ? reportedAt : null;
     // E2E-001 is exactly on a z11/z12 vertical tile seam. The MVT function
     // must publish it from one adjacent tile only (0015 regression fixture).
     const lon = i === 0 ? 68.73046875 : 68.787 + ((i % 4) - 1.5) * 0.004;
@@ -135,6 +149,8 @@ async function provisionMapIncidents(db: Database, actorId: string): Promise<voi
         geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
         source: 'monitoring',
         createdBy: actorId,
+        closedAt,
+        closedBy: status === 'closed' ? actorId : null,
       })
       .onConflictDoUpdate({
         target: incidents.number,
@@ -145,6 +161,8 @@ async function provisionMapIncidents(db: Database, actorId: string): Promise<voi
           reportedAt,
           regionId: region.id,
           geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+          closedAt,
+          closedBy: status === 'closed' ? actorId : null,
           updatedAt: new Date(),
           deletedAt: null,
         },
@@ -163,6 +181,11 @@ async function provisionMapIncidents(db: Database, actorId: string): Promise<voi
 }
 
 async function provision(db: Database): Promise<void> {
+  // The API can be running while this deterministic seed is applied. Remove
+  // stale incident handoff markers before clearing the e2e users' feeds so a
+  // prior failed run cannot be delivered later into the next test's assertions.
+  await db.delete(notificationOutbox).where(eq(notificationOutbox.topic, 'incidents.notification'));
+
   const adminId = await provisionUser(db, {
     username: E2E_USERNAME,
     password: E2E_PASSWORD,
@@ -184,11 +207,19 @@ async function provision(db: Database): Promise<void> {
     fullName: 'E2E Пользователь 2',
     shortName: 'E2E Юзер 2',
   });
+  await provisionUser(db, {
+    username: E2E_DUTY_USERNAME,
+    password: E2E_DUTY_PASSWORD,
+    roleCode: 'duty_officer',
+    fullName: 'E2E Оперативный дежурный',
+    shortName: 'E2E Дежурный',
+    email: 'e2e-duty@cuks.local',
+  });
   await provisionMapIncidents(db, adminId);
   console.log(
     `e2e users ready: "${E2E_USERNAME}" (${E2E_ROLE_CODE}, 2FA reset for enrollment) + ` +
       `"${E2E_USER_USERNAME}"/"${E2E_USER2_USERNAME}" (${E2E_USER_ROLE_CODE}); ` +
-      '12 clustered map incidents.',
+      `"${E2E_DUTY_USERNAME}" (duty_officer); 12 clustered map incidents.`,
   );
 }
 

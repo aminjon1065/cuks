@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { uuidv7 } from 'uuidv7';
 import {
   and,
   asc,
@@ -21,12 +22,15 @@ import {
   incidentReports,
   incidentResources,
   incidents,
+  notificationOutbox,
   savedFilters,
   users,
   type Database,
 } from '@cuks/db';
 import {
   INCIDENT_NUMBER_PREFIX,
+  incidentStatusTransition,
+  type ChangeIncidentStatusInput,
   type CreateIncidentInput,
   type CreateIncidentReportInput,
   type CreateIncidentResourceInput,
@@ -47,6 +51,10 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { RealtimeService } from '../events/realtime.service';
 import { wsRooms } from '@cuks/shared';
 import { buildIncidentXlsx, type IncidentExportRow } from './incident-xlsx';
+import {
+  incidentNotificationOutboxValues,
+  IncidentNotificationOutboxService,
+} from './incident-notification-outbox.service';
 
 const INCIDENT_FILTER_MODULE = 'incidents';
 const INCIDENT_EXPORT_LIMIT = 10_000;
@@ -71,6 +79,8 @@ interface RegistryRow {
   description: string | null;
   source: IncidentDetailDto['source'];
   createdBy: string | null;
+  closedAt: Date | null;
+  closedBy: string | null;
   longitude: number;
   latitude: number;
 }
@@ -109,6 +119,70 @@ export function isSelectableIncidentType(
   return !!type && !child;
 }
 
+export interface IncidentStatusChangePlan {
+  patch: {
+    status: IncidentStatus;
+    closedAt: Date | null;
+    closedBy: string | null;
+    updatedAt: Date;
+  };
+  transition: 'forward' | 'rollback';
+  auditMeta: {
+    fromStatus: IncidentStatus;
+    toStatus: IncidentStatus;
+    reason: string | null;
+    rollback: boolean;
+  };
+}
+
+/** Pure lifecycle policy used by the locked status command and its unit tests. */
+export function planIncidentStatusChange(
+  currentStatus: IncidentStatus,
+  input: ChangeIncidentStatusInput,
+  actorId: string,
+  changedAt: Date,
+): IncidentStatusChangePlan {
+  if (currentStatus !== input.expectedStatus) {
+    throw AppException.conflict('incidents.status.stale', 'Incident status changed', {
+      expectedStatus: input.expectedStatus,
+      actualStatus: currentStatus,
+    });
+  }
+  if (currentStatus === input.status) {
+    throw AppException.conflict('incidents.status.unchanged', 'Incident already has this status');
+  }
+  const transition = incidentStatusTransition(currentStatus, input.status);
+  if (transition === 'invalid') {
+    throw AppException.unprocessable(
+      'incidents.status.invalid_transition',
+      'Incident status may advance by one step only',
+      { fromStatus: currentStatus, toStatus: input.status },
+    );
+  }
+  if (transition === 'rollback' && !input.reason?.trim()) {
+    throw AppException.unprocessable(
+      'incidents.status.rollback_reason_required',
+      'A rollback reason is required',
+    );
+  }
+
+  return {
+    patch: {
+      status: input.status,
+      closedAt: input.status === 'closed' ? changedAt : null,
+      closedBy: input.status === 'closed' ? actorId : null,
+      updatedAt: changedAt,
+    },
+    transition,
+    auditMeta: {
+      fromStatus: currentStatus,
+      toStatus: input.status,
+      reason: input.reason ?? null,
+      rollback: transition === 'rollback',
+    },
+  };
+}
+
 /** Registry, report chronology and resources (docs/modules/10 §5). */
 @Injectable()
 export class IncidentsService {
@@ -116,6 +190,7 @@ export class IncidentsService {
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly incidentNotificationOutbox: IncidentNotificationOutboxService,
   ) {}
 
   async list(query: ListIncidentsQuery): Promise<PaginatedResult<IncidentListItemDto>> {
@@ -141,7 +216,7 @@ export class IncidentsService {
 
     const [listItem] = await this.toListItems([row]);
     if (!listItem) throw new Error('Incident label hydration failed');
-    const [reports, resources, events] = await Promise.all([
+    const [reports, resources, events, closedBy] = await Promise.all([
       this.db
         .select({
           id: incidentReports.id,
@@ -178,11 +253,19 @@ export class IncidentsService {
           action: auditLog.action,
           createdAt: auditLog.createdAt,
           actorName: users.shortName,
+          meta: auditLog.meta,
         })
         .from(auditLog)
         .leftJoin(users, eq(users.id, auditLog.actorId))
         .where(and(eq(auditLog.entityType, 'incident'), eq(auditLog.entityId, id)))
         .orderBy(desc(auditLog.createdAt)),
+      row.closedBy
+        ? this.db
+            .select({ shortName: users.shortName })
+            .from(users)
+            .where(eq(users.id, row.closedBy))
+            .limit(1)
+        : Promise.resolve([]),
     ]);
 
     return {
@@ -191,6 +274,8 @@ export class IncidentsService {
       addressText: row.addressText,
       description: row.description,
       source: row.source,
+      closedAt: row.closedAt?.toISOString() ?? null,
+      closedByName: closedBy[0]?.shortName ?? null,
       evacuated: row.evacuated,
       affected: row.affected,
       damageNote: row.damageNote,
@@ -208,6 +293,7 @@ export class IncidentsService {
         ...event,
         createdAt: event.createdAt.toISOString(),
         actorName: event.actorName ?? null,
+        meta: (event.meta as Record<string, unknown> | null) ?? null,
       })),
     };
   }
@@ -226,7 +312,7 @@ export class IncidentsService {
       input.location.longitude,
       input.location.latitude,
     );
-    const incidentId = await this.db.transaction(async (tx) => {
+    const createdIncident = await this.db.transaction(async (tx) => {
       // One transaction-scoped advisory lock per incident year makes the human
       // number deterministic under simultaneous operator reports.
       const year = occurredAt.getUTCFullYear();
@@ -273,16 +359,31 @@ export class IncidentsService {
         damageNote: input.damageNote ?? null,
         authorId: actor.id,
       });
-      return created.id;
+      const [outbox] = await tx
+        .insert(notificationOutbox)
+        .values(
+          incidentNotificationOutboxValues({
+            event: 'created',
+            incidentId: created.id,
+            number,
+            severity: input.severity,
+            dedupeKey: `incident:${created.id}:created`,
+          }),
+        )
+        .returning({ id: notificationOutbox.id });
+      if (!outbox) throw new Error('Incident notification outbox insert did not return an id');
+      return { id: created.id, number, outboxId: outbox.id };
     });
-    this.audit.log({
-      action: 'incident.created',
+    await this.audit.logAndWait({
+      action: 'incidents.incident.created',
+      actorId: actor.id,
       entityType: 'incident',
-      entityId: incidentId,
+      entityId: createdIncident.id,
       meta: { typeCode: input.typeCode, severity: input.severity },
     });
-    this.publishUpdate(incidentId, 'created');
-    return this.detail(incidentId);
+    this.publishUpdate(createdIncident.id, 'created');
+    await this.incidentNotificationOutbox.dispatchPending(createdIncident.outboxId);
+    return this.detail(createdIncident.id);
   }
 
   async addReport(
@@ -290,7 +391,7 @@ export class IncidentsService {
     input: CreateIncidentReportInput,
     actor: AuthUser,
   ): Promise<IncidentDetailDto> {
-    await this.db.transaction(async (tx) => {
+    const mutation = await this.db.transaction(async (tx) => {
       const [incident] = await tx
         .select()
         .from(incidents)
@@ -299,6 +400,12 @@ export class IncidentsService {
         .for('update');
       if (!incident) {
         throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
+      }
+      if (incident.status === 'closed') {
+        throw AppException.conflict(
+          'incidents.incident.closed',
+          'Reopen the incident before adding a report',
+        );
       }
       const reportedAt = input.reportedAt
         ? new Date(input.reportedAt)
@@ -316,38 +423,167 @@ export class IncidentsService {
         );
       }
       const snapshot = mergeReportSnapshot(incident, input);
-      await tx.insert(incidentReports).values({
-        incidentId: id,
-        reportedAt,
-        text: input.text ?? null,
-        ...snapshot,
-        authorId: actor.id,
-      });
+      const [report] = await tx
+        .insert(incidentReports)
+        .values({
+          incidentId: id,
+          reportedAt,
+          text: input.text ?? null,
+          ...snapshot,
+          authorId: actor.id,
+        })
+        .returning({ id: incidentReports.id });
+      if (!report) throw new Error('Incident report insert did not return an id');
       await tx
         .update(incidents)
         .set({ ...snapshot, reportedAt })
         .where(eq(incidents.id, id));
+      const [outbox] = await tx
+        .insert(notificationOutbox)
+        .values(
+          incidentNotificationOutboxValues({
+            event: 'updated',
+            incidentId: id,
+            number: incident.number,
+            severity: incident.severity,
+            dedupeKey: `incident:${id}:report:${report.id}`,
+          }),
+        )
+        .returning({ id: notificationOutbox.id });
+      if (!outbox) throw new Error('Incident notification outbox insert did not return an id');
+      return {
+        reportId: report.id,
+        number: incident.number,
+        severity: incident.severity,
+        outboxId: outbox.id,
+      };
     });
-    this.audit.log({
-      action: 'incident.updated',
+    await this.audit.logAndWait({
+      action: 'incidents.incident.updated',
+      actorId: actor.id,
       entityType: 'incident',
       entityId: id,
       meta: { report: true },
     });
     this.publishUpdate(id, 'reported');
+    await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
     return this.detail(id);
   }
 
-  async addResource(id: string, input: CreateIncidentResourceInput): Promise<IncidentDetailDto> {
-    await this.requireIncident(id);
-    await this.db.insert(incidentResources).values({ incidentId: id, ...input });
-    this.audit.log({
-      action: 'incident.updated',
+  async addResource(
+    id: string,
+    input: CreateIncidentResourceInput,
+    actor: AuthUser,
+  ): Promise<IncidentDetailDto> {
+    const mutation = await this.db.transaction(async (tx) => {
+      const [incident] = await tx
+        .select()
+        .from(incidents)
+        .where(and(eq(incidents.id, id), isNull(incidents.deletedAt)))
+        .limit(1)
+        .for('update');
+      if (!incident) {
+        throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
+      }
+      if (incident.status === 'closed') {
+        throw AppException.conflict(
+          'incidents.incident.closed',
+          'Reopen the incident before adding a resource',
+        );
+      }
+      const [resource] = await tx
+        .insert(incidentResources)
+        .values({ incidentId: id, ...input })
+        .returning({ id: incidentResources.id });
+      if (!resource) throw new Error('Incident resource insert did not return an id');
+      const [outbox] = await tx
+        .insert(notificationOutbox)
+        .values(
+          incidentNotificationOutboxValues({
+            event: 'updated',
+            incidentId: id,
+            number: incident.number,
+            severity: incident.severity,
+            dedupeKey: `incident:${id}:resource:${resource.id}`,
+          }),
+        )
+        .returning({ id: notificationOutbox.id });
+      if (!outbox) throw new Error('Incident notification outbox insert did not return an id');
+      return {
+        resourceId: resource.id,
+        number: incident.number,
+        severity: incident.severity,
+        outboxId: outbox.id,
+      };
+    });
+    await this.audit.logAndWait({
+      action: 'incidents.incident.updated',
+      actorId: actor.id,
       entityType: 'incident',
       entityId: id,
       meta: { resource: input.kind },
     });
     this.publishUpdate(id, 'resource_added');
+    await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
+    return this.detail(id);
+  }
+
+  async changeStatus(
+    id: string,
+    input: ChangeIncidentStatusInput,
+    actor: AuthUser,
+  ): Promise<IncidentDetailDto> {
+    const transitionId = uuidv7();
+    const mutation = await this.db.transaction(async (tx) => {
+      const [incident] = await tx
+        .select()
+        .from(incidents)
+        .where(and(eq(incidents.id, id), isNull(incidents.deletedAt)))
+        .limit(1)
+        .for('update');
+      if (!incident) {
+        throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
+      }
+      const changedAt = new Date();
+      const plan = planIncidentStatusChange(incident.status, input, actor.id, changedAt);
+      await tx.update(incidents).set(plan.patch).where(eq(incidents.id, id));
+      const [outbox] = await tx
+        .insert(notificationOutbox)
+        .values(
+          incidentNotificationOutboxValues({
+            event: 'status_changed',
+            incidentId: id,
+            number: incident.number,
+            severity: incident.severity,
+            dedupeKey: `incident:${id}:status:${transitionId}`,
+            fromStatus: plan.auditMeta.fromStatus,
+            toStatus: plan.auditMeta.toStatus,
+          }),
+        )
+        .returning({ id: notificationOutbox.id });
+      if (!outbox) throw new Error('Incident notification outbox insert did not return an id');
+      return {
+        number: incident.number,
+        severity: incident.severity,
+        outboxId: outbox.id,
+        ...plan.auditMeta,
+      };
+    });
+
+    await this.audit.logAndWait({
+      action: 'incidents.incident.status_changed',
+      actorId: actor.id,
+      entityType: 'incident',
+      entityId: id,
+      meta: {
+        fromStatus: mutation.fromStatus,
+        toStatus: mutation.toStatus,
+        reason: input.reason ?? null,
+        rollback: mutation.rollback,
+      },
+    });
+    this.publishUpdate(id, 'status_changed');
+    await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
     return this.detail(id);
   }
 
@@ -490,6 +726,8 @@ export class IncidentsService {
         description: incidents.description,
         source: incidents.source,
         createdBy: incidents.createdBy,
+        closedAt: incidents.closedAt,
+        closedBy: incidents.closedBy,
         longitude: sql<number>`ST_X(${incidents.geom})`,
         latitude: sql<number>`ST_Y(${incidents.geom})`,
       })
@@ -631,18 +869,10 @@ export class IncidentsService {
     return territory;
   }
 
-  private async requireIncident(id: string): Promise<typeof incidents.$inferSelect> {
-    const [incident] = await this.db
-      .select()
-      .from(incidents)
-      .where(and(eq(incidents.id, id), isNull(incidents.deletedAt)))
-      .limit(1);
-    if (!incident)
-      throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
-    return incident;
-  }
-
-  private publishUpdate(id: string, action: 'created' | 'reported' | 'resource_added'): void {
+  private publishUpdate(
+    id: string,
+    action: 'created' | 'reported' | 'resource_added' | 'status_changed',
+  ): void {
     this.realtime.emitToRoom(wsRooms.gis(), 'incidents.updated', { id, action });
   }
 }

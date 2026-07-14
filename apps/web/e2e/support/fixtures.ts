@@ -26,6 +26,12 @@ export const E2E_USER2 = {
   password: 'E2eUser2!Passw0rd',
 } as const;
 
+/** Password-only operational recipient for the incident notification matrix. */
+export const E2E_DUTY = {
+  username: 'e2e_duty',
+  password: 'E2eDuty!Passw0rd',
+} as const;
+
 /** Auth artifacts written by global-setup, consumed by the specs (gitignored). */
 export const STORAGE_STATE = fileURLToPath(new URL('../.auth/admin.json', import.meta.url));
 export const TOTP_SECRET_FILE = fileURLToPath(new URL('../.auth/totp-secret.txt', import.meta.url));

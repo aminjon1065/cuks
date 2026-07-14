@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import {
   type CreateIncidentInput,
+  type ChangeIncidentStatusInput,
   type CreateIncidentReportInput,
   type CreateIncidentResourceInput,
   type CreateSavedIncidentFilterInput,
@@ -63,8 +64,8 @@ export function useSavedIncidentFilters(): UseQueryResult<SavedIncidentFilterDto
   });
 }
 
-function invalidateIncidents(queryClient: ReturnType<typeof useQueryClient>): void {
-  void queryClient.invalidateQueries({ queryKey: incidentsKey });
+function invalidateIncidents(queryClient: ReturnType<typeof useQueryClient>): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: incidentsKey });
 }
 
 export function useCreateIncident() {
@@ -90,6 +91,16 @@ export function useCreateIncidentResource() {
     mutationFn: ({ id, input }: { id: string; input: CreateIncidentResourceInput }) =>
       api.post<IncidentDetailDto>(`/v1/incidents/${id}/resources`, input),
     onSuccess: () => invalidateIncidents(queryClient),
+  });
+}
+
+export function useChangeIncidentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ChangeIncidentStatusInput }) =>
+      api.post<IncidentDetailDto>(`/v1/incidents/${id}/status`, input),
+    // A stale optimistic command (409) also needs to refresh the card.
+    onSettled: () => invalidateIncidents(queryClient),
   });
 }
 

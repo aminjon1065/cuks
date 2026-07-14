@@ -26,6 +26,10 @@ export class AppException extends HttpException {
     return new AppException(code, message, HttpStatus.NOT_FOUND);
   }
 
+  static conflict(code: string, message: string, details?: Record<string, unknown>): AppException {
+    return new AppException(code, message, HttpStatus.CONFLICT, details);
+  }
+
   static badRequest(
     code: string,
     message: string,

@@ -55,11 +55,15 @@ export function Toaster(): React.JSX.Element | null {
   );
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-80 flex-col gap-2">
+    <div
+      aria-live="off"
+      className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-80 flex-col gap-2"
+    >
       {list.map((t) => (
         <div
           key={t.id}
           role={t.tone === 'danger' ? 'alert' : 'status'}
+          aria-live={t.tone === 'danger' ? 'assertive' : 'polite'}
           className={cn(
             'pointer-events-auto flex items-start gap-2 rounded-md border bg-surface p-3 text-text shadow-[var(--shadow-2)]',
             toneRing[t.tone ?? 'default'],

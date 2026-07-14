@@ -113,6 +113,8 @@ export class FileSharingService {
         type: 'files.file.shared',
         title: 'Файл открыт для вас',
         body: `«${node.name}» открыт для вас (${input.level})`,
+        priority: 'normal',
+        emailMode: 'offline',
         entityType: node.kind,
         entityId: node.id,
       });

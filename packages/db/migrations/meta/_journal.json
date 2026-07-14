@@ -127,6 +127,27 @@
       "when": 1784042355358,
       "tag": "0017_amazing_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784044213629,
+      "tag": "0018_sour_jamie_braddock",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784045751244,
+      "tag": "0019_military_smasher",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784046134997,
+      "tag": "0020_military_angel",
+      "breakpoints": true
     }
   ]
 }

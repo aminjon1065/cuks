@@ -20,8 +20,14 @@ function makeGateway() {
     getPermissions: vi.fn().mockResolvedValue({ permissions: [], isSuperadmin: false }),
   };
   const realtime = { bind: vi.fn() };
-  const gateway = new EventsGateway(sessions as never, users as never, realtime as never);
-  return { gateway, sessions, users };
+  const presence = { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn() };
+  const gateway = new EventsGateway(
+    sessions as never,
+    users as never,
+    realtime as never,
+    presence as never,
+  );
+  return { gateway, sessions, users, presence };
 }
 
 describe('parseCookieHeader', () => {
@@ -56,6 +62,7 @@ describe('EventsGateway.handleConnection', () => {
     expect(socket.emit).toHaveBeenCalledWith('connection.ready', { userId: 'u1' });
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(socket.data.userId).toBe('u1');
+    expect(g.presence.connect).toHaveBeenCalledWith('u1', 'sock1');
   });
 
   it('disconnects a socket with no session cookie', async () => {

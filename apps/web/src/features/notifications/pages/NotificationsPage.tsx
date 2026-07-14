@@ -6,7 +6,7 @@ import { Button, EmptyState, PageHeader, Skeleton, Switch, cn } from '@cuks/ui';
 import type { NotificationDto } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
 import { useMarkAllRead, useMarkRead, useNotifications, useUnreadCount } from '../api/queries';
-import { formatRelativeTime, groupIcon, notificationText } from '../lib';
+import { formatRelativeTime, groupIcon, notificationHref, notificationText } from '../lib';
 
 const PAGE_SIZE = 20;
 
@@ -126,6 +126,8 @@ export function NotificationsPage(): React.JSX.Element {
                   locale={locale}
                   onClick={() => {
                     if (!n.isRead) markRead.mutate(n.id);
+                    const href = notificationHref(n);
+                    if (href) navigate(href);
                   }}
                 />
               </li>

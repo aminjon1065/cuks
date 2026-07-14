@@ -1,13 +1,15 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Badge } from './badge';
 import { Button } from './button';
 import { DataTable } from './data-table';
+import { Dialog, DialogContent, DialogTitle } from './dialog';
 import { EmptyState } from './empty-state';
 import { SeverityBadge } from './severity-badge';
 import { StatusBadge } from './status-badge';
+import { dismissToast, toast, Toaster } from './toast';
 
 describe('badges', () => {
   it('StatusBadge renders its label', () => {
@@ -36,6 +38,33 @@ describe('Button', () => {
     const link = screen.getByRole('link', { name: 'Ссылка' });
     expect(link).toBeInTheDocument();
     expect(link.className).toContain('bg-primary');
+  });
+});
+
+describe('Toaster', () => {
+  it('keeps danger toasts accessible while a modal dialog is open', () => {
+    render(
+      <>
+        <Dialog open>
+          <DialogContent>
+            <DialogTitle>Изменение статуса</DialogTitle>
+          </DialogContent>
+        </Dialog>
+        <Toaster />
+      </>,
+    );
+
+    let toastId = '';
+    act(() => {
+      toastId = toast({ title: 'Конфликт статуса', tone: 'danger' });
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Конфликт статуса');
+    expect(alert).toHaveAttribute('aria-live', 'assertive');
+    expect(alert.closest('[aria-hidden="true"]')).toBeNull();
+
+    act(() => dismissToast(toastId));
   });
 });
 

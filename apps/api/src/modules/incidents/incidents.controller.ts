@@ -7,9 +7,11 @@ import {
   createIncidentResourceSchema,
   createIncidentSchema,
   createSavedIncidentFilterSchema,
+  changeIncidentStatusSchema,
   incidentRegistryFilterSchema,
   listIncidentsQuerySchema,
   type CreateIncidentInput,
+  type ChangeIncidentStatusInput,
   type CreateIncidentReportInput,
   type CreateIncidentResourceInput,
   type CreateSavedIncidentFilterInput,
@@ -112,13 +114,26 @@ export class IncidentsController {
     return this.incidents.addReport(id, body, user);
   }
 
+  @Post(':id/status')
+  @RequirePermission('incidents.manage')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Advance or roll back an incident lifecycle status' })
+  changeStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(idSchema)) id: string,
+    @Body(new ZodValidationPipe(changeIncidentStatusSchema)) body: ChangeIncidentStatusInput,
+  ): Promise<IncidentDetailDto> {
+    return this.incidents.changeStatus(id, body, user);
+  }
+
   @Post(':id/resources')
   @RequirePermission('incidents.manage')
   @ApiOperation({ summary: 'Add deployed forces or assets to an incident' })
   addResource(
+    @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(idSchema)) id: string,
     @Body(new ZodValidationPipe(createIncidentResourceSchema)) body: CreateIncidentResourceInput,
   ): Promise<IncidentDetailDto> {
-    return this.incidents.addResource(id, body);
+    return this.incidents.addResource(id, body, user);
   }
 }

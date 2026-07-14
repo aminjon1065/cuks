@@ -1,22 +1,33 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Plus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, FileText, Plus, UsersRound } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { WsEventPayloads } from '@cuks/shared';
 import { Button, EmptyState, PageHeader, SeverityBadge, Skeleton, StatusBadge } from '@cuks/ui';
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { useCan } from '@/lib/ability';
 import { formatDateTime } from '@/lib/format';
-import { useIncident } from '../api/queries';
-import { formatDamage, formatNumber, incidentStatusTone } from '../lib';
+import { useSocketEvent } from '@/lib/socket';
+import { incidentsKey, useIncident } from '../api/queries';
+import {
+  formatDamage,
+  formatNumber,
+  incidentStatusTone,
+  readIncidentStatusEventMeta,
+} from '../lib';
 import { AddIncidentReportDialog } from '../components/AddIncidentReportDialog';
 import { AddIncidentResourceDialog } from '../components/AddIncidentResourceDialog';
 import { IncidentLocationPicker } from '../components/IncidentLocationPicker';
+import { ChangeIncidentStatusDialog } from '../components/ChangeIncidentStatusDialog';
+import { IncidentStatusStepper } from '../components/IncidentStatusStepper';
 
 type Tab = 'overview' | 'timeline' | 'resources';
 
 export function IncidentDetailPage(): React.JSX.Element {
   const { t } = useTranslation('incidents');
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id } = useParams();
   const canView = useCan('gis.view');
   const canCreate = useCan('incidents.create');
@@ -25,6 +36,17 @@ export function IncidentDetailPage(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('overview');
   const [reportOpen, setReportOpen] = useState(false);
   const [resourceOpen, setResourceOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+
+  const onIncidentUpdate = useCallback(
+    (event: WsEventPayloads['incidents.updated']) => {
+      if (event.id === id) {
+        void queryClient.invalidateQueries({ queryKey: [...incidentsKey, 'detail', id] });
+      }
+    },
+    [id, queryClient],
+  );
+  useSocketEvent('incidents.updated', onIncidentUpdate);
 
   useEffect(() => {
     if (incident.data) document.title = `${incident.data.number} — ${t('title')}`;
@@ -48,13 +70,22 @@ export function IncidentDetailPage(): React.JSX.Element {
           damageNote: report.damageNote,
         },
       })),
-      ...incident.data.events.map((event) => ({
-        kind: 'event' as const,
-        id: event.id,
-        createdAt: event.createdAt,
-        label: t(`events.${event.action}`, { defaultValue: event.action }),
-        author: event.actorName,
-      })),
+      ...incident.data.events.map((event) => {
+        const transition = readIncidentStatusEventMeta(event.meta);
+        return {
+          kind: 'event' as const,
+          id: event.id,
+          createdAt: event.createdAt,
+          label: transition
+            ? t('events.statusChanged', {
+                from: t(`status.${transition.fromStatus}`),
+                to: t(`status.${transition.toStatus}`),
+              })
+            : t(`events.${event.action}`, { defaultValue: event.action }),
+          author: event.actorName,
+          detail: transition?.reason ?? null,
+        };
+      }),
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [incident.data, t]);
 
@@ -92,19 +123,34 @@ export function IncidentDetailPage(): React.JSX.Element {
       <PageHeader
         title={data.number}
         status={
-          <StatusBadge tone={incidentStatusTone[data.status]} label={t(`status.${data.status}`)} />
+          <span data-testid="incident-current-status">
+            <StatusBadge
+              tone={incidentStatusTone[data.status]}
+              label={t(`status.${data.status}`)}
+            />
+          </span>
         }
         description={`${data.typeName} · ${formatDateTime(data.occurredAt)}`}
         actions={
           <>
             <SeverityBadge level={data.severity} label={t(`severity.${data.severity}`)} />
-            {canCreate ? (
+            {canManage ? (
+              <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
+                <ArrowRightLeft /> {t('statusChange.action')}
+              </Button>
+            ) : null}
+            {canCreate && data.status !== 'closed' ? (
               <Button size="sm" onClick={() => setReportOpen(true)}>
                 <Plus /> {t('card.addReport')}
               </Button>
             ) : null}
           </>
         }
+      />
+      <IncidentStatusStepper
+        status={data.status}
+        label={t('statusChange.stepperLabel')}
+        statusLabel={(status) => t(`status.${status}`)}
       />
       <div
         className="flex gap-1 border-b border-border"
@@ -156,6 +202,15 @@ export function IncidentDetailPage(): React.JSX.Element {
               <div className="text-xs text-text-muted">{t('card.description')}</div>
               <p className="mt-1 whitespace-pre-wrap text-text">{data.description ?? '—'}</p>
             </div>
+            {data.closedAt ? (
+              <div>
+                <div className="text-xs text-text-muted">{t('card.closed')}</div>
+                <div className="mt-1 text-text">
+                  {formatDateTime(data.closedAt)}
+                  {data.closedByName ? ` · ${data.closedByName}` : ''}
+                </div>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}
@@ -170,6 +225,11 @@ export function IncidentDetailPage(): React.JSX.Element {
                     {entry.author ? ` · ${entry.author}` : ''}
                   </div>
                   <p className="mt-1 text-[13px] text-text">{entry.label}</p>
+                  {entry.kind === 'event' && entry.detail ? (
+                    <p className="mt-1 rounded-sm bg-surface-2 px-2 py-1.5 text-xs text-text-muted">
+                      {t('statusChange.reasonLabel')}: {entry.detail}
+                    </p>
+                  ) : null}
                   {entry.kind === 'report' ? (
                     <div
                       className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"
@@ -214,7 +274,7 @@ export function IncidentDetailPage(): React.JSX.Element {
       {tab === 'resources' ? (
         <section className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-4 flex justify-end">
-            {canManage ? (
+            {canManage && data.status !== 'closed' ? (
               <Button size="sm" onClick={() => setResourceOpen(true)}>
                 <Plus /> {t('card.addResource')}
               </Button>
@@ -257,6 +317,12 @@ export function IncidentDetailPage(): React.JSX.Element {
         incidentId={data.id}
         open={resourceOpen}
         onOpenChange={setResourceOpen}
+      />
+      <ChangeIncidentStatusDialog
+        incidentId={data.id}
+        currentStatus={data.status}
+        open={statusOpen}
+        onOpenChange={setStatusOpen}
       />
     </div>
   );

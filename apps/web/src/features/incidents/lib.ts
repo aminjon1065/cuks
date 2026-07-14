@@ -1,4 +1,4 @@
-import { DISPLAY_TIMEZONE, type IncidentStatus } from '@cuks/shared';
+import { DISPLAY_TIMEZONE, INCIDENT_STATUSES, type IncidentStatus } from '@cuks/shared';
 
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
@@ -61,4 +61,34 @@ export function formatNumber(value: number): string {
 export function formatDamage(value: string | null): string | null {
   if (!value) return null;
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(Number(value));
+}
+
+export interface IncidentStatusEventMeta {
+  fromStatus: IncidentStatus;
+  toStatus: IncidentStatus;
+  reason: string | null;
+  rollback: boolean;
+}
+
+/** Narrow untrusted audit JSON before rendering it as a status transition. */
+export function readIncidentStatusEventMeta(
+  meta: Record<string, unknown> | null,
+): IncidentStatusEventMeta | null {
+  if (!meta) return null;
+  const fromStatus = meta['fromStatus'];
+  const toStatus = meta['toStatus'];
+  if (
+    typeof fromStatus !== 'string' ||
+    typeof toStatus !== 'string' ||
+    !(INCIDENT_STATUSES as readonly string[]).includes(fromStatus) ||
+    !(INCIDENT_STATUSES as readonly string[]).includes(toStatus)
+  ) {
+    return null;
+  }
+  return {
+    fromStatus: fromStatus as IncidentStatus,
+    toStatus: toStatus as IncidentStatus,
+    reason: typeof meta['reason'] === 'string' ? meta['reason'] : null,
+    rollback: meta['rollback'] === true,
+  };
 }

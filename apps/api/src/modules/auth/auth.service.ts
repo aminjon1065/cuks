@@ -163,6 +163,8 @@ export class AuthService {
       type: 'system.account.password_changed',
       title: 'Password changed',
       body: 'Your account password was changed.',
+      priority: 'normal',
+      emailMode: 'always',
     });
   }
 

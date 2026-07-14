@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { EventsGateway } from './events.gateway';
 import { RealtimeService } from './realtime.service';
+import { PresenceService } from './presence.service';
 
 /**
  * Realtime module (docs/01 §Realtime): the `/ws` gateway plus {@link RealtimeService},
@@ -11,7 +12,7 @@ import { RealtimeService } from './realtime.service';
  */
 @Module({
   imports: [AuthModule, UsersModule],
-  providers: [EventsGateway, RealtimeService],
-  exports: [RealtimeService],
+  providers: [EventsGateway, RealtimeService, PresenceService],
+  exports: [RealtimeService, PresenceService],
 })
 export class EventsModule {}
