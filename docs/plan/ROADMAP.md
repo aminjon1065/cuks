@@ -55,7 +55,7 @@
 
 ## Фаза 2 — ГИС и аналитика (6 нед)
 
-- [ ] 2.1 Схема gis + admin_units импорт (seed-geo.sh: границы+население), incidents+reports+resources, facilities, risk_zones, layers
+- [x] 2.1 Схема gis + admin_units импорт (seed-geo.sh: границы+население), incidents+reports+resources, facilities, risk_zones, layers
 - [ ] 2.2 Martin: конфиг, авто-источники, подпис-токен через forward_auth; PMTiles-подложка региона (скрипт скачивания/сборки)
 - [ ] 2.3 Карта-компонент: MapLibre-обёртка, стили подложек (light/dark), панель слоёв, легенды
 - [ ] 2.4 Слой ЧС: тайлы-функция с фильтрами, кластеризация, маркеры по уровню, таймлайн

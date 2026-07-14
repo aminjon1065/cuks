@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 1 (Файлы) — задачи 1.1–1.9 готовы (фаза кодово завершена)
-- **Последняя сессия**: 2026-07-13 — задача 1.9 (приёмочные e2e §9 + поток «новая версия»)
+- **Фаза**: 2 (ГИС/аналитика) — начата; задача 2.1 (схема+справочники+границы) готова
+- **Последняя сессия**: 2026-07-13 — задача 2.1 (схема gis/incidents, классификатор, admin_units)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -16,7 +16,7 @@
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
-| 2 ГИС/аналитика   | ⬜                           | —                  |
+| 2 ГИС/аналитика   | 🟡 задача 2.1 готова          | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
 | 5 Чат             | ⬜                           | —                  |
@@ -26,6 +26,67 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-13 — Фаза 2: задача 2.1 (схема gis/incidents + классификатор + admin_units)
+
+**Сделано** (по `docs/modules/10` §3, `docs/07` §gis; схема+сиды, DTO/эндпоинты/UI/Martin — задачи
+2.2+):
+
+- **`@cuks/shared`**: GIS-enum'ы (`ADMIN_UNIT_LEVELS`, `INCIDENT_STATUSES`/`SOURCES`, `INCIDENT_
+  RESOURCE_KINDS`, `GIS_LAYER_KINDS`, `GIS_IMPORT_STATUSES`, `GEOMETRY_TYPES`, severity 1–5),
+  константы `GIS_SRID=4326`, `INCIDENT_NUMBER_PREFIX='ЧС'`.
+- **Схема `gis`** (`schema/gis.ts`): `customType geometry(<Type>,4326)`; `admin_units` (дерево
+  region→district→jamoat, code uq, MultiPolygon, population, GiST), `facilities` (Point),
+  `risk_zones` (MultiPolygon, level 1–5), `layers` (slug **частичный uq по deleted_at**, kind),
+  `layer_features` (Geometry). **Схема `app`** (`schema/incidents.ts`): `incidents` (number uq,
+  type_code, severity 1–5, статус-машина, region/district/jamoat → admin_units, geom Geometry,
+  жертвы int, damage_est **numeric(18,2)**, generated `russian search_tsv` GIN, GiST),
+  `incident_reports`/`incident_resources` (cascade), `gis_imports`. Все enum-колонки — с DB-CHECK.
+- **Миграция `0010`** (drizzle + хэнд-`CREATE EXTENSION postgis`) + **`0011`** (правки ревью).
+  Применены: **PostGIS 3.5.2**, geometry_columns 4326, GiST/GIN на месте.
+- **Классификатор ЧС** (`seed.ts`): полное дерево 2–3 уровней в `dictionaries` (`incident_type`,
+  40 записей, стабильные коды `nat.geo.landslide`…), 0 осиротевших parent.
+- **admin_units**: `seedGeo()` грузит 5 регионов Таджикистана из коммитнутого упрощённого GeoJSON
+  (`data/tj-admin1.geojson`, geoBoundaries) через `ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON,4326))`,
+  идемпотентно; **`infra/scripts/seed-geo.sh`** — прод-импорт ADM1/2/3 через ogr2ogr со спатиальным
+  parent-резолвом.
+
+**Тесты/проверка**: `typecheck/lint/test/build` — зелёные; `seed-geo.sh` синтаксис OK. **Live против
+реального PostGIS 17-3.5**: миграции применяются; 40 записей классификатора; 5 регионов с валидной
+геометрией (`ST_IsValid`) и площадями, совпадающими с реальностью (ГБАО ~62 765 км², Хатлон ~24 376
+км²); **авто-определение региона по точке работает** (Душанбе→TJ-DU, Худжанд→Согд) — готовность к 2.5;
+reseed идемпотентен.
+
+**Adversarial-review** (воркфлоу: 3 измерения — schema-integrity, seed-and-geo, spec-conformance;
+каждая находка рефутирована): **9 находок → 3 уникальных подтверждено** (после дедупа; 2 medium, 1
+low), исправлены:
+
+- **[medium]** `seed-geo.sh` затирал курируемые русские имена регионов английскими из geoBoundaries
+  (`ON CONFLICT DO UPDATE SET name_ru=excluded`). Исправлено: русские имена регионов — встроенным
+  маппингом по ISO-коду; при повторном импорте имена **сохраняются** (обновляется только geom);
+  районы/джамоаты — латинский placeholder до русской локализации (задокументировано).
+- **[medium]** `gis.layers.slug` — не-частичный unique: soft-delete «сжигал» slug навсегда (против
+  конвенции репо). Исправлено: партиальный `unique … WHERE deleted_at IS NULL` (миграция 0011).
+- **[low]** Нет DB-CHECK на `incidents.source`/`incident_resources.kind`/`gis_imports.status`
+  (остальные enum-колонки — с check), а `gis_imports.status` инлайнил массив вместо
+  `GIS_IMPORT_STATUSES`. Исправлено: 3 CHECK + использование shared-константы (важно — gis-схема
+  прямо пишется QGIS-учётками).
+
+**Рефутировано ревью (корректно)**: tg-имена = RU-placeholder (`onConflictDoNothing`) — задокументир.
+конвенция (CLAUDE.md §4), правит админ; предполагаемый «code-collapse» ADM1 — release geoBoundaries
+запинен, коды `TJ-XX` уникальны (проверено на реальных данных).
+
+**Решения**:
+- **Источник границ — geoBoundaries gbOpen (release `9469f09`, запинен)**: открытая лицензия,
+  офлайн-воспроизводимо. Dev — 5 регионов (ADM1) из коммитнутого упрощённого GeoJSON; полный
+  region→district→jamoat — прод-путь `seed-geo.sh` (ogr2ogr, нужен GDAL из worker-образа, здесь не
+  прогонялся — как compose.prod/бэкап-скрипты).
+- **Население регионов — приблизительные официальные цифры** (комментарий в сиде); точные —
+  отдельным источником при полном импорте.
+- **Классификатор — в существующей `dictionaries`** (`type='incident_type'`), не отдельная таблица
+  (enum и дерево уже поддержаны 0.3).
+- **Русские имена районов/джамоатов из geoBoundaries отсутствуют** (только Latin) — placeholder до
+  локализации админом/справочником имён; регионы — курируемый русский маппинг.
 
 ### 2026-07-13 — Фаза 1: задача 1.9 (приёмочные e2e §9 + поток «новая версия») — закрывает фазу 1
 
