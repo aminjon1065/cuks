@@ -100,6 +100,9 @@ export function FilesPage(): React.JSX.Element {
   const [trashTarget, setTrashTarget] = useState<FsNodeDto | null>(null);
   const [viewerNode, setViewerNode] = useState<FsNodeDto | null>(null);
   const [searchInput, setSearchInput] = useState('');
+  // Files dropped/picked whose name already exists here — prompt to upload as new
+  // versions (docs/modules/12 §4). Fresh files upload immediately.
+  const [dupPrompt, setDupPrompt] = useState<{ file: File; nodeId: string }[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // `searching` follows the immediate input (not the debounced value) so clicking a
@@ -181,18 +184,38 @@ export function FilesPage(): React.JSX.Element {
     }
   };
 
+  // Enqueue fresh files (new nodes) and/or collisions (each a new version of the
+  // matched existing node) into the shared upload dock.
+  const enqueueFiles = (fresh: File[], collisions: { file: File; nodeId: string }[]): void => {
+    const base = {
+      space,
+      parentId: folderId,
+      ...(unitParam && space === 'org' ? { orgUnitId: unitParam } : {}),
+    };
+    // Invalidate the whole files slice so the listing AND the quota bar refresh.
+    const onDone = (): void => void qc.invalidateQueries({ queryKey: filesKey });
+    if (fresh.length) enqueue(fresh, base, onDone);
+    for (const { file, nodeId } of collisions) {
+      enqueue([file], { ...base, targetNodeId: nodeId }, onDone);
+    }
+  };
+
   const startUpload = (files: File[]): void => {
     if (files.length === 0 || !isBrowse) return;
-    enqueue(
-      files,
-      {
-        space,
-        parentId: folderId,
-        ...(unitParam && space === 'org' ? { orgUnitId: unitParam } : {}),
-      },
-      // Invalidate the whole files slice so the listing AND the quota bar refresh.
-      () => void qc.invalidateQueries({ queryKey: filesKey }),
+    // A name that already belongs to a file here becomes a new version (on confirm);
+    // everything else uploads straight away.
+    const existing = new Map(
+      nodes.filter((n) => n.kind === 'file').map((n) => [n.name.toLowerCase(), n.id]),
     );
+    const fresh: File[] = [];
+    const collisions: { file: File; nodeId: string }[] = [];
+    for (const file of files) {
+      const nodeId = existing.get(file.name.toLowerCase());
+      if (nodeId) collisions.push({ file, nodeId });
+      else fresh.push(file);
+    }
+    if (fresh.length) enqueueFiles(fresh, []);
+    if (collisions.length) setDupPrompt(collisions);
   };
 
   const onDrop = (e: React.DragEvent): void => {
@@ -526,6 +549,18 @@ export function FilesPage(): React.JSX.Element {
                 tone: 'danger',
               }),
           });
+        }}
+      />
+      <ConfirmDialog
+        open={!!dupPrompt}
+        onOpenChange={(o) => !o && setDupPrompt(null)}
+        title={t('versionUpload.title')}
+        description={t('versionUpload.body', { count: dupPrompt?.length ?? 0 })}
+        confirmLabel={t('versionUpload.confirm')}
+        cancelLabel={t('common:actions.cancel')}
+        onConfirm={() => {
+          if (dupPrompt) enqueueFiles([], dupPrompt);
+          setDupPrompt(null);
         }}
       />
       <UploadDock />

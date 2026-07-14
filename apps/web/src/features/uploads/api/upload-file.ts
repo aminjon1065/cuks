@@ -12,6 +12,9 @@ export interface UploadTarget {
   space: 'personal' | 'org';
   parentId?: string | null;
   orgUnitId?: string | undefined;
+  /** Upload as a new version of this existing file node instead of a new one
+   *  (docs/modules/12 §4: "загрузка того же имени → новая версия"). */
+  targetNodeId?: string | undefined;
 }
 
 export interface UploadHandlers {
@@ -106,6 +109,7 @@ export async function uploadFile(
       space: target.space,
       ...(target.parentId ? { parentId: target.parentId } : {}),
       ...(target.orgUnitId ? { orgUnitId: target.orgUnitId } : {}),
+      ...(target.targetNodeId ? { targetNodeId: target.targetNodeId } : {}),
       name: file.name,
       mime: file.type || 'application/octet-stream',
       size: file.size,
