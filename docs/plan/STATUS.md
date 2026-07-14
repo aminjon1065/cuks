@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 2 (ГИС/аналитика) — начата; задача 2.1 (схема+справочники+границы) готова
-- **Последняя сессия**: 2026-07-13 — задача 2.1 (схема gis/incidents, классификатор, admin_units)
+- **Фаза**: 2 (ГИС/аналитика) — задачи 2.1–2.2 готовы
+- **Последняя сессия**: 2026-07-14 — задача 2.2 (Martin MVT + токен-авторизация + PMTiles)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -16,7 +16,7 @@
 | ----------------- | ---------------------------- | ------------------ |
 | 0 Фундамент       | 🟢 задачи 0.1–0.14 + демо-сиды | приёмка: критерии выполнены, финальный ОК заказчика — открыт |
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
-| 2 ГИС/аналитика   | 🟡 задача 2.1 готова          | —                  |
+| 2 ГИС/аналитика   | 🟡 задачи 2.1–2.2 готовы       | —                  |
 | 3 Документооборот | ⬜                           | —                  |
 | 4 Задачи          | ⬜                           | —                  |
 | 5 Чат             | ⬜                           | —                  |
@@ -26,6 +26,58 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-14 — Фаза 2: задача 2.2 (Martin MVT + токен-авторизация тайлов + PMTiles)
+
+**Сделано** (по `docs/modules/10` §4/§9, `docs/08`, `docs/02` ADR-7/10/12):
+
+- **Martin** (`ghcr.io/maplibre/martin`, v1.12): сервис в `compose.dev` (host-порт 3001), конфиг
+  `infra/martin/config.yaml` — авто-публикация схемы `gis` (admin_units/facilities/risk_zones/
+  layer_features как MVT) + PMTiles-подложка из `/basemap`. **Миграция `0012`**: SQL-функция
+  `gis.incidents_mvt(z,x,y,params)` (ST_AsMVT над `app.incidents`, фильтры status/severity/type).
+- **Токен-авторизация тайлов** (api `GisModule`): `TileTokenService` (HMAC-SHA256 `node:crypto`,
+  ключ scrypt из SESSION_SECRET, TTL 1ч, timing-safe verify); `GET /gis/tile-token` (право
+  `gis.view` → `{token, expiresAt}`); `GET /gis/tile-auth` (`@Public`, цель Caddy forward_auth:
+  токен из `?token=` или `X-Forwarded-Uri` → 200/401). `@cuks/shared`: `TILE_TOKEN_TTL_SECONDS`,
+  `TileTokenResponse`.
+- **Прод-контур**: `infra/caddy/Caddyfile` — `handle_path /tiles/*` → `forward_auth api
+  /api/v1/gis/tile-auth` → `reverse_proxy martin:3000` (+ /api, /socket.io, /geoserver, SPA).
+  compose.prod целиком — задача 7.1; Martin в проде наружу не публикуется.
+- **PMTiles-подложка**: `infra/scripts/build-basemap.sh` — извлечение bbox Таджикистана из
+  planet-сборки Protomaps через `pmtiles` CLI → `infra/basemap/region.pmtiles`.
+- **Dev**: vite-прокси `/tiles` → martin (со срезом префикса). В dev нет Caddy → токен-гейт не
+  форсируется (документировано); enforcement — прод-Caddy.
+
+**Тесты/проверка**: `typecheck/lint/test/build` — зелёные; юнит `TileTokenService` 5/5 (подпись/
+verify/expiry/tamper/чужой ключ). **Live против реального стека**: Martin отдаёт MVT — каталог из 5
+источников; `admin_units/6/44/23` → 200, 441 Б; `incidents_mvt` с тестовым ЧС → 197 Б, фильтры
+status/severity/type корректны; выдача токена (gis.view) + `tile-auth` → 200 (и `?token=`, и
+`X-Forwarded-Uri`), плохой/пустой → 401; web-прокси `/tiles`→martin → 200.
+
+**Adversarial-review** (воркфлоу: 3 измерения — token-security, martin-sql, infra-wiring): **7 находок
+→ 2 подтверждено (обе low), 5 рефутировано**, исправлены:
+
+- **[low]** Токен утекал в логи api через неотредактированный `X-Forwarded-Uri` (реплеебелен в
+  пределах TTL). Исправлено: `x-forwarded-uri` добавлен в pino-redact.
+- **[low]** Мусорный `?severity=abc`/`''` крэшил `::int` → Martin 500. Исправлено (миграция `0013`):
+  фильтры парсятся в локали, каст guard'ится `pg_input_is_valid` (PG17) — плохой ввод игнорируется.
+- **[refuted, но дёшево]** SIGPIPE в `build-basemap.sh` (`pmtiles show | head` + pipefail) →
+  ложный fail. Исправлено `|| true`.
+
+**Рефутировано ревью (корректно)**: layer_features без per-layer-ACL (enforcement — позже; auto-publish
+осознан); LIKE-метасимволы в type (значение bound, не инъекция); отсутствие margin у tile-envelope
+(точки не клипаются); Martin TileJSON base_path (карта 2.3 использует явные URL-шаблоны, тайлы live-ОК).
+
+**Решения**:
+- **Токен — bearer-capability по expiry** (без привязки к user/session/IP), stateless-verify: дёшево,
+  read-only, TTL 1ч. Привязка/cookie — при ужесточении (7.5). В dev гейт не форсируется (нет Caddy).
+- **Martin публикует только схему `gis`** (`app` приватна); ЧС — через `gis.incidents_mvt` (читает
+  `app.incidents`, но наружу — только нужные поля).
+- **Известное (для 2.7 QGIS-путей)**: у gis-таблиц `id` — клиентский default drizzle (uuidv7), нет
+  БД-default → прямой INSERT из QGIS/сырого SQL требует явного `id`. Адресуется при вводе
+  QGIS-editor-учёток (2.9) — БД-default/инструкция.
+- **Basemap-скрипт документирован, здесь не прогонялся** (нужен `pmtiles` CLI + planet-сборка) — как
+  seed-geo/бэкап-скрипты.
 
 ### 2026-07-13 — Фаза 2: задача 2.1 (схема gis/incidents + классификатор + admin_units)
 
