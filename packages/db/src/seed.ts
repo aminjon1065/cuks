@@ -3,11 +3,14 @@ import { config as loadEnv } from 'dotenv';
 // Seeds run from packages/db; load the monorepo-root .env for DATABASE_URL.
 loadEnv({ path: ['.env', '../../.env'] });
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import argon2 from 'argon2';
-import { count, eq } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { ARGON2_OPTIONS, ROLE_TEMPLATES, type OrgUnitType } from '@cuks/shared';
 import { createDb, type Database } from './client';
 import {
+  adminUnits,
   dictionaries,
   notifications,
   orgUnits,
@@ -128,10 +131,280 @@ const DICTIONARIES: readonly DictSeed[] = [
     sort: 4,
   },
   { type: 'correspondent_category', code: 'other', nameRu: 'Иное', sort: 5 },
-  // Виды ЧС — стартовое дерево верхнего уровня (полное дерево — фаза 2.1, modules/10)
+  // Виды ЧС — полное дерево 2–3 уровней (docs/modules/10 §2). Коды стабильные.
   { type: 'incident_type', code: 'natural', nameRu: 'Природная ЧС', sort: 1 },
   { type: 'incident_type', code: 'technogenic', nameRu: 'Техногенная ЧС', sort: 2 },
   { type: 'incident_type', code: 'biosocial', nameRu: 'Биолого-социальная ЧС', sort: 3 },
+
+  // Природные → группы
+  {
+    type: 'incident_type',
+    code: 'nat.geophys',
+    parentCode: 'natural',
+    nameRu: 'Геофизические',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.geo',
+    parentCode: 'natural',
+    nameRu: 'Геологические',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.hydro',
+    parentCode: 'natural',
+    nameRu: 'Гидрологические',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo',
+    parentCode: 'natural',
+    nameRu: 'Метеорологические',
+    sort: 4,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.fire',
+    parentCode: 'natural',
+    nameRu: 'Природные пожары',
+    sort: 5,
+  },
+  // Геофизические
+  {
+    type: 'incident_type',
+    code: 'nat.geophys.earthquake',
+    parentCode: 'nat.geophys',
+    nameRu: 'Землетрясение',
+    sort: 1,
+  },
+  // Геологические
+  {
+    type: 'incident_type',
+    code: 'nat.geo.landslide',
+    parentCode: 'nat.geo',
+    nameRu: 'Оползень',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.geo.mudflow',
+    parentCode: 'nat.geo',
+    nameRu: 'Сель',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.geo.avalanche',
+    parentCode: 'nat.geo',
+    nameRu: 'Лавина',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.geo.rockfall',
+    parentCode: 'nat.geo',
+    nameRu: 'Обвал/осыпь',
+    sort: 4,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.geo.subsidence',
+    parentCode: 'nat.geo',
+    nameRu: 'Просадка грунта',
+    sort: 5,
+  },
+  // Гидрологические
+  {
+    type: 'incident_type',
+    code: 'nat.hydro.freshet',
+    parentCode: 'nat.hydro',
+    nameRu: 'Паводок',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.hydro.flood',
+    parentCode: 'nat.hydro',
+    nameRu: 'Наводнение',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.hydro.waterlogging',
+    parentCode: 'nat.hydro',
+    nameRu: 'Подтопление',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.hydro.glof',
+    parentCode: 'nat.hydro',
+    nameRu: 'Прорыв ледникового озера',
+    sort: 4,
+  },
+  // Метеорологические
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.downpour',
+    parentCode: 'nat.meteo',
+    nameRu: 'Ливень',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.hail',
+    parentCode: 'nat.meteo',
+    nameRu: 'Град',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.windstorm',
+    parentCode: 'nat.meteo',
+    nameRu: 'Ураганный ветер',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.snowfall',
+    parentCode: 'nat.meteo',
+    nameRu: 'Снегопад',
+    sort: 4,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.frost',
+    parentCode: 'nat.meteo',
+    nameRu: 'Мороз',
+    sort: 5,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.heat',
+    parentCode: 'nat.meteo',
+    nameRu: 'Жара',
+    sort: 6,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.drought',
+    parentCode: 'nat.meteo',
+    nameRu: 'Засуха',
+    sort: 7,
+  },
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.fog',
+    parentCode: 'nat.meteo',
+    nameRu: 'Туман',
+    sort: 8,
+  },
+
+  // Техногенные → группы
+  {
+    type: 'incident_type',
+    code: 'tech.transport',
+    parentCode: 'technogenic',
+    nameRu: 'Транспортные аварии',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.fire_explosion',
+    parentCode: 'technogenic',
+    nameRu: 'Пожары и взрывы в зданиях',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.power',
+    parentCode: 'technogenic',
+    nameRu: 'Аварии энергосистем',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.utilities',
+    parentCode: 'technogenic',
+    nameRu: 'Аварии ЖКХ (вода/тепло/газ)',
+    sort: 4,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.chemical',
+    parentCode: 'technogenic',
+    nameRu: 'Аварии с химически опасными веществами',
+    sort: 5,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.collapse',
+    parentCode: 'technogenic',
+    nameRu: 'Обрушения зданий и сооружений',
+    sort: 6,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.hydrodynamic',
+    parentCode: 'technogenic',
+    nameRu: 'Гидродинамические аварии (прорыв дамб)',
+    sort: 7,
+  },
+  // Транспортные аварии
+  {
+    type: 'incident_type',
+    code: 'tech.transport.road',
+    parentCode: 'tech.transport',
+    nameRu: 'ДТП с тяжкими последствиями',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.transport.aviation',
+    parentCode: 'tech.transport',
+    nameRu: 'Авиационная авария',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'tech.transport.railway',
+    parentCode: 'tech.transport',
+    nameRu: 'Железнодорожная авария',
+    sort: 3,
+  },
+
+  // Биолого-социальные
+  {
+    type: 'incident_type',
+    code: 'bio.epidemic',
+    parentCode: 'biosocial',
+    nameRu: 'Эпидемия',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'bio.epizootic',
+    parentCode: 'biosocial',
+    nameRu: 'Эпизоотия',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'bio.epiphytotic',
+    parentCode: 'biosocial',
+    nameRu: 'Эпифитотия',
+    sort: 3,
+  },
+  {
+    type: 'incident_type',
+    code: 'bio.poisoning',
+    parentCode: 'biosocial',
+    nameRu: 'Массовое отравление',
+    sort: 4,
+  },
 ];
 
 async function seedRoles(db: Database): Promise<void> {
@@ -211,6 +484,63 @@ async function seedDictionaries(db: Database): Promise<void> {
         sort: d.sort,
       })
       .onConflictDoNothing();
+  }
+}
+
+/**
+ * Region metadata keyed by the geoBoundaries ADM1 ISO code. Population is an
+ * approximate recent official figure (persons); exact/updated numbers come with
+ * the full seed-geo import (infra/scripts/seed-geo.sh). name_tg is a RU
+ * placeholder until real translations land (CLAUDE.md §4).
+ */
+const TJ_REGIONS: Record<string, { nameRu: string; population: number }> = {
+  'TJ-SU': { nameRu: 'Согдийская область', population: 2_809_000 },
+  'TJ-KT': { nameRu: 'Хатлонская область', population: 3_596_000 },
+  'TJ-GB': { nameRu: 'Горно-Бадахшанская автономная область', population: 228_000 },
+  'TJ-RA': { nameRu: 'Районы республиканского подчинения', population: 2_264_000 },
+  'TJ-DU': { nameRu: 'город Душанбе', population: 863_400 },
+};
+
+interface GeoFeature {
+  properties: { shapeISO?: string; shapeName?: string };
+  geometry: unknown;
+}
+
+/**
+ * Administrative boundaries (docs/modules/10 §3). Loads Tajikistan's regions
+ * (ADM1) from a committed simplified GeoJSON so the map / region-detection work
+ * out of the box; the full region→district→jamoat import with precise geometry
+ * is the production path in infra/scripts/seed-geo.sh (ogr2ogr). Geometry is
+ * coerced to MultiPolygon in 4326. Idempotent by `code`.
+ */
+async function seedGeo(db: Database): Promise<void> {
+  const path = join(__dirname, 'data', 'tj-admin1.geojson');
+  const fc = JSON.parse(readFileSync(path, 'utf8')) as { features: GeoFeature[] };
+  for (const f of fc.features) {
+    const iso = f.properties.shapeISO;
+    const meta = iso ? TJ_REGIONS[iso] : undefined;
+    if (!iso || !meta) continue; // skip anything not in our region map
+    const geom = sql`ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(f.geometry)}), 4326))`;
+    await db
+      .insert(adminUnits)
+      .values({
+        level: 'region',
+        code: iso,
+        nameRu: meta.nameRu,
+        nameTg: meta.nameRu,
+        population: meta.population,
+        geom,
+      })
+      .onConflictDoUpdate({
+        target: adminUnits.code,
+        set: {
+          nameRu: meta.nameRu,
+          nameTg: meta.nameRu,
+          population: meta.population,
+          geom,
+          updatedAt: new Date(),
+        },
+      });
   }
 }
 
@@ -574,10 +904,12 @@ async function main(): Promise<void> {
     const adminId = await seedAdmin(db);
     await assignSuperadmin(db, adminId);
     await seedDictionaries(db);
+    await seedGeo(db);
     await seedDemoNotifications(db, adminId);
     console.log(
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
-        `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries.`,
+        `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries, ` +
+        `admin boundaries (regions).`,
     );
     if (isDemo) await seedDemoUsers(db);
   } finally {

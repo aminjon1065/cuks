@@ -10,3 +10,5 @@ export * from './dictionaries';
 export * from './auth';
 export * from './notifications';
 export * from './fs';
+export * from './gis';
+export * from './incidents';
