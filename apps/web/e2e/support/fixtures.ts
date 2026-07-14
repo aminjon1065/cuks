@@ -11,6 +11,21 @@ export const E2E_ADMIN = {
   password: 'E2eAdmin!Passw0rd',
 } as const;
 
+/**
+ * Plain non-superadmin (files.use, no 2FA gate). Provisioned alongside the admin by
+ * packages/db/src/seed-e2e.ts — used by the phase-1 permission specs (task 1.9).
+ */
+export const E2E_USER = {
+  username: 'e2e_user',
+  password: 'E2eUser!Passw0rd',
+} as const;
+
+/** A second plain user — the permission spec needs owner + other, both non-admin. */
+export const E2E_USER2 = {
+  username: 'e2e_user2',
+  password: 'E2eUser2!Passw0rd',
+} as const;
+
 /** Auth artifacts written by global-setup, consumed by the specs (gitignored). */
 export const STORAGE_STATE = fileURLToPath(new URL('../.auth/admin.json', import.meta.url));
 export const TOTP_SECRET_FILE = fileURLToPath(new URL('../.auth/totp-secret.txt', import.meta.url));
