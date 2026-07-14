@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   Crosshair,
   Download,
   FileUp,
+  Globe,
   Layers,
   PanelLeftClose,
   Pencil,
@@ -33,6 +35,8 @@ export interface LayersPanelProps {
   canImport: boolean;
   /** `gis.export` — hides the per-layer export action (task 2.8). */
   canExport: boolean;
+  /** `gis.layers.manage` — enables the WMS/WFS publish toggle (task 2.9). */
+  canPublish: boolean;
   /** An unsaved geometry edit is open — switching target or deleting would strand it. */
   editLocked: boolean;
   /** The drawn-layer registry is still loading. */
@@ -49,6 +53,7 @@ export interface LayersPanelProps {
   onCreateLayer: () => void;
   onImportLayer: () => void;
   onExportLayer: (def: MapLayerDef) => void;
+  onTogglePublish: (def: MapLayerDef) => void;
   onDeleteLayer: (def: MapLayerDef) => void;
 }
 
@@ -93,11 +98,13 @@ function LayerRow({
   isDrawTarget,
   editLocked,
   canExport,
+  canPublish,
   onToggle,
   onOpacity,
   onZoom,
   onActiveLayerChange,
   onExportLayer,
+  onTogglePublish,
   onDeleteLayer,
 }: {
   def: MapLayerDef;
@@ -105,11 +112,13 @@ function LayerRow({
   isDrawTarget: boolean;
   editLocked: boolean;
   canExport: boolean;
+  canPublish: boolean;
   onToggle: LayersPanelProps['onToggle'];
   onOpacity: LayersPanelProps['onOpacity'];
   onZoom: LayersPanelProps['onZoom'];
   onActiveLayerChange: LayersPanelProps['onActiveLayerChange'];
   onExportLayer: LayersPanelProps['onExportLayer'];
+  onTogglePublish: LayersPanelProps['onTogglePublish'];
   onDeleteLayer: LayersPanelProps['onDeleteLayer'];
 }): React.JSX.Element {
   const { t } = useTranslation('map');
@@ -152,6 +161,24 @@ function LayerRow({
             data-testid={`draw-target-${drawn.id}`}
           >
             <Pencil className="size-3.5" />
+          </Button>
+        )}
+        {registry && canPublish && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn('size-6 text-text-muted', registry.isPublishedWms && 'text-primary')}
+            aria-pressed={registry.isPublishedWms}
+            onClick={() => onTogglePublish(def)}
+            aria-label={t(registry.isPublishedWms ? 'publish.unpublish' : 'publish.publish', {
+              name: title,
+            })}
+            title={t(registry.isPublishedWms ? 'publish.unpublish' : 'publish.publish', {
+              name: title,
+            })}
+            data-testid={`publish-${registry.id}`}
+          >
+            <Globe className="size-3.5" />
           </Button>
         )}
         {registry && canExport && (
@@ -234,6 +261,7 @@ export function LayersPanel({
   canCreateLayer,
   canImport,
   canExport,
+  canPublish,
   editLocked,
   layersLoading,
   layersError,
@@ -247,6 +275,7 @@ export function LayersPanel({
   onCreateLayer,
   onImportLayer,
   onExportLayer,
+  onTogglePublish,
   onDeleteLayer,
 }: LayersPanelProps): React.JSX.Element {
   const { t } = useTranslation('map');
@@ -341,11 +370,13 @@ export function LayersPanel({
               isDrawTarget={def.drawn?.id === activeLayerId}
               editLocked={editLocked}
               canExport={canExport}
+              canPublish={canPublish}
               onToggle={onToggle}
               onOpacity={onOpacity}
               onZoom={onZoom}
               onActiveLayerChange={onActiveLayerChange}
               onExportLayer={onExportLayer}
+              onTogglePublish={onTogglePublish}
               onDeleteLayer={onDeleteLayer}
             />
           ))}
@@ -361,16 +392,30 @@ export function LayersPanel({
           <Layers className="size-4 text-text-muted" />
           {t('panel.layers')}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 text-text-muted"
-          onClick={() => onCollapsedChange(true)}
-          aria-label={t('panel.collapse')}
-          title={t('panel.collapse')}
-        >
-          <PanelLeftClose className="size-4" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-7 text-text-muted"
+            aria-label={t('gisAccessLink')}
+            title={t('gisAccessLink')}
+          >
+            <Link to="/app/map/gis-access" data-testid="gis-access-link">
+              <Globe className="size-4" />
+            </Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-text-muted"
+            onClick={() => onCollapsedChange(true)}
+            aria-label={t('panel.collapse')}
+            title={t('panel.collapse')}
+          >
+            <PanelLeftClose className="size-4" />
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {groups.length === 0 ? (

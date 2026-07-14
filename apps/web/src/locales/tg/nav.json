@@ -16,7 +16,8 @@
     "adminUsers": "Пользователи",
     "adminRoles": "Роли",
     "adminOrg": "Оргструктура",
-    "adminAudit": "Аудит"
+    "adminAudit": "Аудит",
+    "adminGisAccess": "Доступ ГИС"
   },
   "sidebar": {
     "collapse": "Свернуть меню",

@@ -1,4 +1,5 @@
 import {
+  KeyRound,
   Bell,
   CalendarClock,
   FileText,
@@ -46,4 +47,10 @@ export const ADMIN_NAV: NavItem[] = [
   },
   { key: 'adminOrg', path: '/app/admin/org', icon: Building2, permission: 'admin.org.manage' },
   { key: 'adminAudit', path: '/app/admin/audit', icon: ScrollText, permission: 'admin.audit.view' },
+  {
+    key: 'adminGisAccess',
+    path: '/app/admin/gis-access',
+    icon: KeyRound,
+    permission: 'gis.pg.access',
+  },
 ];

@@ -215,6 +215,8 @@ function drawnLayer(overrides: Partial<GisLayerDto> = {}): GisLayerDto {
     updatedAt: '2026-07-01T00:00:00.000Z',
     canEdit: true,
     canManage: true,
+    isPublishedWms: false,
+    geoserverLayer: null,
     ...overrides,
   };
 }

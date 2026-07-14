@@ -10,6 +10,7 @@ import {
   type CreateGisExportInput,
   type CreateGisFeatureInput,
   type CreateGisImportResponse,
+  type GisAccessInfoDto,
   type CreateGisLayerInput,
   type GisExportDto,
   type GisFeatureDto,
@@ -221,4 +222,31 @@ export function useGisExport(id: string | null): UseQueryResult<GisExportDto> {
 /** Presigned download of a finished export (short-lived, `attachment`). */
 export function fetchGisExportUrl(id: string): Promise<{ url: string }> {
   return api.get<{ url: string }>(`/v1/gis/exports/${id}/download`);
+}
+
+// --- QGIS/ArcGIS integration: publication + access info (docs/modules/10 §7, 2.9) ---
+
+/** Connection details for the «Для ГИС-специалистов» page. */
+export function useGisAccessInfo(): UseQueryResult<GisAccessInfoDto> {
+  return useQuery({
+    queryKey: [...mapKey, 'access-info'],
+    queryFn: () => api.get<GisAccessInfoDto>('/v1/gis/access-info'),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function usePublishLayer(): UseMutationResult<GisLayerDto, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<GisLayerDto>(`/v1/gis/layers/${id}/publish`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: layersKey }),
+  });
+}
+
+export function useUnpublishLayer(): UseMutationResult<GisLayerDto, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<GisLayerDto>(`/v1/gis/layers/${id}/unpublish`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: layersKey }),
+  });
 }

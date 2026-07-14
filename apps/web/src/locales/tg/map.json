@@ -189,7 +189,10 @@
     "gis.import.too_large": "Файл слишком большой",
     "gis.import.not_uploaded": "Файл не был загружен",
     "gis.import.already_started": "Импорт уже запущен",
-    "gis.export.not_ready": "Экспорт ещё не готов"
+    "gis.export.not_ready": "Экспорт ещё не готов",
+    "gis.geoserver.not_configured": "GeoServer не настроен на этом сервере",
+    "gis.geoserver.request_failed": "Ошибка обращения к GeoServer",
+    "gis.layer.not_publishable": "Этот слой нельзя опубликовать"
   },
   "import": {
     "title": "Импорт слоя",
@@ -228,5 +231,13 @@
     "ready": "Готово: {{count}} объектов, {{size}}",
     "download": "Скачать",
     "failed": "Не удалось выполнить экспорт"
+  },
+  "gisAccessLink": "Для ГИС-специалистов",
+  "publish": {
+    "publish": "Опубликовать «{{name}}» в WMS/WFS",
+    "unpublish": "Снять с публикации «{{name}}»",
+    "published": "Слой опубликован в GeoServer",
+    "unpublished": "Слой снят с публикации",
+    "failed": "Не удалось изменить публикацию слоя"
   }
 }

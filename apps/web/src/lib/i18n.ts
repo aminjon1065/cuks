@@ -41,6 +41,7 @@ void i18n.use(initReactI18next).init({
     'uploads',
     'map',
     'incidents',
+    'gisAccess',
   ],
   interpolation: { escapeValue: false },
   returnNull: false,

@@ -18,7 +18,9 @@ import {
   useIncidentMapFilterOptions,
   useMartinCatalog,
   usePatchGisFeature,
+  usePublishLayer,
   useTileToken,
+  useUnpublishLayer,
 } from '../api/queries';
 import {
   defaultLayerStates,
@@ -82,6 +84,7 @@ export function MapPage(): React.JSX.Element {
   const canManageLayers = useCan('gis.layers.manage');
   const canImport = useCan('gis.import');
   const canExport = useCan('gis.export');
+  const canPublish = useCan('gis.layers.manage');
 
   const tokenQuery = useTileToken();
   const catalogQuery = useMartinCatalog(tokenQuery.data?.token);
@@ -169,6 +172,8 @@ export function MapPage(): React.JSX.Element {
   const patchFeature = usePatchGisFeature();
   const deleteFeature = useDeleteGisFeature();
   const deleteLayer = useDeleteGisLayer();
+  const publishLayer = usePublishLayer();
+  const unpublishLayer = useUnpublishLayer();
 
   // The inspector's own selection, read by callbacks that outlive the render that
   // started them (the edit fetch below).
@@ -368,6 +373,26 @@ export function MapPage(): React.JSX.Element {
     [t],
   );
 
+  // Publish/unpublish a registry layer to GeoServer WMS/WFS (task 2.9). The toast
+  // surfaces the "GeoServer not configured" case rather than failing silently.
+  const togglePublish = useCallback(
+    (def: MapLayerDef) => {
+      const registry = registryLayer(def);
+      if (!registry) return;
+      const action = registry.isPublishedWms ? unpublishLayer : publishLayer;
+      action.mutate(registry.id, {
+        onSuccess: (layer) =>
+          toast({
+            title: t(layer.isPublishedWms ? 'publish.published' : 'publish.unpublished'),
+            tone: 'success',
+          }),
+        onError: (error) => failed(error, 'publish.failed'),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `failed` is a stable local
+    [publishLayer, unpublishLayer, t],
+  );
+
   const onCreated = useCallback((layerId: string) => {
     setActiveLayerId(layerId);
     setTool('none');
@@ -448,6 +473,7 @@ export function MapPage(): React.JSX.Element {
             canCreateLayer={canManageLayers}
             canImport={canImport}
             canExport={canExport}
+            canPublish={canPublish}
             editLocked={editing !== null}
             layersLoading={layersQuery.isPending}
             layersError={layersQuery.isError}
@@ -473,6 +499,7 @@ export function MapPage(): React.JSX.Element {
                 });
               }
             }}
+            onTogglePublish={togglePublish}
             onDeleteLayer={(def) => setPendingDelete({ kind: 'layer', def })}
           />
           <BasemapSwitcher value={basemapMode} onChange={setBasemapMode} />

@@ -15,6 +15,8 @@ import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { RolesPage } from '@/features/admin/pages/RolesPage';
 import { OrgPage } from '@/features/admin/pages/OrgPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
+import { GisAccessPage } from '@/features/gis-access/pages/GisAccessPage';
+import { GisDbAccountsPage } from '@/features/gis-access/pages/GisDbAccountsPage';
 import { FilesPage } from '@/features/files/pages/FilesPage';
 
 // The map pulls in MapLibre + basemap themes (~800 kB); lazy-load it so that
@@ -102,6 +104,8 @@ export const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      { path: 'map/gis-access', element: <GisAccessPage /> },
+      { path: 'admin/gis-access', element: <GisDbAccountsPage /> },
       ...PLACEHOLDER_PATHS.map((path) => ({ path, element: <ComingSoonPage /> })),
     ],
   },

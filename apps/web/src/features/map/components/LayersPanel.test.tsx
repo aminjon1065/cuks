@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisLayerDto } from '@cuks/shared';
 import i18n from '@/lib/i18n';
@@ -31,6 +32,8 @@ function layer(overrides: Partial<GisLayerDto> = {}): GisLayerDto {
     updatedAt: '2026-07-01T00:00:00.000Z',
     canEdit: true,
     canManage: true,
+    isPublishedWms: false,
+    geoserverLayer: null,
     ...overrides,
   };
 }
@@ -44,6 +47,7 @@ function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
     canCreateLayer: false,
     canImport: false,
     canExport: false,
+    canPublish: false,
     editLocked: false,
     layersLoading: false,
     layersError: false,
@@ -57,13 +61,16 @@ function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
     onCreateLayer: vi.fn(),
     onImportLayer: vi.fn(),
     onExportLayer: vi.fn(),
+    onTogglePublish: vi.fn(),
     onDeleteLayer: vi.fn(),
     ...overrides,
   };
   render(
-    <I18nextProvider i18n={i18n}>
-      <LayersPanel {...props} />
-    </I18nextProvider>,
+    <MemoryRouter>
+      <I18nextProvider i18n={i18n}>
+        <LayersPanel {...props} />
+      </I18nextProvider>
+    </MemoryRouter>,
   );
   return props;
 }
@@ -204,6 +211,24 @@ describe('LayersPanel', () => {
       const props = renderPanel({ canImport: true });
       fireEvent.click(screen.getByRole('button', { name: 'Импорт слоя' }));
       expect(props.onImportLayer).toHaveBeenCalled();
+    });
+
+    it('toggles WMS/WFS publication when the user can manage', () => {
+      const props = renderPanel({ drawnDefs: drawnLayerDefs([layer()]), canPublish: true });
+      fireEvent.click(screen.getByRole('button', { name: /Опубликовать «Оцепление»/ }));
+      expect(props.onTogglePublish).toHaveBeenCalledWith(
+        expect.objectContaining({ drawn: expect.objectContaining({ id: 'l1' }) }),
+      );
+    });
+
+    it('shows the unpublish label for an already-published layer', () => {
+      renderPanel({
+        drawnDefs: drawnLayerDefs([layer({ isPublishedWms: true })]),
+        canPublish: true,
+      });
+      expect(
+        screen.getByRole('button', { name: /Снять с публикации «Оцепление»/ }),
+      ).toBeInTheDocument();
     });
 
     it('hides the create action without `gis.layers.manage`', () => {
