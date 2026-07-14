@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import type { GisLayerKind } from '../enums/index';
+import {
+  GIS_EXPORT_FORMATS,
+  GIS_EXPORT_SOURCES,
+  type GisExportFormat,
+  type GisExportSource,
+  type GisExportStatus,
+  type GisImportStatus,
+  type GisLayerKind,
+} from '../enums/index';
+import { incidentRegistryFilterSchema } from './incidents';
 
 /** Tile-access token issued on map load (docs/modules/10 §9). The client appends
  *  it as `?token=` to Martin tile requests; Caddy forward_auth validates it. */
@@ -157,3 +166,91 @@ export const gisFeaturesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).default(500),
 });
 export type GisFeaturesQuery = z.infer<typeof gisFeaturesQuerySchema>;
+
+// --- Import / export of geodata (docs/modules/10 §6; task 2.8) ---
+
+/** Hard ceiling on an uploaded source file. A shapefile of a whole country fits
+ *  well inside this; anything larger belongs in a direct PostGIS load (§7). */
+export const GIS_IMPORT_MAX_BYTES = 100 * 1024 * 1024;
+/** Features imported from one file. Beyond this the import is refused rather than
+ *  silently truncated. */
+export const GIS_IMPORT_MAX_FEATURES = 200_000;
+
+/** One attribute column the worker found in the source file. */
+export interface GisImportField {
+  name: string;
+  /** Postgres type the column was created with (`text`, `numeric`, …). */
+  type: string;
+}
+
+/** What the wizard shows once the worker has read the file (docs/modules/10 §6:
+ *  «предпросмотр (поля, число объектов, extent)»). */
+export interface GisImportPreview {
+  /** Name of the layer inside the source dataset. */
+  sourceLayer: string;
+  driver: string;
+  geometryType: string;
+  featureCount: number;
+  /** How many features were skipped (invalid/empty geometry) — detailed in the log. */
+  skippedCount: number;
+  fields: GisImportField[];
+  /** `[west, south, east, north]` in 4326, or null for an empty layer. */
+  extent: [number, number, number, number] | null;
+}
+
+/** A geo-import record (`app.gis_imports`). */
+export interface GisImportDto {
+  id: string;
+  status: GisImportStatus;
+  sourceName: string | null;
+  sizeBytes: number | null;
+  layerId: string | null;
+  preview: GisImportPreview | null;
+  /** Per-row error log (docs/modules/10 §6: «Ошибки — построчный лог»). */
+  log: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+/** Step 1 of the wizard: reserve the record and get a presigned upload URL. */
+export const createGisImportSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  size: z.number().int().positive().max(GIS_IMPORT_MAX_BYTES),
+  /** Title of the layer to create; defaults to the file name server-side. */
+  title: z.string().trim().min(1).max(200).optional(),
+});
+export type CreateGisImportInput = z.infer<typeof createGisImportSchema>;
+
+export interface CreateGisImportResponse {
+  importId: string;
+  /** Presigned PUT — the browser uploads straight to storage, as everywhere else. */
+  uploadUrl: string;
+}
+
+/** A geo-export record (`app.gis_exports`). */
+export interface GisExportDto {
+  id: string;
+  source: GisExportSource;
+  format: GisExportFormat;
+  status: GisExportStatus;
+  fileName: string | null;
+  sizeBytes: number | null;
+  featureCount: number | null;
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+/** Export a registry layer, or the incidents matching the registry filters. */
+export const createGisExportSchema = z
+  .object({
+    source: z.enum(GIS_EXPORT_SOURCES),
+    format: z.enum(GIS_EXPORT_FORMATS),
+    layerId: z.string().uuid().optional(),
+    filters: incidentRegistryFilterSchema.optional(),
+  })
+  .refine((v) => v.source !== 'layer' || !!v.layerId, {
+    message: 'layerId is required for a layer export',
+    path: ['layerId'],
+  });
+export type CreateGisExportInput = z.infer<typeof createGisExportSchema>;

@@ -155,6 +155,20 @@
       "when": 1784046135997,
       "tag": "0021_layer_features_mvt",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784060099603,
+      "tag": "0022_legal_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784060100603,
+      "tag": "0023_imported_layer_mvt",
+      "breakpoints": true
     }
   ]
 }

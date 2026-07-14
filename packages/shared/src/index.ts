@@ -2,6 +2,7 @@ export * from './ability/index';
 export * from './constants/index';
 export * from './dto/index';
 export * from './enums/index';
+export * from './gis/slug';
 export * from './permissions/index';
 export * from './notifications/index';
 export * from './queues/index';

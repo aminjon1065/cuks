@@ -12,6 +12,9 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import {
+  GIS_EXPORT_FORMATS,
+  GIS_EXPORT_SOURCES,
+  GIS_EXPORT_STATUSES,
   GIS_IMPORT_STATUSES,
   INCIDENT_RESOURCE_KINDS,
   INCIDENT_SOURCES,
@@ -145,8 +148,11 @@ export const incidentResources = appSchema.table(
 );
 
 /**
- * app.gis_imports — geo-import job records (docs/modules/10 §3, §6). Points at the
- * uploaded fs_node and, once processed, the created layer.
+ * app.gis_imports — geo-import job records (docs/modules/10 §3, §6). The uploaded
+ * source object lives in S3 under `storage_key` (the wizard uploads it straight
+ * there, presigned, like every other upload); `file_id` stays null unless the
+ * source was picked from the file registry. `preview` holds what the wizard shows
+ * after the worker has read the file: fields, feature count, extent, geometry type.
  */
 export const gisImports = appSchema.table(
   'gis_imports',
@@ -155,18 +161,64 @@ export const gisImports = appSchema.table(
     fileId: uuid('file_id').references(() => fsNodes.id, { onDelete: 'set null' }),
     layerId: uuid('layer_id').references(() => gisLayers.id, { onDelete: 'set null' }),
     status: text('status', { enum: GIS_IMPORT_STATUSES }).notNull().default('pending'),
+    /** S3 key of the uploaded source file. */
+    storageKey: text('storage_key'),
+    /** Original file name, as the user picked it (shown in the wizard). */
+    sourceName: text('source_name'),
+    /** Declared byte size, checked against the object before the job is queued. */
+    sizeBytes: integer('size_bytes'),
     log: text('log'),
+    preview: jsonb('preview'),
     options: jsonb('options')
       .notNull()
       .default(sql`'{}'::jsonb`),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
   },
   (t) => [
     check(
       'gis_imports_status_chk',
       sql`${t.status} in ('pending', 'processing', 'done', 'failed')`,
     ),
+    index('gis_imports_created_by_idx').on(t.createdBy, t.createdAt),
+  ],
+);
+
+/**
+ * app.gis_exports — geo-export job records (docs/modules/10 §6). A layer or a
+ * selection of incidents is rendered by the worker into one of the export formats,
+ * uploaded to S3 and announced with a notification carrying the download link.
+ */
+export const gisExports = appSchema.table(
+  'gis_exports',
+  {
+    id: primaryId(),
+    source: text('source', { enum: GIS_EXPORT_SOURCES }).notNull(),
+    format: text('format', { enum: GIS_EXPORT_FORMATS }).notNull(),
+    /** Which layer, or the incident filters — the same shape the registry uses. */
+    params: jsonb('params')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: text('status', { enum: GIS_EXPORT_STATUSES }).notNull().default('pending'),
+    storageKey: text('storage_key'),
+    fileName: text('file_name'),
+    sizeBytes: integer('size_bytes'),
+    featureCount: integer('feature_count'),
+    error: text('error'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      'gis_exports_status_chk',
+      sql`${t.status} in ('pending', 'processing', 'done', 'failed')`,
+    ),
+    check('gis_exports_source_chk', sql`${t.source} in ('layer', 'incidents')`),
+    check('gis_exports_format_chk', sql`${t.format} in ('geojson', 'gpkg', 'shp', 'csv', 'xlsx')`),
+    index('gis_exports_created_by_idx').on(t.createdBy, t.createdAt),
   ],
 );

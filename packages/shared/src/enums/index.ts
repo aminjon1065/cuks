@@ -125,6 +125,24 @@ export type GisLayerKind = (typeof GIS_LAYER_KINDS)[number];
 export const GIS_IMPORT_STATUSES = ['pending', 'processing', 'done', 'failed'] as const;
 export type GisImportStatus = (typeof GIS_IMPORT_STATUSES)[number];
 
+/** geo-export job lifecycle (app.gis_exports) — same states as the import. */
+export const GIS_EXPORT_STATUSES = GIS_IMPORT_STATUSES;
+export type GisExportStatus = GisImportStatus;
+
+/** What a geo-export renders (docs/modules/10 §6: «любой слой/выборка ЧС»). */
+export const GIS_EXPORT_SOURCES = ['layer', 'incidents'] as const;
+export type GisExportSource = (typeof GIS_EXPORT_SOURCES)[number];
+
+/** Export formats (docs/modules/10 §6). GPKG/SHP/GeoJSON keep the geometry; CSV
+ *  carries it as WKT; XLSX is the flat attribute table for office reports. */
+export const GIS_EXPORT_FORMATS = ['geojson', 'gpkg', 'shp', 'csv', 'xlsx'] as const;
+export type GisExportFormat = (typeof GIS_EXPORT_FORMATS)[number];
+
+/** Formats a geo-import accepts (docs/modules/10 §6). A shapefile arrives zipped
+ *  because it is a set of sidecar files, not one. */
+export const GIS_IMPORT_FORMATS = ['geojson', 'zip', 'kml', 'gpkg', 'csv'] as const;
+export type GisImportFormat = (typeof GIS_IMPORT_FORMATS)[number];
+
 /** PostGIS geometry types used across the platform (layer geometry_type + the
  *  Drizzle `geometry()` column helper). Values match PostGIS type modifiers. */
 export const GEOMETRY_TYPES = [
