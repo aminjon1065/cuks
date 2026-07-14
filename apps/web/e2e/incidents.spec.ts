@@ -385,7 +385,11 @@ test('registry refreshes for another operator and rejects invalid report chronol
         data: {
           typeCode: 'nat.hydro.flood',
           severity: 2,
-          occurredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          // Dated now, not in the past: the registry shows 25 rows sorted by
+          // -occurredAt, so on a dev database that has accumulated incidents from
+          // earlier runs a backdated one lands on page 2 and this assertion — about
+          // the realtime refresh, not about dates — fails for the wrong reason.
+          occurredAt: new Date().toISOString(),
           location: { longitude: 68.787, latitude: 38.559 },
           description: 'E2E registry realtime',
           source: 'phone',
