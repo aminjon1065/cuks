@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AuthGate } from './AuthGate';
 import { AppShell } from './shell/AppShell';
@@ -16,9 +17,15 @@ import { OrgPage } from '@/features/admin/pages/OrgPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
 import { FilesPage } from '@/features/files/pages/FilesPage';
 
+// The map pulls in MapLibre + basemap themes (~800 kB); lazy-load it so that
+// weight only ships when the map is actually opened.
+const MapPage = lazy(() =>
+  import('@/features/map/pages/MapPage').then((m) => ({ default: m.MapPage })),
+);
+
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['map', 'incidents', 'analytics', 'docs', 'tasks', 'chat', 'meet'];
+const PLACEHOLDER_PATHS = ['incidents', 'analytics', 'docs', 'tasks', 'chat', 'meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -63,6 +70,14 @@ export const router = createBrowserRouter([
       { path: 'admin/org', element: <OrgPage /> },
       { path: 'admin/audit', element: <AuditPage /> },
       { path: 'files', element: <FilesPage /> },
+      {
+        path: 'map',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <MapPage />
+          </Suspense>
+        ),
+      },
       ...PLACEHOLDER_PATHS.map((path) => ({ path, element: <ComingSoonPage /> })),
     ],
   },

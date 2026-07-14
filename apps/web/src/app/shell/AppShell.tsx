@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { AbilityProvider } from '@/lib/ability';
 import { SocketProvider } from '@/lib/socket';
 import { useMe } from '@/features/auth/api/queries';
@@ -11,6 +11,8 @@ import { CommandPalette } from './CommandPalette';
 export function AppShell(): React.JSX.Element | null {
   const { data: me } = useMe();
   const [commandOpen, setCommandOpen] = useState(false);
+  // The map is full-bleed (docs/06 §3): no content padding, no page scroll.
+  const fullbleed = useLocation().pathname === '/app/map';
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -32,7 +34,11 @@ export function AppShell(): React.JSX.Element | null {
           <Sidebar me={me} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar me={me} onOpenCommand={() => setCommandOpen(true)} />
-            <main className="flex-1 overflow-y-auto p-6">
+            <main
+              className={
+                fullbleed ? 'relative flex-1 overflow-hidden' : 'flex-1 overflow-y-auto p-6'
+              }
+            >
               <Outlet />
             </main>
           </div>
