@@ -83,6 +83,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # Vector tile server (phase 2.2). In dev the token gate is not enforced (no
+  # Caddy) — the web dev proxy forwards /tiles → martin directly. Prod puts Caddy
+  # forward_auth in front (infra/caddy/Caddyfile).
+  martin:
+    image: ghcr.io/maplibre/martin:latest
+    restart: unless-stopped
+    command: ['--config', '/config/config.yaml']
+    environment:
+      DATABASE_URL: postgres://cuks:cuks@postgres:5432/cuks
+    ports:
+      - '3001:3000'
+    volumes:
+      - ../martin/config.yaml:/config/config.yaml:ro
+      - ../basemap:/basemap:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
   redisdata:

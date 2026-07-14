@@ -1,0 +1,39 @@
+# Caddy reverse proxy / TLS terminator (docs/08 §Маршрутизация, docs/02 ADR-10).
+# The full production compose + TLS wiring is phase 7.1; this file already carries
+# the phase-2.2 contract: /tiles/* is gated by the api's signed tile token via
+# forward_auth before reaching Martin (docs/modules/10 §9). Set CUKS_DOMAIN (or
+# use `tls internal` for a fully-closed network).
+{$CUKS_DOMAIN:localhost} {
+	encode zstd gzip
+
+	# API + realtime (session-authenticated).
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /socket.io/* {
+		reverse_proxy api:3000
+	}
+
+	# Vector tiles: validate the short-lived signed token (docs/modules/10 §9)
+	# before proxying to Martin. Caddy sets X-Forwarded-Uri on the auth subrequest
+	# so tile-auth can read `?token=`; handle_path strips /tiles for Martin, whose
+	# source paths are /<source>/{z}/{x}/{y}.
+	handle_path /tiles/* {
+		forward_auth api:3000 {
+			uri /api/v1/gis/tile-auth
+		}
+		reverse_proxy martin:3000
+	}
+
+	# OGC services for QGIS/ArcGIS (docs/modules/10 §7).
+	handle /geoserver/* {
+		reverse_proxy geoserver:8080
+	}
+
+	# SPA (static build copied into the caddy volume).
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}

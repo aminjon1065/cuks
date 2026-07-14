@@ -31,6 +31,13 @@ export default defineConfig({
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
       // Socket.IO handshake + upgrade (namespace `/ws` still uses this path).
       '/socket.io': { target: 'http://localhost:3000', ws: true, changeOrigin: true },
+      // Vector tiles → Martin (docker, host port 3001), stripping the /tiles prefix
+      // that Caddy's handle_path strips in prod. Token auth is Caddy-only (prod).
+      '/tiles': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/tiles/, ''),
+      },
     },
   },
 });

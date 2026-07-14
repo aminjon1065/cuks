@@ -1,0 +1,22 @@
+# Martin tile server (docs/modules/10 §4, docs/02 ADR-7). Serves vector MVT
+# straight from PostGIS + a PMTiles basemap. Sits behind Caddy, which enforces
+# the tile token via forward_auth (docs/modules/10 §9) — Martin itself is only
+# reachable inside the docker network.
+listen_addresses: '0.0.0.0:3000'
+
+postgres:
+  # Env substitution (Martin supports ${VAR}); keeps creds out of the file and
+  # identical between dev and prod.
+  connection_string: ${DATABASE_URL}
+  # Auto-catalog the spatial schema only: admin_units / facilities / risk_zones /
+  # layer_features become table sources, and gis.incidents_mvt (migration 0012)
+  # becomes a filtered function source. `app` stays private (docs/07 §gis).
+  auto_publish:
+    from_schemas:
+      - gis
+
+# Basemap: any *.pmtiles in this directory (built by infra/scripts/build-basemap.sh)
+# is published as a source named after the file (e.g. region.pmtiles → "region").
+pmtiles:
+  paths:
+    - /basemap
