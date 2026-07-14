@@ -117,6 +117,16 @@ export const DOCX_MIME_TYPE =
  *  as a duplicate. */
 export const STALE_PENDING_SCAN_HOURS = 1;
 
+// --- GIS / incidents (docs/modules/10, docs/07 §gis; phase 2) ---
+
+/** Spatial reference for all stored geometry: WGS84 (docs/07 §gis). Display is
+ *  web-mercator, done client-side by MapLibre — the DB stays 4326. */
+export const GIS_SRID = 4326;
+
+/** Incident number format `ЧС-{YYYY}-{seq}` (docs/modules/10 §3). The sequence is
+ *  per-year; the prefix is the Russian abbreviation for ЧС (emergency). */
+export const INCIDENT_NUMBER_PREFIX = 'ЧС';
+
 /** Bound on how long the `preview`/`text-extract` jobs let a single sharp/
  *  pdf-parse/mammoth call run before giving up — mirrors the explicit ClamAV
  *  socket timeout (clamd-client.ts) so a pathological/crafted file can't hang a

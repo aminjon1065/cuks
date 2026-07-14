@@ -61,3 +61,54 @@ export const DICTIONARY_TYPES = [
   'correspondent_category',
 ] as const;
 export type DictionaryType = (typeof DICTIONARY_TYPES)[number];
+
+// --- GIS / incidents (docs/modules/10, phase 2) ---
+
+/** Administrative division levels (gis.admin_units). */
+export const ADMIN_UNIT_LEVELS = ['region', 'district', 'jamoat'] as const;
+export type AdminUnitLevel = (typeof ADMIN_UNIT_LEVELS)[number];
+
+/** Incident lifecycle (docs/modules/10 §2): reported → active → localized →
+ *  eliminated → closed. Rollback needs `incidents.manage` + a reason. */
+export const INCIDENT_STATUSES = [
+  'reported',
+  'active',
+  'localized',
+  'eliminated',
+  'closed',
+] as const;
+export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
+
+/** How an incident was first reported (docs/modules/10 §3). */
+export const INCIDENT_SOURCES = ['phone', 'report_doc', 'monitoring', 'other'] as const;
+export type IncidentSource = (typeof INCIDENT_SOURCES)[number];
+
+/** Deployed forces & assets kind (app.incident_resources). */
+export const INCIDENT_RESOURCE_KINDS = ['personnel', 'vehicle', 'equipment', 'aviation'] as const;
+export type IncidentResourceKind = (typeof INCIDENT_RESOURCE_KINDS)[number];
+
+/** Severity scale sev-1..5 (docs/06 design-system; objectowy…transboundary). */
+export const INCIDENT_SEVERITY_MIN = 1;
+export const INCIDENT_SEVERITY_MAX = 5;
+
+/** Layer registry kinds (gis.layers): built-in, ogr2ogr-imported, web-drawn. */
+export const GIS_LAYER_KINDS = ['system', 'imported', 'drawn'] as const;
+export type GisLayerKind = (typeof GIS_LAYER_KINDS)[number];
+
+/** geo-import job lifecycle (app.gis_imports). */
+export const GIS_IMPORT_STATUSES = ['pending', 'processing', 'done', 'failed'] as const;
+export type GisImportStatus = (typeof GIS_IMPORT_STATUSES)[number];
+
+/** PostGIS geometry types used across the platform (layer geometry_type + the
+ *  Drizzle `geometry()` column helper). Values match PostGIS type modifiers. */
+export const GEOMETRY_TYPES = [
+  'Point',
+  'LineString',
+  'Polygon',
+  'MultiPoint',
+  'MultiLineString',
+  'MultiPolygon',
+  'GeometryCollection',
+  'Geometry',
+] as const;
+export type GeometryType = (typeof GEOMETRY_TYPES)[number];
