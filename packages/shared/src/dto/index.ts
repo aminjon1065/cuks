@@ -8,4 +8,5 @@ export * from './notifications';
 export * from './audit';
 export * from './users';
 export * from './files';
+export * from './gis';
 export * from './directory';

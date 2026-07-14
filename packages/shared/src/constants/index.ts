@@ -127,6 +127,11 @@ export const GIS_SRID = 4326;
  *  per-year; the prefix is the Russian abbreviation for ЧС (emergency). */
 export const INCIDENT_NUMBER_PREFIX = 'ЧС';
 
+/** Short-lived signed tile-access token TTL (docs/modules/10 §9). Issued by the
+ *  api on map load; Caddy forward_auth validates it before proxying to Martin. An
+ *  hour comfortably covers a map session and is re-issued on the next load. */
+export const TILE_TOKEN_TTL_SECONDS = 60 * 60;
+
 /** Bound on how long the `preview`/`text-extract` jobs let a single sharp/
  *  pdf-parse/mammoth call run before giving up — mirrors the explicit ClamAV
  *  socket timeout (clamd-client.ts) so a pathological/crafted file can't hang a

@@ -24,6 +24,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { FilesModule } from './modules/files/files.module';
+import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
@@ -43,10 +44,12 @@ import { UsersModule } from './modules/users/users.module';
             ? {}
             : { transport: { target: 'pino-pretty', options: { singleLine: true } } }),
           // Never log secrets (docs/04 §Logging, docs/09 §1: authorization, cookie,
-          // password, totp).
+          // password, totp). `x-forwarded-uri` carries the tile token on
+          // forward_auth subrequests (docs/modules/10 §9) — keep it out of logs.
           redact: [
             'req.headers.cookie',
             'req.headers.authorization',
+            'req.headers["x-forwarded-uri"]',
             'req.body.password',
             'req.body.totp',
             'res.headers["set-cookie"]',
@@ -78,6 +81,7 @@ import { UsersModule } from './modules/users/users.module';
     EventsModule,
     NotificationsModule,
     FilesModule,
+    GisModule,
     DirectoryModule,
     HealthModule,
   ],
