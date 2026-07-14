@@ -65,6 +65,16 @@ export function notificationHref(notification: NotificationDto): string | null {
   if (notification.entityType === 'incident' && notification.entityId) {
     return `/app/incidents/${notification.entityId}`;
   }
+  // A finished import puts its layer on the map. A finished export is downloaded
+  // from there too — its link is a short-lived presigned URL fetched on demand, so
+  // the notification cannot bake it in; instead it deep-links the map with
+  // `?export=<id>`, which reopens the export ready to download (docs/modules/10 §6).
+  if (notification.entityType === 'gis_export' && notification.entityId) {
+    return `/app/map?export=${notification.entityId}`;
+  }
+  if (notification.entityType === 'gis_import') {
+    return '/app/map';
+  }
   return null;
 }
 

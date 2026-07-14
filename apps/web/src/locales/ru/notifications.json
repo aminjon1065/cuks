@@ -71,6 +71,18 @@
     "incidents.incident.status_changed": {
       "title": "Изменён статус ЧС {{number}}",
       "body": "{{fromStatus}} → {{toStatus}}"
+    },
+    "gis.import.done": {
+      "title": "Импорт слоя завершён"
+    },
+    "gis.import.failed": {
+      "title": "Импорт слоя не выполнен"
+    },
+    "gis.export.done": {
+      "title": "Экспорт готов"
+    },
+    "gis.export.failed": {
+      "title": "Экспорт не выполнен"
     }
   }
 }

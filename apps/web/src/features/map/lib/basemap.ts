@@ -47,7 +47,7 @@ export interface BuildStyleOptions {
   availableSources: ReadonlySet<string> | null;
   /** Query string for the filtered incident MVT source (without `?`/token). */
   incidentTileQuery?: string;
-  /** The user's drawn layers (task 2.7); all share the `layer_features` source. */
+  /** The user's registry layers: drawn (task 2.7) and imported (2.8). */
   drawnDefs?: readonly MapLayerDef[];
   /** Cache-buster for the drawn source, bumped after every feature write. */
   drawnTileQuery?: string;
@@ -55,16 +55,39 @@ export interface BuildStyleOptions {
   hiddenFeatureId?: string | null;
 }
 
-/** The unique Martin sources referenced by the available layers. */
+/** Is the Martin source behind this layer published? An imported layer reads a
+ *  function source (`imported_mvt`) rather than a source of its own. */
+function isAvailable(def: MapLayerDef, availableSources: ReadonlySet<string> | null): boolean {
+  return !availableSources || availableSources.has(def.tileSource ?? def.source);
+}
+
+/** MapLibre sources for the available layers, keyed by their (unique) source id.
+ *  Several defs can share one — every drawn layer reads `layer_features_mvt`. */
 function gisSources(
   availableSources: ReadonlySet<string> | null,
-  drawnDefs: readonly MapLayerDef[],
-): string[] {
-  const sources = new Set<string>();
-  for (const def of [...SYSTEM_LAYERS, ...drawnDefs]) {
-    if (!availableSources || availableSources.has(def.source)) sources.add(def.source);
+  registryDefs: readonly MapLayerDef[],
+  incidentTileQuery: string,
+  drawnTileQuery: string,
+): StyleSpecification['sources'] {
+  const sources: StyleSpecification['sources'] = {};
+  for (const def of [...SYSTEM_LAYERS, ...registryDefs]) {
+    if (!isAvailable(def, availableSources) || sources[def.source]) continue;
+    const martinSource = def.tileSource ?? def.source;
+    const query =
+      def.tileQuery ??
+      (martinSource === 'incidents_mvt'
+        ? incidentTileQuery
+        : martinSource === DRAWN_SOURCE
+          ? drawnTileQuery
+          : '');
+    sources[def.source] = {
+      type: 'vector',
+      tiles: [tileUrl(martinSource, query)],
+      minzoom: 0,
+      maxzoom: 18,
+    };
   }
-  return [...sources];
+  return sources;
 }
 
 export function hasBasemap(availableSources: ReadonlySet<string> | null): boolean {
@@ -76,16 +99,12 @@ export function buildStyle(opts: BuildStyleOptions): StyleSpecification {
   const drawnDefs = opts.drawnDefs ?? [];
   const basemap = hasBasemap(availableSources);
 
-  const sources: StyleSpecification['sources'] = {};
-  for (const source of gisSources(availableSources, drawnDefs)) {
-    const query =
-      source === 'incidents_mvt'
-        ? (opts.incidentTileQuery ?? '')
-        : source === DRAWN_SOURCE
-          ? (opts.drawnTileQuery ?? '')
-          : '';
-    sources[source] = { type: 'vector', tiles: [tileUrl(source, query)], minzoom: 0, maxzoom: 18 };
-  }
+  const sources = gisSources(
+    availableSources,
+    drawnDefs,
+    opts.incidentTileQuery ?? '',
+    opts.drawnTileQuery ?? '',
+  );
   if (basemap) {
     sources[PROTOMAPS_SOURCE] = {
       type: 'vector',

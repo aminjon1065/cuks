@@ -78,6 +78,19 @@ export interface MapLayerDef {
   fillOpacity?: number;
   /** The `gis.layers` row behind a drawn layer; absent for system layers. */
   drawn?: GisLayerDto;
+  /** The `gis.layers` row behind an imported layer (task 2.8). */
+  imported?: GisLayerDto;
+  /** Martin source this layer's tiles come from, when it differs from the MapLibre
+   *  source id — imported layers share one function source but each needs its own
+   *  MapLibre source (their tile URLs differ by `?layer=`). */
+  tileSource?: string;
+  /** Query string appended to the tile URL (without `?`). */
+  tileQuery?: string;
+}
+
+/** The registry row behind a layer, whichever kind it is. */
+export function registryLayer(def: MapLayerDef): GisLayerDto | undefined {
+  return def.drawn ?? def.imported;
 }
 
 export interface LayerState {
@@ -179,6 +192,20 @@ export const DRAWN_SOURCE_LAYER = 'layer_features';
 /** Prefix of a drawn layer's def id, so it never collides with a system layer. */
 export const DRAWN_PREFIX = 'drawn:';
 
+/**
+ * Martin function source serving every imported layer (`gis.imported_mvt`,
+ * migration 0023; task 2.8). A physical table created after Martin booted is not in
+ * its table catalog, so an imported layer would not be servable until the tile
+ * server restarted. The function resolves the table from the registry by
+ * `?layer=<id>` instead, which also means each imported layer needs its own
+ * MapLibre source (their tile URLs differ only by that query).
+ */
+export const IMPORTED_SOURCE = 'imported_mvt';
+/** The MVT layer name inside that source. */
+export const IMPORTED_SOURCE_LAYER = 'imported';
+/** Prefix of an imported layer's def id. */
+export const IMPORTED_PREFIX = 'imported:';
+
 const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 /** The drawn layer a def belongs to, or `null` for system layers. */
@@ -214,6 +241,43 @@ export function drawnLayerDefs(layers: readonly GisLayerDto[]): MapLayerDef[] {
         defaultVisible: true,
         ...(layer.minZoom !== null ? { minzoom: layer.minZoom } : {}),
         drawn: layer,
+      };
+    });
+}
+
+/** Paint kind an import's auto style asks for (worker: `autoStyle`). */
+function importedKind(style: Record<string, unknown>): LayerKind {
+  const kind = style['kind'];
+  return kind === 'circle' || kind === 'fill' || kind === 'mixed' ? kind : 'mixed';
+}
+
+/**
+ * Compile the user's imported layers (`GET /gis/layers`, kind `imported`). Each one
+ * is its own MapLibre source: they share the `imported_mvt` function source but
+ * differ by the `?layer=` it resolves the physical table from.
+ */
+export function importedLayerDefs(layers: readonly GisLayerDto[]): MapLayerDef[] {
+  return layers
+    .filter((layer) => layer.kind === 'imported')
+    .map((layer) => {
+      const styleColor = layer.style['color'];
+      const color =
+        typeof styleColor === 'string' && HEX_COLOR.test(styleColor) ? styleColor : undefined;
+      return {
+        id: `${IMPORTED_PREFIX}${layer.id}`,
+        source: `${IMPORTED_PREFIX}${layer.id}`,
+        tileSource: IMPORTED_SOURCE,
+        tileQuery: `layer=${layer.id}`,
+        sourceLayer: IMPORTED_SOURCE_LAYER,
+        group: 'mine' as const,
+        title: layer.title,
+        kind: importedKind(layer.style),
+        colorToken: '--info',
+        ...(color ? { color } : {}),
+        legend: [],
+        defaultVisible: true,
+        ...(layer.minZoom !== null ? { minzoom: layer.minZoom } : {}),
+        imported: layer,
       };
     });
 }
@@ -529,7 +593,7 @@ export function compileAllLayers(
   hiddenFeatureId?: string | null,
 ): LayerSpecification[] {
   const defs = orderedLayers(drawnDefs).filter(
-    (def) => !availableSources || availableSources.has(def.source),
+    (def) => !availableSources || availableSources.has(def.tileSource ?? def.source),
   );
   return defs.flatMap((def) => compileLayers(def, token, layerState(states, def), hiddenFeatureId));
 }

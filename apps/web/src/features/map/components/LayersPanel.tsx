@@ -1,8 +1,18 @@
 import { useTranslation } from 'react-i18next';
-import { Crosshair, Layers, PanelLeftClose, Pencil, Plus, Trash2 } from 'lucide-react';
+import {
+  Crosshair,
+  Download,
+  FileUp,
+  Layers,
+  PanelLeftClose,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { Button, Checkbox, cn, Skeleton, Slider } from '@cuks/ui';
 import {
   PANEL_GROUP_ORDER,
+  registryLayer,
   SYSTEM_LAYERS,
   type LayerGroup,
   type LayerState,
@@ -19,6 +29,10 @@ export interface LayersPanelProps {
   activeLayerId: string | null;
   /** `gis.layers.manage` (docs/05) — hides the create action for everyone else. */
   canCreateLayer: boolean;
+  /** `gis.import` — hides the import action (task 2.8). */
+  canImport: boolean;
+  /** `gis.export` — hides the per-layer export action (task 2.8). */
+  canExport: boolean;
   /** An unsaved geometry edit is open — switching target or deleting would strand it. */
   editLocked: boolean;
   /** The drawn-layer registry is still loading. */
@@ -33,6 +47,8 @@ export interface LayersPanelProps {
   onZoom: (def: MapLayerDef) => void;
   onActiveLayerChange: (layerId: string | null) => void;
   onCreateLayer: () => void;
+  onImportLayer: () => void;
+  onExportLayer: (def: MapLayerDef) => void;
   onDeleteLayer: (def: MapLayerDef) => void;
 }
 
@@ -76,24 +92,29 @@ function LayerRow({
   state,
   isDrawTarget,
   editLocked,
+  canExport,
   onToggle,
   onOpacity,
   onZoom,
   onActiveLayerChange,
+  onExportLayer,
   onDeleteLayer,
 }: {
   def: MapLayerDef;
   state: LayerState;
   isDrawTarget: boolean;
   editLocked: boolean;
+  canExport: boolean;
   onToggle: LayersPanelProps['onToggle'];
   onOpacity: LayersPanelProps['onOpacity'];
   onZoom: LayersPanelProps['onZoom'];
   onActiveLayerChange: LayersPanelProps['onActiveLayerChange'];
+  onExportLayer: LayersPanelProps['onExportLayer'];
   onDeleteLayer: LayersPanelProps['onDeleteLayer'];
 }): React.JSX.Element {
   const { t } = useTranslation('map');
   const drawn = def.drawn;
+  const registry = registryLayer(def);
   const title = def.title ?? (def.titleKey ? t(def.titleKey) : def.id);
 
   return (
@@ -105,7 +126,7 @@ function LayerRow({
           onCheckedChange={(checked) => onToggle(def.id, checked === true)}
           aria-label={title}
         />
-        {drawn && (
+        {registry && (
           <span
             aria-hidden
             className="inline-block size-2.5 shrink-0 rounded-full"
@@ -133,6 +154,19 @@ function LayerRow({
             <Pencil className="size-3.5" />
           </Button>
         )}
+        {registry && canExport && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 text-text-muted"
+            onClick={() => onExportLayer(def)}
+            aria-label={t('export.layer', { name: title })}
+            title={t('export.layer', { name: title })}
+            data-testid={`export-layer-${registry.id}`}
+          >
+            <Download className="size-3.5" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -143,7 +177,7 @@ function LayerRow({
         >
           <Crosshair className="size-3.5" />
         </Button>
-        {drawn?.canManage && (
+        {registry?.canManage && (
           <Button
             variant="ghost"
             size="icon"
@@ -198,6 +232,8 @@ export function LayersPanel({
   drawnDefs,
   activeLayerId,
   canCreateLayer,
+  canImport,
+  canExport,
   editLocked,
   layersLoading,
   layersError,
@@ -209,6 +245,8 @@ export function LayersPanel({
   onZoom,
   onActiveLayerChange,
   onCreateLayer,
+  onImportLayer,
+  onExportLayer,
   onDeleteLayer,
 }: LayersPanelProps): React.JSX.Element {
   const { t } = useTranslation('map');
@@ -229,13 +267,18 @@ export function LayersPanel({
     );
   }
 
+  // An imported layer's MapLibre source is its own (`imported:<id>`), but its tiles
+  // come from the shared `imported_mvt` function source — that is what the catalog
+  // publishes, so that is what availability is checked against.
   const available = [...SYSTEM_LAYERS, ...drawnDefs].filter(
-    (def) => !availableSources || availableSources.has(def.source),
+    (def) => !availableSources || availableSources.has(def.tileSource ?? def.source),
   );
   const groups = PANEL_GROUP_ORDER.map((group) => ({
     group,
     layers: available.filter((def) => def.group === group),
-  })).filter((entry) => entry.layers.length > 0 || (entry.group === 'mine' && canCreateLayer));
+  })).filter(
+    (entry) => entry.layers.length > 0 || (entry.group === 'mine' && (canCreateLayer || canImport)),
+  );
 
   const renderGroup = (group: LayerGroup, layers: MapLayerDef[]): React.JSX.Element => (
     <section key={group} className="mb-2 last:mb-0">
@@ -243,18 +286,35 @@ export function LayersPanel({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
           {t(`groups.${group}`)}
         </h3>
-        {group === 'mine' && canCreateLayer && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 text-text-muted"
-            onClick={onCreateLayer}
-            aria-label={t('drawn.newLayer')}
-            title={t('drawn.newLayer')}
-            data-testid="create-layer"
-          >
-            <Plus className="size-3.5" />
-          </Button>
+        {group === 'mine' && (
+          <div className="flex items-center gap-0.5">
+            {canImport && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-text-muted"
+                onClick={onImportLayer}
+                aria-label={t('import.title')}
+                title={t('import.title')}
+                data-testid="import-layer"
+              >
+                <FileUp className="size-3.5" />
+              </Button>
+            )}
+            {canCreateLayer && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 text-text-muted"
+                onClick={onCreateLayer}
+                aria-label={t('drawn.newLayer')}
+                title={t('drawn.newLayer')}
+                data-testid="create-layer"
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            )}
+          </div>
         )}
       </div>
       {group === 'mine' && layersError ? (
@@ -280,10 +340,12 @@ export function LayersPanel({
               state={states[def.id] ?? { visible: def.defaultVisible, opacity: 1 }}
               isDrawTarget={def.drawn?.id === activeLayerId}
               editLocked={editLocked}
+              canExport={canExport}
               onToggle={onToggle}
               onOpacity={onOpacity}
               onZoom={onZoom}
               onActiveLayerChange={onActiveLayerChange}
+              onExportLayer={onExportLayer}
               onDeleteLayer={onDeleteLayer}
             />
           ))}

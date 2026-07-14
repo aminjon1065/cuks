@@ -7,9 +7,13 @@ import {
 } from '@tanstack/react-query';
 import {
   TILE_TOKEN_TTL_SECONDS,
+  type CreateGisExportInput,
   type CreateGisFeatureInput,
+  type CreateGisImportResponse,
   type CreateGisLayerInput,
+  type GisExportDto,
   type GisFeatureDto,
+  type GisImportDto,
   type GisLayerDto,
   type IncidentMapFilterOptionsResponse,
   type PatchGisFeatureInput,
@@ -143,4 +147,78 @@ export function useMartinCatalog(
     enabled: !!token,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+// --- Import / export of geodata (docs/modules/10 §6, task 2.8) ---
+
+const importsKey = [...mapKey, 'imports'] as const;
+const exportsKey = [...mapKey, 'exports'] as const;
+
+/** Poll interval while a geo job runs. The worker reports through the record, and
+ *  a background job has no socket channel of its own (the worker cannot push). */
+const JOB_POLL_MS = 1000;
+
+/** Step 1+2 of the wizard: reserve the record, upload the file straight to storage
+ *  with the presigned URL, then queue it. */
+export function useStartGisImport(): UseMutationResult<
+  GisImportDto,
+  Error,
+  { file: File; title?: string }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, title }: { file: File; title?: string }) => {
+      const created = await api.post<CreateGisImportResponse>('/v1/gis/imports', {
+        fileName: file.name,
+        size: file.size,
+        ...(title ? { title } : {}),
+      });
+      const uploaded = await fetch(created.uploadUrl, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: file,
+      });
+      if (!uploaded.ok) throw new Error(`upload failed: HTTP ${uploaded.status}`);
+      return api.post<GisImportDto>(`/v1/gis/imports/${created.importId}/start`);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: importsKey }),
+  });
+}
+
+/** Watch a running import; stops polling once the worker is done. */
+export function useGisImport(id: string | null): UseQueryResult<GisImportDto> {
+  return useQuery({
+    queryKey: [...importsKey, id],
+    queryFn: () => api.get<GisImportDto>(`/v1/gis/imports/${id!}`),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'done' || status === 'failed' ? false : JOB_POLL_MS;
+    },
+  });
+}
+
+export function useCreateGisExport(): UseMutationResult<GisExportDto, Error, CreateGisExportInput> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateGisExportInput) => api.post<GisExportDto>('/v1/gis/exports', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: exportsKey }),
+  });
+}
+
+export function useGisExport(id: string | null): UseQueryResult<GisExportDto> {
+  return useQuery({
+    queryKey: [...exportsKey, id],
+    queryFn: () => api.get<GisExportDto>(`/v1/gis/exports/${id!}`),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'done' || status === 'failed' ? false : JOB_POLL_MS;
+    },
+  });
+}
+
+/** Presigned download of a finished export (short-lived, `attachment`). */
+export function fetchGisExportUrl(id: string): Promise<{ url: string }> {
+  return api.get<{ url: string }>(`/v1/gis/exports/${id}/download`);
 }

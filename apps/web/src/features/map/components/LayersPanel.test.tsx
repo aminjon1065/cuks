@@ -3,7 +3,7 @@ import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GisLayerDto } from '@cuks/shared';
 import i18n from '@/lib/i18n';
-import { defaultLayerStates, drawnLayerDefs } from '../lib/layers';
+import { defaultLayerStates, drawnLayerDefs, importedLayerDefs } from '../lib/layers';
 import { LayersPanel, type LayersPanelProps } from './LayersPanel';
 
 const ALL_SOURCES = new Set([
@@ -11,6 +11,7 @@ const ALL_SOURCES = new Set([
   'facilities',
   'risk_zones',
   'layer_features_mvt',
+  'imported_mvt',
   'incidents_mvt',
 ]);
 
@@ -41,6 +42,8 @@ function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
     drawnDefs: [],
     activeLayerId: null,
     canCreateLayer: false,
+    canImport: false,
+    canExport: false,
     editLocked: false,
     layersLoading: false,
     layersError: false,
@@ -52,6 +55,8 @@ function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
     onZoom: vi.fn(),
     onActiveLayerChange: vi.fn(),
     onCreateLayer: vi.fn(),
+    onImportLayer: vi.fn(),
+    onExportLayer: vi.fn(),
     onDeleteLayer: vi.fn(),
     ...overrides,
   };
@@ -171,6 +176,34 @@ describe('LayersPanel', () => {
       expect(screen.getByText('Не удалось загрузить слои')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
       expect(props.onRetryLayers).toHaveBeenCalled();
+    });
+
+    it('lists an imported layer and offers its export', () => {
+      const imported = layer({ id: 'l2', title: 'Дороги', kind: 'imported', canEdit: false });
+      const props = renderPanel({ drawnDefs: importedLayerDefs([imported]), canExport: true });
+      expect(screen.getByText('Дороги')).toBeInTheDocument();
+      // An imported layer is not drawable into — only exportable.
+      expect(
+        screen.queryByRole('button', { name: 'Рисовать в слое «Дороги»' }),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Экспортировать слой «Дороги»' }));
+      expect(props.onExportLayer).toHaveBeenCalledWith(
+        expect.objectContaining({ imported: expect.objectContaining({ id: 'l2' }) }),
+      );
+    });
+
+    it('hides import/export actions without the permissions', () => {
+      renderPanel({ drawnDefs: drawnLayerDefs([layer()]), canImport: false, canExport: false });
+      expect(screen.queryByRole('button', { name: 'Импорт слоя' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Экспортировать слой «Оцепление»' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers the import action with `gis.import`', () => {
+      const props = renderPanel({ canImport: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Импорт слоя' }));
+      expect(props.onImportLayer).toHaveBeenCalled();
     });
 
     it('hides the create action without `gis.layers.manage`', () => {

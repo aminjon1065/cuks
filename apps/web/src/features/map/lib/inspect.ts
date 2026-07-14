@@ -1,6 +1,7 @@
 import type { MapGeoJSONFeature } from 'maplibre-gl';
 import {
   DRAWN_SOURCE_LAYER,
+  IMPORTED_SOURCE_LAYER,
   INCIDENT_CLUSTERS_LAYER_ID,
   INCIDENT_CLUSTER_COUNT_LAYER_ID,
   INCIDENT_PULSE_LAYER_ID,
@@ -14,7 +15,8 @@ import {
  * jsonb attribute columns parsed back from the strings MVT can carry.
  */
 
-export type InspectKind = 'incident' | 'drawn' | 'facility' | 'admin_unit' | 'risk_zone';
+export type InspectKind =
+  'incident' | 'drawn' | 'imported' | 'facility' | 'admin_unit' | 'risk_zone';
 
 export interface InspectedFeature {
   kind: InspectKind;
@@ -39,14 +41,16 @@ export const MAX_SELECTION = 100;
 const KIND_PRIORITY: Record<InspectKind, number> = {
   incident: 0,
   drawn: 1,
-  facility: 2,
-  risk_zone: 3,
-  admin_unit: 4,
+  imported: 2,
+  facility: 3,
+  risk_zone: 4,
+  admin_unit: 5,
 };
 
 const KIND_BY_SOURCE_LAYER: Record<string, InspectKind> = {
   incidents: 'incident',
   [DRAWN_SOURCE_LAYER]: 'drawn',
+  [IMPORTED_SOURCE_LAYER]: 'imported',
   facilities: 'facility',
   admin_units: 'admin_unit',
   risk_zones: 'risk_zone',
@@ -114,6 +118,24 @@ export function toInspected(
       kind,
       id,
       layerId,
+      title: layerTitles.get(layerId) ?? '',
+      props: parseJsonProps(props['props']),
+    };
+  }
+
+  // An imported feature carries its source columns as one jsonb text value; the
+  // layer it belongs to is the MapLibre layer it was queried through (the tiles
+  // themselves are already scoped to one layer by `?layer=`).
+  if (kind === 'imported') {
+    const id = asString(props['id']);
+    if (!id) return null;
+    const layerId = feature.layer.id.startsWith('imported:')
+      ? feature.layer.id.slice('imported:'.length).replace(/-(fill|line|point|outline)$/, '')
+      : '';
+    return {
+      kind,
+      id,
+      ...(layerId ? { layerId } : {}),
       title: layerTitles.get(layerId) ?? '',
       props: parseJsonProps(props['props']),
     };

@@ -89,7 +89,8 @@
       "drawn": "Нарисованный объект",
       "facility": "Объект инфраструктуры",
       "admin_unit": "Административная единица",
-      "risk_zone": "Зона риска"
+      "risk_zone": "Зона риска",
+      "imported": "Импортированный объект"
     },
     "noAttributes": "Нет атрибутов",
     "incidentType": "Вид ЧС",
@@ -183,6 +184,49 @@
     "gis.layer.slug_conflict": "Слой с таким названием уже существует",
     "gis.feature.not_found": "Объект не найден — возможно, он уже удалён",
     "gis.feature.geometry_mismatch": "Слой не принимает объекты такой геометрии",
-    "validation_error": "Проверьте геометрию объекта: она не прошла проверку"
+    "validation_error": "Проверьте геометрию объекта: она не прошла проверку",
+    "gis.import.unsupported_format": "Формат файла не поддерживается",
+    "gis.import.too_large": "Файл слишком большой",
+    "gis.import.not_uploaded": "Файл не был загружен",
+    "gis.import.already_started": "Импорт уже запущен",
+    "gis.export.not_ready": "Экспорт ещё не готов"
+  },
+  "import": {
+    "title": "Импорт слоя",
+    "layerTitle": "Название слоя",
+    "layerTitlePlaceholder": "По умолчанию — имя файла",
+    "dropzone": "Перетащите файл сюда или нажмите, чтобы выбрать",
+    "formats": "SHP (zip), GeoJSON, KML, GPKG, CSV",
+    "maxSize": "До {{max}}",
+    "tooLarge": "Файл больше {{max}}",
+    "running": "Импорт выполняется…",
+    "runningHint": "Файл читается на сервере: геометрии проверяются и приводятся к WGS84.",
+    "done": "Импортировано объектов: {{count}} (пропущено: {{skipped}})",
+    "driver": "Формат",
+    "geometry": "Геометрия",
+    "extent": "Охват",
+    "fields": "Поля",
+    "log": "Журнал импорта",
+    "failed": "Не удалось импортировать файл",
+    "finish": "Готово"
+  },
+  "export": {
+    "title": "Экспорт: {{name}}",
+    "layer": "Экспортировать слой «{{name}}»",
+    "incidents": "Экспорт выборки ЧС",
+    "format": "Формат",
+    "formats": {
+      "geojson": "GeoJSON",
+      "gpkg": "GeoPackage (GPKG)",
+      "shp": "Shapefile (zip)",
+      "csv": "CSV (с геометрией в WKT)",
+      "xlsx": "XLSX (таблица атрибутов)"
+    },
+    "hint": "Файл готовится в фоне: когда он будет готов, придёт уведомление со ссылкой.",
+    "start": "Экспортировать",
+    "running": "Файл готовится…",
+    "ready": "Готово: {{count}} объектов, {{size}}",
+    "download": "Скачать",
+    "failed": "Не удалось выполнить экспорт"
   }
 }

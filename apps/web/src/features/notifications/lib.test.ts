@@ -26,6 +26,18 @@ describe('notificationHref', () => {
     );
   });
 
+  it('deep-links a ready export to the map with its id (download is fetched there)', () => {
+    expect(notificationHref({ ...notification, entityType: 'gis_export', entityId: 'exp-1' })).toBe(
+      '/app/map?export=exp-1',
+    );
+  });
+
+  it('sends an import notification to the map, where its layer now lives', () => {
+    expect(notificationHref({ ...notification, entityType: 'gis_import', entityId: 'imp-1' })).toBe(
+      '/app/map',
+    );
+  });
+
   it('does not invent a route for an unsupported entity', () => {
     expect(notificationHref({ ...notification, entityType: null, entityId: null })).toBeNull();
   });

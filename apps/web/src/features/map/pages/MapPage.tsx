@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapPinned, TriangleAlert } from 'lucide-react';
 import { Button, ConfirmDialog, EmptyState, Skeleton, toast } from '@cuks/ui';
@@ -22,6 +23,8 @@ import {
 import {
   defaultLayerStates,
   drawnLayerDefs,
+  importedLayerDefs,
+  registryLayer,
   type LayerState,
   type MapLayerDef,
 } from '../lib/layers';
@@ -42,11 +45,18 @@ import { IncidentTimeline } from '../components/IncidentTimeline';
 import { MapInspector } from '../components/MapInspector';
 import { DrawToolbar } from '../components/DrawToolbar';
 import { CreateLayerDialog } from '../components/CreateLayerDialog';
+import { ImportLayerDialog } from '../components/ImportLayerDialog';
+import { ExportDialog } from '../components/ExportDialog';
 
 const PANEL_KEY = 'cuks-map-panel-collapsed';
 const DEFAULT_DRAW_COLOR = '#15803d';
 /** `gisFeaturesQuerySchema` caps a page at 1000 features. */
 const FEATURE_PAGE_MAX = 1000;
+
+/** A stored `[west, south, east, north]` extent (imported layer style). */
+function isBounds(value: unknown): value is [number, number, number, number] {
+  return Array.isArray(value) && value.length === 4 && value.every((n) => typeof n === 'number');
+}
 
 /** What the confirm dialog is about to destroy. */
 type PendingDelete =
@@ -70,6 +80,8 @@ export function MapPage(): React.JSX.Element {
   // docs/05: creating/configuring a layer is `gis.layers.manage`; editing the
   // objects on it is `gis.layers.edit`. The server enforces both.
   const canManageLayers = useCan('gis.layers.manage');
+  const canImport = useCan('gis.import');
+  const canExport = useCan('gis.export');
 
   const tokenQuery = useTileToken();
   const catalogQuery = useMartinCatalog(tokenQuery.data?.token);
@@ -114,11 +126,39 @@ export function MapPage(): React.JSX.Element {
   // --- Drawn layers, drawing and the inspector (task 2.7) ---
 
   const layers = useMemo(() => layersQuery.data ?? [], [layersQuery.data]);
-  const drawnDefs = useMemo(() => drawnLayerDefs(layers), [layers]);
+  // Drawn and imported layers both live in «Мои слои»; the map treats them as one
+  // list of registry layers (they differ only in where their tiles come from).
+  const registryDefs = useMemo(
+    () => [...drawnLayerDefs(layers), ...importedLayerDefs(layers)],
+    [layers],
+  );
+  const drawnDefs = registryDefs;
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [tool, setTool] = useState<DrawTool>('none');
   const [drawnRevision, setDrawnRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<{
+    source: 'layer';
+    layerId: string;
+    subject: string;
+  } | null>(null);
+  // A ready-export notification deep-links here as `?export=<id>` (the download URL
+  // is presigned on demand, so it cannot live in a permanent notification href).
+  // react-router's params, not window.location: the link works even when the map is
+  // already open (no remount).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkExportId = searchParams.get('export');
+  const clearDeepLinkExport = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('export');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [selection, setSelection] = useState<InspectedFeature[]>([]);
   const [selected, setSelected] = useState<InspectedFeature | null>(null);
@@ -292,9 +332,17 @@ export function MapPage(): React.JSX.Element {
   }, []);
 
   // Drawn layers all share one Martin source, so its bounds would cover every
-  // layer at once — zoom to the layer's own features instead.
+  // layer at once — zoom to the layer's own features instead. An imported layer has
+  // no features endpoint (it is a physical table behind a function tile source), so
+  // it carries its extent in its stored style, computed at import time.
   const zoomToLayer = useCallback(
     (def: MapLayerDef) => {
+      if (def.imported) {
+        const extent = def.imported.style['extent'];
+        if (isBounds(extent)) mapRef.current?.fitBounds(extent);
+        else toast({ title: t('drawn.noFeatures') });
+        return;
+      }
       const drawn = def.drawn;
       if (!drawn) {
         void mapRef.current?.zoomToLayer(def.source);
@@ -398,6 +446,8 @@ export function MapPage(): React.JSX.Element {
             drawnDefs={drawnDefs}
             activeLayerId={activeLayerId}
             canCreateLayer={canManageLayers}
+            canImport={canImport}
+            canExport={canExport}
             editLocked={editing !== null}
             layersLoading={layersQuery.isPending}
             layersError={layersQuery.isError}
@@ -412,6 +462,17 @@ export function MapPage(): React.JSX.Element {
               if (!layerId) setTool('none');
             }}
             onCreateLayer={() => setCreateOpen(true)}
+            onImportLayer={() => setImportOpen(true)}
+            onExportLayer={(def) => {
+              const registry = registryLayer(def);
+              if (registry) {
+                setExportTarget({
+                  source: 'layer',
+                  layerId: registry.id,
+                  subject: registry.title,
+                });
+              }
+            }}
             onDeleteLayer={(def) => setPendingDelete({ kind: 'layer', def })}
           />
           <BasemapSwitcher value={basemapMode} onChange={setBasemapMode} />
@@ -464,6 +525,25 @@ export function MapPage(): React.JSX.Element {
             </div>
           )}
           <CreateLayerDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={onCreated} />
+          <ImportLayerDialog
+            open={importOpen}
+            onOpenChange={setImportOpen}
+            onImported={() => void layersQuery.refetch()}
+          />
+          {exportTarget && (
+            <ExportDialog
+              open
+              onOpenChange={(value) => !value && setExportTarget(null)}
+              request={exportTarget}
+            />
+          )}
+          {deepLinkExportId && (
+            <ExportDialog
+              open
+              onOpenChange={(value) => !value && clearDeepLinkExport()}
+              existingId={deepLinkExportId}
+            />
+          )}
           <ConfirmDialog
             open={pendingDelete !== null}
             onOpenChange={(open) => !open && setPendingDelete(null)}

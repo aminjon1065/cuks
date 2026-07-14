@@ -100,11 +100,12 @@ function themeFlavor(): BasemapFlavor {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
-/** id → title for the drawn layers, so inspector rows can name their layer. */
+/** id → title for the registry layers, so inspector rows can name their layer. */
 function layerTitles(defs: readonly MapLayerDef[]): ReadonlyMap<string, string> {
   const titles = new Map<string, string>();
   for (const def of defs) {
-    if (def.drawn) titles.set(def.drawn.id, def.drawn.title);
+    const registry = def.drawn ?? def.imported;
+    if (registry) titles.set(registry.id, registry.title);
   }
   return titles;
 }

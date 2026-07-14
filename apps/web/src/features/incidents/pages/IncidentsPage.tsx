@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, Plus, Save, ShieldAlert, Trash2 } from 'lucide-react';
+import { ExportDialog } from '@/features/map/components/ExportDialog';
+import { Download, Globe, Plus, Save, ShieldAlert, Trash2 } from 'lucide-react';
 import {
   Button,
   ConfirmDialog,
@@ -107,6 +108,7 @@ export function IncidentsPage(): React.JSX.Element {
   const canView = useCan('gis.view');
   const canCreate = useCan('incidents.create');
   const canExport = useCan('gis.export');
+  const [geoExportOpen, setGeoExportOpen] = useState(false);
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [page, setPage] = useState(1);
@@ -280,17 +282,29 @@ export function IncidentsPage(): React.JSX.Element {
         actions={
           <>
             {canExport ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  void exportIncidents(apiFilters).catch(() =>
-                    toast({ title: t('filters.exportFailed'), tone: 'danger' }),
-                  )
-                }
-              >
-                <Download /> {t('actions.export')}
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    void exportIncidents(apiFilters).catch(() =>
+                      toast({ title: t('filters.exportFailed'), tone: 'danger' }),
+                    )
+                  }
+                >
+                  <Download /> {t('actions.export')}
+                </Button>
+                {/* The geo formats are big enough to belong in the worker (2.8): the
+                    request is queued and the file arrives with a notification. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setGeoExportOpen(true)}
+                  data-testid="incidents-export-geo"
+                >
+                  <Globe /> {t('actions.exportGeo')}
+                </Button>
+              </>
             ) : null}
             {canCreate ? (
               <Button size="sm" data-testid="incidents-create" onClick={() => setCreateOpen(true)}>
@@ -493,6 +507,18 @@ export function IncidentsPage(): React.JSX.Element {
             {t('actions.next')}
           </Button>
         </div>
+      ) : null}
+
+      {geoExportOpen ? (
+        <ExportDialog
+          open
+          onOpenChange={setGeoExportOpen}
+          request={{
+            source: 'incidents',
+            filters: apiFilters,
+            subject: t('actions.exportGeoSubject'),
+          }}
+        />
       ) : null}
 
       <CreateIncidentDialog

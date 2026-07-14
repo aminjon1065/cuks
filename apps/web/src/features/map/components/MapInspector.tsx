@@ -32,6 +32,7 @@ export interface MapInspectorProps {
 const KIND_LABEL: Record<InspectKind, string> = {
   incident: 'inspector.kinds.incident',
   drawn: 'inspector.kinds.drawn',
+  imported: 'inspector.kinds.imported',
   facility: 'inspector.kinds.facility',
   admin_unit: 'inspector.kinds.admin_unit',
   risk_zone: 'inspector.kinds.risk_zone',
