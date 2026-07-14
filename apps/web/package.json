@@ -16,10 +16,12 @@
   "dependencies": {
     "@cuks/shared": "workspace:*",
     "@cuks/ui": "workspace:*",
+    "@protomaps/basemaps": "^5.7.2",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-table": "^8.20.6",
     "i18next": "^26.3.6",
     "lucide-react": "^0.469.0",
+    "maplibre-gl": "^5.24.0",
     "pdfjs-dist": "^6.1.200",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
