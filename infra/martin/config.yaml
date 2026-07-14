@@ -8,9 +8,15 @@ postgres:
   # Env substitution (Martin supports ${VAR}); keeps creds out of the file and
   # identical between dev and prod.
   connection_string: ${DATABASE_URL}
-  # Auto-catalog the spatial schema only: admin_units / facilities / risk_zones /
-  # layer_features become table sources, and gis.incidents_mvt (migration 0012)
-  # becomes a filtered function source. `app` stays private (docs/07 §gis).
+  # Auto-catalog the spatial schema only: admin_units / facilities / risk_zones
+  # become table sources; gis.incidents_mvt (0015) and gis.layer_features_mvt
+  # (0021) become function sources. `app` stays private (docs/07 §gis).
+  #
+  # The map reads drawn features through the *function* source, never the
+  # layer_features table source: Martin caches table tiles by (source, z, x, y)
+  # alone, so an edited feature would keep returning the stale tile. A function
+  # source's cache key includes its query params, so the map's `?v=<revision>`
+  # always fetches what was just written.
   auto_publish:
     from_schemas:
       - gis

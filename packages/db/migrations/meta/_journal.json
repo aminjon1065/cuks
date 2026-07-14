@@ -148,6 +148,13 @@
       "when": 1784046134997,
       "tag": "0020_military_angel",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784046135997,
+      "tag": "0021_layer_features_mvt",
+      "breakpoints": true
     }
   ]
 }
