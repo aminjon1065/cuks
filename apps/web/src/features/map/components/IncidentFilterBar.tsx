@@ -37,8 +37,12 @@ export function IncidentFilterBar({
 }: IncidentFilterBarProps): React.JSX.Element {
   const { t, i18n } = useTranslation('map');
   const tajik = i18n.resolvedLanguage === 'tg';
-  // A confined user's region is fixed, so show only their region(s) — a removable
-  // chip or an "all regions" option would suggest a choice they don't have.
+  // A user confined to a single region has no choice, so the select is locked to it.
+  // A user confined to several regions may still switch among them (incident tiles are
+  // per-region), so the select stays interactive but constrained to their regions.
+  const regionLocked = lockedRegionIds !== null && lockedRegionIds.length <= 1;
+  // A confined user's options are limited to their region(s) — a removable chip or an
+  // "all regions" option would suggest a choice they don't have.
   const regionOptions = useMemo(
     () =>
       lockedRegionIds
@@ -150,9 +154,9 @@ export function IncidentFilterBar({
           </label>
           <select
             id="incident-region-filter"
-            className={cn(selectClass, 'w-full md:w-48', lockedRegionIds && 'opacity-70')}
+            className={cn(selectClass, 'w-full md:w-48', regionLocked && 'opacity-70')}
             value={value.regionId}
-            disabled={Boolean(lockedRegionIds)}
+            disabled={regionLocked}
             onChange={(event) => onChange({ ...value, regionId: event.target.value })}
           >
             {!lockedRegionIds && <option value="">{t('filters.allRegions')}</option>}

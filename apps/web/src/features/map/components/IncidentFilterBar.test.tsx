@@ -63,7 +63,7 @@ describe('IncidentFilterBar', () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
-  it('pins the region select for a territory-confined user', () => {
+  it('pins the region select for a single-region confined user', () => {
     renderBar(['r2']);
     const regionSelect = screen.getByRole('combobox', { name: 'Регион' }) as HTMLSelectElement;
     expect(regionSelect).toBeDisabled();
@@ -72,5 +72,18 @@ describe('IncidentFilterBar', () => {
     expect(screen.getByRole('option', { name: 'Хатлон' })).toBeVisible();
     expect(screen.queryByRole('option', { name: 'Все регионы' })).toBeNull();
     expect(screen.queryByRole('option', { name: 'Душанбе' })).toBeNull();
+  });
+
+  it('lets a multi-region confined user switch among their regions', () => {
+    const { onChange } = renderBar(['r1', 'r2']);
+    const regionSelect = screen.getByRole('combobox', { name: 'Регион' }) as HTMLSelectElement;
+    // Interactive (incident tiles are per-region), but constrained to the scoped
+    // regions — still no "all regions" escape hatch.
+    expect(regionSelect).toBeEnabled();
+    expect(screen.getByRole('option', { name: 'Душанбе' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Хатлон' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Все регионы' })).toBeNull();
+    fireEvent.change(regionSelect, { target: { value: 'r2' } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ regionId: 'r2' }));
   });
 });
