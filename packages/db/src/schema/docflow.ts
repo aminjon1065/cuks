@@ -12,6 +12,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
+  CERTIFICATE_KINDS,
   DOC_CLASSES,
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
@@ -25,9 +26,11 @@ import {
   ROUTE_STEP_KINDS,
   ROUTE_STEP_MODES,
   ROUTE_STEP_STATUSES,
+  SIGNATURE_ALGORITHMS,
+  SIGNATURE_CONTEXTS,
 } from '@cuks/shared';
 import { appSchema, createdAt, deletedAt, primaryId, updatedAt } from './_shared';
-import { fsNodes } from './fs';
+import { fileVersions, fsNodes } from './fs';
 import { orgUnits } from './org';
 import { users } from './users';
 
@@ -389,4 +392,84 @@ export const resolutionExtensions = appSchema.table(
     createdAt: createdAt(),
   },
   (t) => [index('resolution_extensions_resolution_idx').on(t.resolutionId)],
+);
+
+/**
+ * app.certificates — a user's per-device signing certificate (docs/09-security.md §4,
+ * task 3.5). The device generates an ECDSA P-256 key in the browser (private key never
+ * leaves the device); the internal CA issues this certificate over the device's public
+ * key. `ca_signature` binds the certificate to the CA (chain of trust). A revoked
+ * certificate stays in the table so historical signatures remain verifiable. The
+ * subject fields are a snapshot of the holder at issue time.
+ */
+export const certificates = appSchema.table(
+  'certificates',
+  {
+    id: primaryId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    serial: text('serial').notNull(),
+    kind: text('kind', { enum: CERTIFICATE_KINDS }).notNull().default('device'),
+    deviceLabel: text('device_label').notNull(),
+    // The device public key (SPKI, base64) the CA certified.
+    publicKeySpki: text('public_key_spki').notNull(),
+    // Subject snapshot: username, full name, position at issue time.
+    subjectUsername: text('subject_username').notNull(),
+    subjectFullName: text('subject_full_name').notNull(),
+    subjectPosition: text('subject_position'),
+    // The CA's ECDSA P-384 signature over the canonical certificate body (base64).
+    caSignature: text('ca_signature').notNull(),
+    notBefore: timestamp('not_before', { withTimezone: true }).notNull(),
+    notAfter: timestamp('not_after', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedReason: text('revoked_reason'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('certificates_serial_uq').on(t.serial),
+    index('certificates_user_idx').on(t.userId),
+  ],
+);
+
+/**
+ * app.signatures — a signature over a concrete file version + card requisites
+ * (docs/09-security.md §4, task 3.5). `doc_version_id` pins the immutable
+ * `file_versions` row that was signed (so the exact bytes are known forever). `payload`
+ * is the canonical string that was signed (buildSignPayload); `signature` is the raw
+ * (IEEE P1363) ECDSA-P256-SHA256 signature, base64. `context` distinguishes a full
+ * signing from a route approval or an acknowledgement. Insert-only — never updated.
+ */
+export const signatures = appSchema.table(
+  'signatures',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    docVersionId: uuid('doc_version_id')
+      .notNull()
+      .references(() => fileVersions.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    certificateId: uuid('certificate_id')
+      .notNull()
+      .references(() => certificates.id, { onDelete: 'restrict' }),
+    // The route step this signature satisfied (if any), for the sign-queue / substitution.
+    routeStepId: uuid('route_step_id').references(() => routeSteps.id, { onDelete: 'set null' }),
+    algorithm: text('algorithm', { enum: SIGNATURE_ALGORITHMS }).notNull(),
+    context: text('context', { enum: SIGNATURE_CONTEXTS }).notNull(),
+    // The exact canonical payload that was signed, and its SHA-256 (hex), for the record.
+    payload: text('payload').notNull(),
+    payloadHash: text('payload_hash').notNull(),
+    signature: text('signature').notNull(),
+    signedAt: timestamp('signed_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('signatures_document_idx').on(t.documentId),
+    index('signatures_doc_version_idx').on(t.docVersionId),
+    index('signatures_user_idx').on(t.userId),
+  ],
 );
