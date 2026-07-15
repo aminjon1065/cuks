@@ -96,16 +96,19 @@ describe('registerDocumentSchema', () => {
 });
 
 describe('documentTransitionAllowed', () => {
-  it('permits the forward lifecycle and the rework back-edges', () => {
-    expect(documentTransitionAllowed('draft', 'on_route')).toBe(true);
-    expect(documentTransitionAllowed('on_route', 'pending_registration')).toBe(true);
+  it('permits the execution/filing tail and the rework back-edges', () => {
     expect(documentTransitionAllowed('registered', 'in_progress')).toBe(true);
+    expect(documentTransitionAllowed('in_progress', 'completed')).toBe(true);
+    expect(documentTransitionAllowed('pending_registration', 'rejected')).toBe(true);
     expect(documentTransitionAllowed('rejected', 'draft')).toBe(true);
   });
 
-  it('never allows a manual change into "registered" (that is the register action only)', () => {
+  it('never allows a manual change into a dedicated-action state', () => {
+    // register() mints the number; the route engine drives on_route/pending_registration.
     expect(documentTransitionAllowed('draft', 'registered')).toBe(false);
     expect(documentTransitionAllowed('pending_registration', 'registered')).toBe(false);
+    expect(documentTransitionAllowed('draft', 'on_route')).toBe(false);
+    expect(documentTransitionAllowed('on_route', 'pending_registration')).toBe(false);
   });
 
   it('rejects skips and moves out of a terminal state', () => {

@@ -6,12 +6,19 @@ import {
   DOCUMENT_FILE_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
+  ROUTE_ASSIGNEE_TYPES,
+  ROUTE_STEP_KINDS,
   type DocClass,
   type DocumentConfidentiality,
   type DocumentDelivery,
   type DocumentFileKind,
   type DocumentStatus,
   type JournalSeqReset,
+  type RouteAssigneeType,
+  type RouteStatus,
+  type RouteStepDecision,
+  type RouteStepKind,
+  type RouteStepStatus,
 } from '../enums/index';
 
 // --- Journals (docs/modules/11 §1/§3) ---
@@ -156,6 +163,83 @@ export interface CorrespondentCategoryDto {
   nameTg: string;
 }
 
+// --- Routes (docs/modules/11 §3/§4, task 3.3) ---
+
+/** One step of a route or template. Steps sharing an `order` are a parallel group. */
+export const routeStepInputSchema = z.object({
+  order: z.number().int().min(0).max(100),
+  kind: z.enum(ROUTE_STEP_KINDS),
+  assigneeType: z.enum(ROUTE_ASSIGNEE_TYPES),
+  assigneeId: z.string().uuid(),
+  dueHours: z.number().int().min(1).max(8760).nullish(),
+});
+export type RouteStepInput = z.infer<typeof routeStepInputSchema>;
+
+/** Start a route from a template or an explicit step list (exactly one). */
+export const startRouteSchema = z
+  .object({
+    templateId: z.string().uuid().optional(),
+    steps: z.array(routeStepInputSchema).min(1).max(50).optional(),
+  })
+  .refine((v) => (v.templateId ? !v.steps : !!v.steps), {
+    message: 'Provide either a templateId or a steps list, not both',
+  });
+export type StartRouteInput = z.infer<typeof startRouteSchema>;
+
+export const approveRouteStepSchema = z.object({ comment: z.string().max(2000).nullish() });
+export type ApproveRouteStepInput = z.infer<typeof approveRouteStepSchema>;
+
+/** A rejection must carry a reason (docs/modules/11 §4). */
+export const rejectRouteStepSchema = z.object({ comment: z.string().min(1).max(2000) });
+export type RejectRouteStepInput = z.infer<typeof rejectRouteStepSchema>;
+
+export const createRouteTemplateSchema = z.object({
+  name: z.string().min(1).max(200),
+  orgUnitId: z.string().uuid().nullish(),
+  steps: z.array(routeStepInputSchema).min(1).max(50),
+  isActive: z.boolean().optional(),
+});
+export type CreateRouteTemplateInput = z.infer<typeof createRouteTemplateSchema>;
+
+export const updateRouteTemplateSchema = createRouteTemplateSchema.partial();
+export type UpdateRouteTemplateInput = z.infer<typeof updateRouteTemplateSchema>;
+
+export interface RouteStepDto {
+  id: string;
+  stepOrder: number;
+  kind: RouteStepKind;
+  assigneeType: RouteAssigneeType;
+  assigneeId: string;
+  assigneeName: string | null;
+  status: RouteStepStatus;
+  decision: RouteStepDecision | null;
+  comment: string | null;
+  actedByName: string | null;
+  actedAt: string | null;
+  dueHours: number | null;
+  /** Whether the current caller may act on this step (assignee match + active). */
+  canAct: boolean;
+}
+
+export interface RouteDto {
+  id: string;
+  cycle: number;
+  status: RouteStatus;
+  createdByName: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  steps: RouteStepDto[];
+}
+
+export interface RouteTemplateDto {
+  id: string;
+  name: string;
+  orgUnitId: string | null;
+  orgUnitName: string | null;
+  steps: RouteStepInput[];
+  isActive: boolean;
+}
+
 // --- Documents (docs/modules/11 §3/§4) ---
 
 export const createDocumentSchema = z.object({
@@ -179,7 +263,7 @@ export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export const updateDocumentSchema = createDocumentSchema.partial().omit({ docClass: true });
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 
-export const DOCUMENT_QUEUES = ['mine', 'drafts', 'authored', 'registry'] as const;
+export const DOCUMENT_QUEUES = ['mine', 'drafts', 'authored', 'registry', 'to_approve'] as const;
 export type DocumentQueue = (typeof DOCUMENT_QUEUES)[number];
 
 export const listDocumentsQuerySchema = z.object({

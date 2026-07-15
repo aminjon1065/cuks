@@ -195,15 +195,16 @@ export const DOCUMENT_STATUSES = [
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /**
- * Allowed manual (`changeStatus`) transitions (docs/modules/11 §4). A DAG with two
- * back-edges for rework (`rejected → draft`) and re-opening a recalled draft.
- * `registered` is intentionally NOT a target here: reaching it is the dedicated
- * `register` action, which mints the journal number and sets the status directly —
- * so a plain status change can never register a document without a number.
+ * Allowed manual (`changeStatus`) transitions (docs/modules/11 §4). Several statuses
+ * are reached only through dedicated actions, never a plain status change, so they are
+ * NOT targets here: `registered` (the `register` action, which mints the number), and
+ * `on_route` / `pending_registration` (the route engine — start moves draft→on_route,
+ * completion moves on_route→pending_registration, rejection moves on_route→draft).
+ * What remains manual is the execution/filing tail and rework back-edges.
  */
 export const DOCUMENT_STATUS_TRANSITIONS: Record<DocumentStatus, readonly DocumentStatus[]> = {
-  draft: ['on_route', 'recalled'],
-  on_route: ['pending_registration', 'rejected', 'recalled'],
+  draft: [],
+  on_route: [],
   pending_registration: ['rejected'],
   registered: ['in_progress', 'archived'],
   in_progress: ['completed'],
@@ -229,3 +230,32 @@ export type DocumentDelivery = (typeof DOCUMENT_DELIVERY)[number];
 /** A document file's role (docs/modules/11 §3): the main body vs an attachment. */
 export const DOCUMENT_FILE_KINDS = ['main', 'attachment'] as const;
 export type DocumentFileKind = (typeof DOCUMENT_FILE_KINDS)[number];
+
+// --- Document routes (docs/modules/11 §3/§4, task 3.3) ---
+
+/** A route's lifecycle (docs/modules/11 §3). One active route per document at a time;
+ *  a rejected/relaunched route is kept as history (`cycle`). */
+export const ROUTE_STATUSES = ['active', 'completed', 'cancelled'] as const;
+export type RouteStatus = (typeof ROUTE_STATUSES)[number];
+
+/** What a route step asks of its assignee (docs/modules/11 §3). Task 3.3 acts on
+ *  `approve`; `sign` lands in 3.5, `acknowledge` in 3.6. */
+export const ROUTE_STEP_KINDS = ['approve', 'sign', 'register', 'acknowledge', 'execute'] as const;
+export type RouteStepKind = (typeof ROUTE_STEP_KINDS)[number];
+
+/** Steps sharing an `order` form a parallel group; groups run sequentially. `mode`
+ *  is descriptive — activation is driven by the order grouping (docs/modules/11 §3). */
+export const ROUTE_STEP_MODES = ['sequential', 'parallel'] as const;
+export type RouteStepMode = (typeof ROUTE_STEP_MODES)[number];
+
+/** A step's state (docs/modules/11 §3). */
+export const ROUTE_STEP_STATUSES = ['pending', 'active', 'done', 'rejected', 'skipped'] as const;
+export type RouteStepStatus = (typeof ROUTE_STEP_STATUSES)[number];
+
+/** The recorded decision on an acted step (docs/modules/11 §3). */
+export const ROUTE_STEP_DECISIONS = ['approved', 'rejected', 'signed', 'acknowledged'] as const;
+export type RouteStepDecision = (typeof ROUTE_STEP_DECISIONS)[number];
+
+/** Who a step is assigned to (docs/modules/11 §3): a user, a position, or an org unit. */
+export const ROUTE_ASSIGNEE_TYPES = ['user', 'position', 'org_unit'] as const;
+export type RouteAssigneeType = (typeof ROUTE_ASSIGNEE_TYPES)[number];
