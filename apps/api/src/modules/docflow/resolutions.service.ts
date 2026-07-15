@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, arrayContains, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { documents, resolutionExtensions, resolutions, users, type Database } from '@cuks/db';
 import type {
   CreateResolutionInput,
@@ -49,7 +49,8 @@ export class ResolutionsService {
           eq(resolutions.status, 'active'),
           or(
             eq(resolutions.executorId, userId),
-            sql`${userId}::uuid = any(${resolutions.coExecutors})`,
+            // `@>` (arrayContains) so the co_executors GIN index is usable; `= ANY()` is not.
+            arrayContains(resolutions.coExecutors, [userId]),
           ),
         ),
       );
@@ -60,7 +61,7 @@ export class ResolutionsService {
     return or(
       eq(resolutions.authorId, userId),
       eq(resolutions.executorId, userId),
-      sql`${userId}::uuid = any(${resolutions.coExecutors})`,
+      arrayContains(resolutions.coExecutors, [userId]),
     );
   }
 
@@ -73,7 +74,10 @@ export class ResolutionsService {
   ): Promise<ResolutionDto[]> {
     await this.db.transaction(async (tx) => {
       const doc = await this.requireVisibleDoc(tx, documentId, actor);
-      if (doc.status === 'draft' || doc.status === 'on_route') {
+      // A document may be resolved only while it is under execution: after registration
+      // (`registered`) and until it is closed (`in_progress`). Not before registration
+      // (draft/on_route/pending_registration) nor after (completed/archived/rejected/recalled).
+      if (doc.status !== 'registered' && doc.status !== 'in_progress') {
         throw AppException.conflict(
           'docflow.resolution.doc_not_ready',
           'Resolve a document only after registration',
@@ -125,6 +129,12 @@ export class ResolutionsService {
         throw AppException.forbidden(
           'docflow.resolution.not_executor',
           'Only the executor may sub-delegate',
+        );
+      }
+      if (parent.status !== 'active') {
+        throw AppException.conflict(
+          'docflow.resolution.not_active',
+          'The resolution is not active',
         );
       }
       await tx.insert(resolutions).values({

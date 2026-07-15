@@ -19,6 +19,20 @@ export function formatDateTime(iso: string): string {
   return DT.format(new Date(iso));
 }
 
+const D = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Asia/Dushanbe',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+/** Format a UTC ISO instant as a date only (no time) in Asia/Dushanbe — for
+ *  date-only values (e.g. a deadline the user set with `<input type="date">`),
+ *  which would otherwise render a spurious midnight-UTC → 05:00 local time. */
+export function formatDate(iso: string): string {
+  return D.format(new Date(iso));
+}
+
 const RTF = new Intl.RelativeTimeFormat('ru-RU', { numeric: 'auto' });
 
 /** Relative time from now — "5 минут назад" (docs/06 §5, for feeds). Past a week

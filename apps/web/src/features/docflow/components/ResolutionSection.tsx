@@ -19,7 +19,7 @@ import {
 } from '@cuks/ui';
 import type { DocumentDetailDto, ResolutionDto, ResolutionStatus } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
-import { formatDateTime } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { useDocumentResolutions, useResolutionAction } from '../api/queries';
 import { AddResolutionDialog } from './AddResolutionDialog';
 
@@ -112,7 +112,7 @@ function ResolutionNode({
           ) : null}
           {r.dueDate ? (
             <span className="text-xs text-text-muted">
-              {t('resolutions.due')}: {formatDateTime(r.dueDate)}
+              {t('resolutions.due')}: {formatDate(r.dueDate)}
             </span>
           ) : null}
         </div>
@@ -128,7 +128,7 @@ function ResolutionNode({
         {r.extensions.map((e) => (
           <p key={e.id} className="mt-0.5 text-xs text-text-muted">
             {t('resolutions.extended', {
-              date: formatDateTime(e.newDue),
+              date: formatDate(e.newDue),
               reason: e.reason,
               by: e.extendedByName ?? '—',
             })}

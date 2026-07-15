@@ -175,3 +175,48 @@ test('resolutions: a sub-resolution delegates onward, and a non-participant cann
 
   await Promise.all([admin.dispose(), executor.dispose(), outsider.dispose()]);
 });
+
+test('resolutions: guards — no resolution before registration, no sub-delegation under a closed parent', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const byName = await users(admin);
+
+  // A draft (unregistered) document rejects resolutions with 409 — resolve only while executing.
+  const draft = await json<DocumentDto>(
+    await admin.post('/api/v1/docflow/documents', {
+      headers,
+      data: { docClass: 'incoming', typeCode: 'letter', subject: `Guard ${Date.now()}` },
+    }),
+  );
+  const onDraft = await admin.post(`/api/v1/docflow/documents/${draft.id}/resolutions`, {
+    headers,
+    data: { text: 'Слишком рано', executorId: byName[E2E_USER.username] },
+  });
+  expect(onDraft.status(), 'cannot resolve a draft').toBe(409);
+
+  // On a registered doc, issue → executor completes → sub-delegating under the done parent is 409.
+  const docId = await registeredDoc(admin, headers);
+  await admin.post(`/api/v1/docflow/documents/${docId}/resolutions`, {
+    headers,
+    data: { text: 'Исполнить', executorId: byName[E2E_USER.username] },
+  });
+  const executor = await apiLogin(E2E_USER.username, E2E_USER.password);
+  const exHeaders = await jsonHeaders(executor);
+  const res = (
+    await json<ResolutionDto[]>(
+      await executor.get(`/api/v1/docflow/documents/${docId}/resolutions`),
+    )
+  )[0]!;
+  const done = await executor.post(`/api/v1/docflow/resolutions/${res.id}/actions/done`, {
+    headers: exHeaders,
+    data: {},
+  });
+  expect(done.ok(), `done ${done.status()}`).toBeTruthy();
+  const late = await executor.post(`/api/v1/docflow/resolutions/${res.id}/subresolutions`, {
+    headers: exHeaders,
+    data: { text: 'Поздно', executorId: byName[E2E_USER2.username] },
+  });
+  expect(late.status(), 'cannot sub-delegate under a done parent').toBe(409);
+
+  await Promise.all([admin.dispose(), executor.dispose()]);
+});
