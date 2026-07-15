@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import {
+  auditLog,
   correspondents,
   documentFiles,
   documents,
@@ -19,7 +20,9 @@ import {
   type CreateDocumentInput,
   type DocumentDetailDto,
   type DocumentFileDto,
+  type DocumentHistoryEntryDto,
   type DocumentListItemDto,
+  type DocumentQueueCountsDto,
   type DocumentStatus,
   type ListDocumentsQuery,
   type PaginatedResult,
@@ -117,18 +120,26 @@ export class DocumentsService {
     query: ListDocumentsQuery,
     user: AuthUser,
   ): Promise<PaginatedResult<DocumentListItemDto>> {
-    // The «На согласование» / «Мои поручения» queues are defined by route steps and
-    // resolutions respectively, resolved to document ids first.
-    const queueDocIds =
-      query.queue === 'to_approve'
-        ? await this.routes.approvalQueueDocumentIds(user.id)
-        : query.queue === 'to_sign'
-          ? await this.routes.signQueueDocumentIds(user.id)
-          : query.queue === 'to_acknowledge'
-            ? await this.acknowledgements.toAcknowledgeDocumentIds(user.id)
-            : query.queue === 'my_tasks'
-              ? await this.resolutions.myTasksDocumentIds(user.id)
-              : undefined;
+    // Action queues resolve to route steps: keep a doc→step map so each row can carry the
+    // step to act on directly. «Мои поручения» resolves to document ids only.
+    let queueDocIds: string[] | undefined;
+    let actionSteps: Map<string, string> | undefined;
+    if (
+      query.queue === 'to_approve' ||
+      query.queue === 'to_sign' ||
+      query.queue === 'to_acknowledge'
+    ) {
+      const steps =
+        query.queue === 'to_approve'
+          ? await this.routes.approvalQueueSteps(user.id)
+          : query.queue === 'to_sign'
+            ? await this.routes.signQueueSteps(user.id)
+            : await this.acknowledgements.toAcknowledgeSteps(user.id);
+      actionSteps = new Map(steps.map((s) => [s.documentId, s.stepId]));
+      queueDocIds = [...actionSteps.keys()];
+    } else if (query.queue === 'my_tasks') {
+      queueDocIds = await this.resolutions.myTasksDocumentIds(user.id);
+    }
     const where = and(...this.whereFor(query, user, queueDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
@@ -170,6 +181,7 @@ export class DocumentsService {
         dueDate: r.dueDate?.toISOString() ?? null,
         regDate: r.regDate?.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),
+        actionStepId: actionSteps?.get(r.id) ?? null,
       })),
       total: totalRows[0]?.total ?? 0,
       page: query.page,
@@ -177,14 +189,55 @@ export class DocumentsService {
     };
   }
 
-  async detail(id: string, user: AuthUser): Promise<DocumentDetailDto> {
+  /** Pending-work counts for the cabinet queue badges (docs/modules/11 §7). */
+  async queueCounts(user: AuthUser): Promise<DocumentQueueCountsDto> {
+    const [approve, sign, ack, tasks] = await Promise.all([
+      this.routes.approvalQueueDocumentIds(user.id),
+      this.routes.signQueueDocumentIds(user.id),
+      this.acknowledgements.toAcknowledgeDocumentIds(user.id),
+      this.resolutions.myTasksDocumentIds(user.id),
+    ]);
+    return {
+      to_approve: approve.length,
+      to_sign: sign.length,
+      to_acknowledge: ack.length,
+      my_tasks: tasks.length,
+    };
+  }
+
+  /** A document's audit history — the «История» tab (docs/modules/11 §7). Visibility-gated
+   *  (only a document the caller can see); pinned to `entityType='document'`. */
+  async history(id: string, user: AuthUser): Promise<DocumentHistoryEntryDto[]> {
+    await this.detail(id, user); // reuse the card's visibility gate (throws 404 otherwise)
+    const rows = await this.db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        actorName: users.shortName,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .leftJoin(users, eq(users.id, auditLog.actorId))
+      .where(and(eq(auditLog.entityType, 'document'), eq(auditLog.entityId, id)))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(200);
+    return rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      actorName: r.actorName ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /** Load a document the caller may view, or throw 404 (out-of-scope / ДСП-without-access
+   *  is indistinguishable from missing — no existence leak). Author + access_list see it
+   *  via the base rule; route/resolution/acknowledge participants also may. */
+  async assertVisible(id: string, user: AuthUser): Promise<typeof documents.$inferSelect> {
     const [row] = await this.db
       .select()
       .from(documents)
       .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
       .limit(1);
-    // Out-of-scope / ДСП-without-access is indistinguishable from missing (no leak).
-    // A route participant (an approver on one of the document's steps) may also view it.
     if (!row) throw AppException.notFound('docflow.document.not_found', 'Document not found');
     if (!canViewDocumentBase(row, user)) {
       const assignments = await this.routes.actorAssignments(user.id);
@@ -196,6 +249,11 @@ export class DocumentsService {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
     }
+    return row;
+  }
+
+  async detail(id: string, user: AuthUser): Promise<DocumentDetailDto> {
+    const row = await this.assertVisible(id, user);
     const [journalRow, orgUnitRow, authorRow, correspondentRow, files] = await Promise.all([
       row.journalId
         ? this.db
@@ -239,6 +297,8 @@ export class DocumentsService {
       dueDate: row.dueDate?.toISOString() ?? null,
       regDate: row.regDate?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
+      // Row actions come from the queue list; the card drives actions via its sections.
+      actionStepId: null,
       summary: row.summary,
       orgUnitId: row.orgUnitId,
       orgUnitName: orgUnitRow[0]?.name ?? null,
@@ -535,6 +595,10 @@ export class DocumentsService {
     if (query.status) where.push(eq(documents.status, query.status));
     if (query.docClass) where.push(eq(documents.docClass, query.docClass));
     if (query.journalId) where.push(eq(documents.journalId, query.journalId));
+    // The journals register view filters by registration year (docs/modules/11 §7).
+    if (query.year) {
+      where.push(sql`extract(year from ${documents.regDate}) = ${query.year}`);
+    }
     if (query.search) {
       const text = `%${query.search}%`;
       const cond = or(ilike(documents.subject, text), ilike(documents.regNumber, text));

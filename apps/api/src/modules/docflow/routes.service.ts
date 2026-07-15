@@ -109,44 +109,52 @@ export class RoutesService {
     return clauses.length ? or(...clauses) : undefined;
   }
 
-  /** Document ids the caller has an active `approve` step on — the «На согласование» queue. */
-  async approvalQueueDocumentIds(userId: string): Promise<string[]> {
+  /** The caller's active steps of a given kind, as {documentId, stepId} — one step per
+   *  document (a document has at most one active step of a kind for a given assignee that
+   *  matters for the row action). Backs both the queue id list and the row action. */
+  private async queueSteps(
+    userId: string,
+    kind: 'approve' | 'sign',
+  ): Promise<{ documentId: string; stepId: string }[]> {
     const assignments = await this.actorAssignments(userId);
     const match = this.assignmentPredicate(assignments);
     if (!match) return [];
     const rows = await this.db
-      .selectDistinct({ documentId: routes.documentId })
+      .select({ documentId: routes.documentId, stepId: routeSteps.id })
       .from(routeSteps)
       .innerJoin(routes, eq(routes.id, routeSteps.routeId))
       .where(
         and(
           eq(routes.status, 'active'),
           eq(routeSteps.status, 'active'),
-          eq(routeSteps.kind, 'approve'),
+          eq(routeSteps.kind, kind),
           match,
         ),
       );
-    return rows.map((r) => r.documentId);
+    // Keep the first step per document (an active step of this kind is actionable).
+    const byDoc = new Map<string, string>();
+    for (const r of rows) if (!byDoc.has(r.documentId)) byDoc.set(r.documentId, r.stepId);
+    return [...byDoc].map(([documentId, stepId]) => ({ documentId, stepId }));
+  }
+
+  /** The caller's «На согласование» documents with the active approve step to act on. */
+  approvalQueueSteps(userId: string): Promise<{ documentId: string; stepId: string }[]> {
+    return this.queueSteps(userId, 'approve');
+  }
+
+  /** The caller's «На подпись» documents with the active sign step. */
+  signQueueSteps(userId: string): Promise<{ documentId: string; stepId: string }[]> {
+    return this.queueSteps(userId, 'sign');
+  }
+
+  /** Document ids the caller has an active `approve` step on — the «На согласование» queue. */
+  async approvalQueueDocumentIds(userId: string): Promise<string[]> {
+    return (await this.approvalQueueSteps(userId)).map((r) => r.documentId);
   }
 
   /** Document ids the caller has an active `sign` step on — the «На подпись» queue. */
   async signQueueDocumentIds(userId: string): Promise<string[]> {
-    const assignments = await this.actorAssignments(userId);
-    const match = this.assignmentPredicate(assignments);
-    if (!match) return [];
-    const rows = await this.db
-      .selectDistinct({ documentId: routes.documentId })
-      .from(routeSteps)
-      .innerJoin(routes, eq(routes.id, routeSteps.routeId))
-      .where(
-        and(
-          eq(routes.status, 'active'),
-          eq(routeSteps.status, 'active'),
-          eq(routeSteps.kind, 'sign'),
-          match,
-        ),
-      );
-    return rows.map((r) => r.documentId);
+    return (await this.signQueueSteps(userId)).map((r) => r.documentId);
   }
 
   /**

@@ -12,7 +12,9 @@ import {
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
   type DocumentDetailDto,
+  type DocumentHistoryEntryDto,
   type DocumentListItemDto,
+  type DocumentQueueCountsDto,
   type ListDocumentsQuery,
   type PaginatedResult,
   type RegisterDocumentInput,
@@ -46,6 +48,14 @@ export class DocumentsController {
     return this.documents.list(query, user);
   }
 
+  // Declared before `:id` so the literal path is not captured by the uuid param.
+  @Get('queue-counts')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Pending-work counts for the cabinet queue badges' })
+  queueCounts(@CurrentUser() user: AuthUser): Promise<DocumentQueueCountsDto> {
+    return this.documents.queueCounts(user);
+  }
+
   @Post()
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Create a draft document' })
@@ -64,6 +74,16 @@ export class DocumentsController {
     @CurrentUser() user: AuthUser,
   ): Promise<DocumentDetailDto> {
     return this.documents.detail(id, user);
+  }
+
+  @Get(':id/history')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: "A document's audit history (История tab)" })
+  history(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentHistoryEntryDto[]> {
+    return this.documents.history(id, user);
   }
 
   @Patch(':id')

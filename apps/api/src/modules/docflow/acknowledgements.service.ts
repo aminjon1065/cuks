@@ -165,11 +165,11 @@ export class AcknowledgementsService {
     };
   }
 
-  /** Documents with a pending acknowledgement line for the caller on an active step — the
-   *  «На ознакомление» queue. */
-  async toAcknowledgeDocumentIds(userId: string): Promise<string[]> {
+  /** Documents with a pending acknowledgement line for the caller on an active step, and
+   *  the step to act on — the «На ознакомление» queue + its row action. */
+  async toAcknowledgeSteps(userId: string): Promise<{ documentId: string; stepId: string }[]> {
     const rows = await this.db
-      .selectDistinct({ documentId: acquaintances.documentId })
+      .select({ documentId: acquaintances.documentId, stepId: acquaintances.routeStepId })
       .from(acquaintances)
       .innerJoin(routeSteps, eq(routeSteps.id, acquaintances.routeStepId))
       .where(
@@ -179,7 +179,14 @@ export class AcknowledgementsService {
           eq(routeSteps.status, 'active'),
         ),
       );
-    return rows.map((r) => r.documentId);
+    const byDoc = new Map<string, string>();
+    for (const r of rows)
+      if (r.stepId && !byDoc.has(r.documentId)) byDoc.set(r.documentId, r.stepId);
+    return [...byDoc].map(([documentId, stepId]) => ({ documentId, stepId }));
+  }
+
+  async toAcknowledgeDocumentIds(userId: string): Promise<string[]> {
+    return (await this.toAcknowledgeSteps(userId)).map((r) => r.documentId);
   }
 
   /** Whether the caller is on the document's acknowledgement sheet (for visibility). */
