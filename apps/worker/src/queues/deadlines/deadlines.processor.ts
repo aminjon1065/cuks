@@ -1,19 +1,149 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
+import { aliasedTable, and, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { Job } from 'bullmq';
-import { QUEUE } from '@cuks/shared';
+import {
+  documents,
+  notificationOutbox,
+  positions,
+  resolutions,
+  userPositions,
+  type Database,
+} from '@cuks/db';
+import {
+  DOCFLOW_DEADLINE_TOPIC,
+  QUEUE,
+  classifyDeadline,
+  type DocflowDeadlinePayload,
+  type DocflowDeadlineTier,
+} from '@cuks/shared';
+import { DB } from '../../common/db.module';
+
+const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+// The executor's position/unit vs the head's position — aliased to join the same tables twice.
+const execPosition = aliasedTable(positions, 'exec_position');
+const headPosition = aliasedTable(positions, 'head_position');
+const headUserPosition = aliasedTable(userPositions, 'head_user_position');
 
 /**
- * Deadline/escalation sweep (docs/01 §73 `docflow-deadlines`). Phase-0.13 stub —
- * the real overdue-detection + escalation logic lands with the docflow/tasks
- * modules; this proves the cron wiring runs.
+ * Deadline/escalation daily sweep (docs/modules/11 §5, task 3.8). Scans controlled active
+ * resolutions with a due date, classifies each against Asia/Dushanbe calendar days, and
+ * writes `docflow.deadline` outbox rows: a reminder to the executor at 3 / 1 / 0 days out,
+ * an overdue reminder (executor + resolution author) every day once past due, and — past 5
+ * days overdue — an escalation to the executor's subdivision head. The API dispatcher fans
+ * these out; a per-day dedupe key keeps a re-run idempotent within the day.
  */
 @Processor(QUEUE.deadlines)
 export class DeadlinesProcessor extends WorkerHost {
   private readonly logger = new Logger(DeadlinesProcessor.name);
 
-  process(job: Job): Promise<void> {
-    this.logger.log({ jobId: job.id }, 'deadline sweep (stub — no deadlines yet)');
-    return Promise.resolve();
+  constructor(@Inject(DB) private readonly db: Database) {
+    super();
+  }
+
+  async process(job: Job): Promise<void> {
+    const now = new Date();
+    const day = new Date(now.getTime() + DUSHANBE_OFFSET_MS).toISOString().slice(0, 10);
+
+    const rows = await this.db
+      .select({
+        resolutionId: resolutions.id,
+        documentId: resolutions.documentId,
+        executorId: resolutions.executorId,
+        authorId: resolutions.authorId,
+        dueDate: resolutions.dueDate,
+        subject: documents.subject,
+      })
+      .from(resolutions)
+      .innerJoin(
+        documents,
+        and(eq(documents.id, resolutions.documentId), isNull(documents.deletedAt)),
+      )
+      .where(
+        and(
+          eq(resolutions.isControl, true),
+          eq(resolutions.status, 'active'),
+          isNotNull(resolutions.dueDate),
+        ),
+      );
+
+    let emitted = 0;
+    for (const r of rows) {
+      try {
+        const dueIso = r.dueDate!.toISOString();
+        const c = classifyDeadline(dueIso, now);
+        const base = { documentId: r.documentId, subject: r.subject, dueDate: dueIso };
+
+        if (c.reminder) {
+          emitted += await this.emit(r.resolutionId, day, c.reminder, [r.executorId], base);
+        }
+        if (c.overdue) {
+          emitted += await this.emit(
+            r.resolutionId,
+            day,
+            'overdue',
+            [r.executorId, r.authorId],
+            base,
+          );
+        }
+        if (c.escalation) {
+          const heads = await this.subdivisionHeads(r.executorId);
+          if (heads.length) {
+            emitted += await this.emit(r.resolutionId, day, 'escalation', heads, base);
+          }
+        }
+      } catch (error) {
+        // One bad resolution (e.g. an executor with no resolvable unit) must not abort the
+        // whole daily sweep — log and continue.
+        this.logger.error({ error, resolutionId: r.resolutionId }, 'deadline item failed');
+      }
+    }
+    this.logger.log({ jobId: job.id, scanned: rows.length, emitted }, 'deadline sweep');
+  }
+
+  /** Insert one outbox row for a (resolution, tier, day); idempotent via the dedupe key. */
+  private async emit(
+    resolutionId: string,
+    day: string,
+    tier: DocflowDeadlineTier,
+    recipientUserIds: string[],
+    base: { documentId: string; subject: string; dueDate: string },
+  ): Promise<number> {
+    const recipients = [...new Set(recipientUserIds)];
+    if (recipients.length === 0) return 0;
+    const payload: DocflowDeadlinePayload = {
+      resolutionId,
+      tier,
+      recipientUserIds: recipients,
+      ...base,
+    };
+    const dedupeKey = `${DOCFLOW_DEADLINE_TOPIC}:${resolutionId}:${tier}:${day}`;
+    const inserted = await this.db
+      .insert(notificationOutbox)
+      .values({ topic: DOCFLOW_DEADLINE_TOPIC, payload, dedupeKey })
+      .onConflictDoNothing({ target: notificationOutbox.dedupeKey })
+      .returning({ id: notificationOutbox.id });
+    return inserted.length;
+  }
+
+  /** Head users of the executor's subdivision (positions.isHead), excluding the executor
+   *  themselves (no self-escalation). */
+  private async subdivisionHeads(executorId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ userId: headUserPosition.userId })
+      .from(userPositions)
+      .innerJoin(execPosition, eq(execPosition.id, userPositions.positionId))
+      .innerJoin(
+        headPosition,
+        and(
+          eq(headPosition.orgUnitId, execPosition.orgUnitId),
+          eq(headPosition.isHead, true),
+          isNull(headPosition.deletedAt),
+        ),
+      )
+      .innerJoin(headUserPosition, eq(headUserPosition.positionId, headPosition.id))
+      .where(eq(userPositions.userId, executorId));
+    return rows.map((r) => r.userId).filter((id) => id !== executorId);
   }
 }
