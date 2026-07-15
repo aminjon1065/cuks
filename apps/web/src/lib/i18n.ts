@@ -44,6 +44,7 @@ void i18n.use(initReactI18next).init({
     'gisAccess',
     'statistics',
     'reports',
+    'docflow',
   ],
   interpolation: { escapeValue: false },
   returnNull: false,

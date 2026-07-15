@@ -17,7 +17,8 @@
     "adminRoles": "Роли",
     "adminOrg": "Оргструктура",
     "adminAudit": "Аудит",
-    "adminGisAccess": "Доступ ГИС"
+    "adminGisAccess": "Доступ ГИС",
+    "docflowSettings": "Настройки ДОУ"
   },
   "sidebar": {
     "collapse": "Свернуть меню",
