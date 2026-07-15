@@ -13,6 +13,8 @@ import {
   adminUnits,
   dictionaries,
   incidents,
+  journals,
+  nomenclature,
   notifications,
   orgUnits,
   positions,
@@ -121,6 +123,10 @@ const DICTIONARIES: readonly DictSeed[] = [
   { type: 'doc_type', code: 'internal', nameRu: 'Внутренний', sort: 3 },
   { type: 'doc_type', code: 'order', nameRu: 'Приказ', sort: 4 },
   { type: 'doc_type', code: 'directive', nameRu: 'Распоряжение', sort: 5 },
+  { type: 'doc_type', code: 'letter', nameRu: 'Письмо', sort: 6 },
+  { type: 'doc_type', code: 'memo', nameRu: 'Служебная записка', sort: 7 },
+  { type: 'doc_type', code: 'protocol', nameRu: 'Протокол', sort: 8 },
+  { type: 'doc_type', code: 'citizen_appeal', nameRu: 'Обращение гражданина', sort: 9 },
   // Категории корреспондентов
   { type: 'correspondent_category', code: 'ministry', nameRu: 'Министерство', sort: 1 },
   { type: 'correspondent_category', code: 'agency', nameRu: 'Ведомство', sort: 2 },
@@ -486,6 +492,141 @@ async function seedDictionaries(db: Database): Promise<void> {
       })
       .onConflictDoNothing();
   }
+}
+
+/** Standard registration journals (docs/modules/11 §1). Fixed ids keep the seed
+ *  idempotent; `{ПРЕФИКС}-{YYYY}/{seq4}` renders e.g. `ВХ-2026/0001`. */
+const DOCFLOW_JOURNALS: ReadonlyArray<{
+  id: string;
+  code: string;
+  name: string;
+  docClass: 'incoming' | 'outgoing' | 'internal' | 'citizens';
+  numberTemplate: string;
+  sort: number;
+}> = [
+  {
+    id: '0190d0c0-0000-7000-8000-000000000001',
+    code: 'incoming',
+    name: 'Входящие документы',
+    docClass: 'incoming',
+    numberTemplate: '{ВХ}-{YYYY}/{seq4}',
+    sort: 1,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000002',
+    code: 'outgoing',
+    name: 'Исходящие документы',
+    docClass: 'outgoing',
+    numberTemplate: '{ИСХ}-{YYYY}/{seq4}',
+    sort: 2,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000003',
+    code: 'orders',
+    name: 'Приказы',
+    docClass: 'internal',
+    numberTemplate: '{П}-{YYYY}/{seq4}',
+    sort: 3,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000004',
+    code: 'directives',
+    name: 'Распоряжения',
+    docClass: 'internal',
+    numberTemplate: '{Р}-{YYYY}/{seq4}',
+    sort: 4,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000005',
+    code: 'memos',
+    name: 'Служебные записки',
+    docClass: 'internal',
+    numberTemplate: '{СЗ}-{YYYY}/{seq4}',
+    sort: 5,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000006',
+    code: 'protocols',
+    name: 'Протоколы',
+    docClass: 'internal',
+    numberTemplate: '{ПР}-{YYYY}/{seq4}',
+    sort: 6,
+  },
+  {
+    id: '0190d0c0-0000-7000-8000-000000000007',
+    code: 'citizens',
+    name: 'Обращения граждан',
+    docClass: 'citizens',
+    numberTemplate: '{ОГ}-{YYYY}/{seq4}',
+    sort: 7,
+  },
+];
+
+/** Baseline case-index nomenclature (docs/modules/11 §1). Fixed ids, idempotent. */
+const DOCFLOW_NOMENCLATURE: ReadonlyArray<{
+  id: string;
+  index: string;
+  title: string;
+  sort: number;
+}> = [
+  {
+    id: '0190d0c1-0000-7000-8000-000000000001',
+    index: '01-01',
+    title: 'Приказы по основной деятельности',
+    sort: 1,
+  },
+  { id: '0190d0c1-0000-7000-8000-000000000002', index: '01-05', title: 'Распоряжения', sort: 2 },
+  {
+    id: '0190d0c1-0000-7000-8000-000000000003',
+    index: '02-01',
+    title: 'Входящая корреспонденция',
+    sort: 3,
+  },
+  {
+    id: '0190d0c1-0000-7000-8000-000000000004',
+    index: '02-02',
+    title: 'Исходящая корреспонденция',
+    sort: 4,
+  },
+  {
+    id: '0190d0c1-0000-7000-8000-000000000005',
+    index: '03-01',
+    title: 'Протоколы совещаний',
+    sort: 5,
+  },
+  {
+    id: '0190d0c1-0000-7000-8000-000000000006',
+    index: '04-01',
+    title: 'Обращения граждан',
+    sort: 6,
+  },
+];
+
+/** Docflow reference data (task 3.1): registration journals + case-index nomenclature. */
+async function seedDocflow(db: Database): Promise<void> {
+  for (const j of DOCFLOW_JOURNALS) {
+    await db
+      .insert(journals)
+      .values({
+        id: j.id,
+        code: j.code,
+        name: j.name,
+        docClass: j.docClass,
+        numberTemplate: j.numberTemplate,
+        seqReset: 'yearly',
+        sort: j.sort,
+      })
+      .onConflictDoNothing();
+  }
+  for (const n of DOCFLOW_NOMENCLATURE) {
+    await db
+      .insert(nomenclature)
+      .values({ id: n.id, index: n.index, title: n.title, sort: n.sort })
+      .onConflictDoNothing();
+  }
+  console.log(
+    `Docflow reference seeded: ${DOCFLOW_JOURNALS.length} journals, ${DOCFLOW_NOMENCLATURE.length} nomenclature entries.`,
+  );
 }
 
 /**
@@ -1036,6 +1177,7 @@ async function main(): Promise<void> {
     const adminId = await seedAdmin(db);
     await assignSuperadmin(db, adminId);
     await seedDictionaries(db);
+    await seedDocflow(db);
     await seedGeo(db);
     await bindOrgTerritory(db);
     await seedDemoNotifications(db, adminId);
