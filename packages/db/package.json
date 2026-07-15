@@ -19,6 +19,7 @@
     "migrate": "drizzle-kit migrate",
     "seed": "tsx src/seed.ts",
     "seed:e2e": "tsx src/seed-e2e.ts",
+    "seed:perf": "tsx src/seed-perf.ts",
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
