@@ -32,6 +32,16 @@ export const E2E_DUTY = {
   password: 'E2eDuty!Passw0rd',
 } as const;
 
+/**
+ * A duty officer whose role is bound to the Sughd regional department, so their
+ * data scope is the Sughd region only (task 2.13). The district-rights spec uses
+ * it to prove a regional user never sees another region's incidents.
+ */
+export const E2E_SUGHD = {
+  username: 'e2e_sughd',
+  password: 'E2eSughd!Passw0rd',
+} as const;
+
 /** Auth artifacts written by global-setup, consumed by the specs (gitignored). */
 export const STORAGE_STATE = fileURLToPath(new URL('../.auth/admin.json', import.meta.url));
 export const TOTP_SECRET_FILE = fileURLToPath(new URL('../.auth/totp-secret.txt', import.meta.url));

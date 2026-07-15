@@ -48,6 +48,12 @@ const E2E_USER2_USERNAME = 'e2e_user2';
 const E2E_USER2_PASSWORD = 'E2eUser2!Passw0rd';
 const E2E_DUTY_USERNAME = 'e2e_duty';
 const E2E_DUTY_PASSWORD = 'E2eDuty!Passw0rd';
+// A duty officer bound to the Sughd regional department, so its data scope is the
+// Sughd region only (task 2.13). The org unit id and its TJ-SU binding come from the
+// base seed (packages/db/src/seed.ts ORG_TERRITORY); duty_officer carries no 2FA gate.
+const E2E_SUGHD_USERNAME = 'e2e_sughd';
+const E2E_SUGHD_PASSWORD = 'E2eSughd!Passw0rd';
+const SUGHD_ORG_UNIT_ID = '0190a000-0000-7000-8000-000000000006';
 
 async function provisionUser(
   db: Database,
@@ -58,6 +64,8 @@ async function provisionUser(
     fullName: string;
     shortName: string;
     email?: string;
+    /** Bind the role to an org unit (region-scoped access); null = global (2.13). */
+    orgUnitId?: string;
   },
 ): Promise<string> {
   const [role] = await db.select().from(roles).where(eq(roles.code, opts.roleCode));
@@ -103,7 +111,7 @@ async function provisionUser(
 
   // Reset role assignments to exactly the intended one (deterministic across reruns).
   await db.delete(userRoles).where(eq(userRoles.userId, userId));
-  await db.insert(userRoles).values({ userId, roleId: role.id, orgUnitId: null });
+  await db.insert(userRoles).values({ userId, roleId: role.id, orgUnitId: opts.orgUnitId ?? null });
   await db.delete(notifications).where(eq(notifications.userId, userId));
   return userId;
 }
@@ -180,6 +188,65 @@ async function provisionMapIncidents(db: Database, actorId: string): Promise<voi
   }
 }
 
+/**
+ * Cross-region incident fixtures for the district-rights spec (task 2.13, §11c):
+ * incidents in Sughd and in Khatlon, so a Sughd-scoped user must see exactly the
+ * former and never the latter. Deterministic numbers keep reruns idempotent.
+ */
+async function provisionScopedIncidents(
+  db: Database,
+  actorId: string,
+): Promise<{ sughdCount: number; khatlonIncidentId: string }> {
+  const regionRows = await db
+    .select({ id: adminUnits.id, code: adminUnits.code })
+    .from(adminUnits)
+    .where(sql`${adminUnits.code} in ('TJ-SU', 'TJ-KT')`);
+  const regionByCode = new Map(regionRows.map((r) => [r.code, r.id]));
+  const sughdId = regionByCode.get('TJ-SU');
+  const khatlonId = regionByCode.get('TJ-KT');
+  if (!sughdId || !khatlonId) {
+    throw new Error('Scoped incident fixtures require the seeded TJ-SU and TJ-KT regions');
+  }
+
+  // [number, regionId, lon, lat] — Sughd points near Khujand, Khatlon near Bokhtar.
+  const fixtures: Array<[string, string, number, number]> = [
+    ['ЧС-E2E-SU-001', sughdId, 69.62, 40.28],
+    ['ЧС-E2E-SU-002', sughdId, 69.7, 40.24],
+    ['ЧС-E2E-SU-003', sughdId, 69.55, 40.31],
+    ['ЧС-E2E-KT-001', khatlonId, 68.78, 37.84],
+    ['ЧС-E2E-KT-002', khatlonId, 68.9, 37.9],
+  ];
+  const occurredAt = new Date('2026-06-01T06:00:00Z');
+  const reportedAt = new Date('2026-06-01T06:30:00Z');
+  const idByNumber = new Map<string, string>();
+  for (const [number, regionId, lon, lat] of fixtures) {
+    const [row] = await db
+      .insert(incidents)
+      .values({
+        number,
+        typeCode: 'nat.hydro.flood',
+        severity: 3,
+        status: 'active',
+        occurredAt,
+        reportedAt,
+        regionId,
+        geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+        source: 'monitoring',
+        createdBy: actorId,
+      })
+      .onConflictDoUpdate({
+        target: incidents.number,
+        set: { regionId, status: 'active', updatedAt: new Date(), deletedAt: null },
+      })
+      .returning({ id: incidents.id });
+    if (row) idByNumber.set(number, row.id);
+  }
+
+  const khatlonIncidentId = idByNumber.get('ЧС-E2E-KT-001');
+  if (!khatlonIncidentId) throw new Error('Failed to provision the Khatlon scope fixture');
+  return { sughdCount: 3, khatlonIncidentId };
+}
+
 async function provision(db: Database): Promise<void> {
   // The API can be running while this deterministic seed is applied. Remove
   // stale incident handoff markers before clearing the e2e users' feeds so a
@@ -215,11 +282,21 @@ async function provision(db: Database): Promise<void> {
     shortName: 'E2E Дежурный',
     email: 'e2e-duty@cuks.local',
   });
+  await provisionUser(db, {
+    username: E2E_SUGHD_USERNAME,
+    password: E2E_SUGHD_PASSWORD,
+    roleCode: 'duty_officer',
+    fullName: 'E2E Дежурный (Согд)',
+    shortName: 'E2E Согд',
+    orgUnitId: SUGHD_ORG_UNIT_ID,
+  });
   await provisionMapIncidents(db, adminId);
+  const scoped = await provisionScopedIncidents(db, adminId);
   console.log(
     `e2e users ready: "${E2E_USERNAME}" (${E2E_ROLE_CODE}, 2FA reset for enrollment) + ` +
       `"${E2E_USER_USERNAME}"/"${E2E_USER2_USERNAME}" (${E2E_USER_ROLE_CODE}); ` +
-      `"${E2E_DUTY_USERNAME}" (duty_officer); 12 clustered map incidents.`,
+      `"${E2E_DUTY_USERNAME}" (duty_officer); "${E2E_SUGHD_USERNAME}" (duty_officer/Sughd); ` +
+      `12 clustered map incidents + ${scoped.sughdCount} Sughd/2 Khatlon scoped incidents.`,
   );
 }
 
