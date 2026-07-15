@@ -124,6 +124,27 @@ describe('AnalyticsService.summary', () => {
   });
 });
 
+describe('AnalyticsService territory scope', () => {
+  it('resolves the region scope against the analytics permissions, not gis.view', async () => {
+    const seen: (string | readonly string[])[] = [];
+    const recordingScope = {
+      getAccessibleRegions: async (_user: unknown, permission: string | readonly string[]) => {
+        seen.push(permission);
+        return { global: true, adminUnitIds: [] as string[] };
+      },
+    };
+    const db = fakeDb({ kpis: KPIS_ROW, active: [], activeTotal: 0, reports: [] });
+    const service = new AnalyticsService(db as never, recordingScope as never);
+
+    await service.summary(QUERY, { id: 'u1', isSuperadmin: false } as never);
+
+    // A role holding analytics.view OR analytics.build must confine to its region(s);
+    // probing gis.view (which such a role need not hold) would resolve to an empty,
+    // match-nothing scope and hide all of an authorized user's data (task 2.13).
+    expect(seen).toEqual([['analytics.view', 'analytics.build']]);
+  });
+});
+
 /** A db double for the six grouped stats queries, keyed by the select projection. */
 function fakeStatsDb(data: {
   totals: Record<string, unknown>;

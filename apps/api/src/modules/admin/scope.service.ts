@@ -65,9 +65,15 @@ export class ScopeService {
    */
   async getAccessibleRegions(
     user: Pick<AuthUser, 'id' | 'isSuperadmin'>,
-    permission: string,
+    permission: string | readonly string[],
   ): Promise<RegionScope> {
     if (user.isSuperadmin) return { global: true, adminUnitIds: [] };
+
+    // Resolve the scope against the permission(s) that actually gate the caller's
+    // endpoint. A module guarded by more than one read permission (e.g. analytics —
+    // `analytics.view`/`analytics.build`) must pass all of them, else a user holding
+    // one of them but not the probed one resolves to an empty (match-nothing) scope.
+    const permissions = typeof permission === 'string' ? [permission] : permission;
 
     const rows = await this.db
       .select({ orgUnitId: userRoles.orgUnitId, adminUnitId: orgUnits.adminUnitId })
@@ -78,7 +84,7 @@ export class ScopeService {
       .where(
         and(
           eq(userRoles.userId, user.id),
-          inArray(rolePermissions.permission, [permission, PERMISSION_WILDCARD]),
+          inArray(rolePermissions.permission, [...permissions, PERMISSION_WILDCARD]),
         ),
       );
 

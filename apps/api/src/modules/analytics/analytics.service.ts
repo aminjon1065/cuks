@@ -47,6 +47,10 @@ import { ScopeService } from '../admin/scope.service';
 
 /** Report definitions are saved on the shared `saved_filters` table under this module. */
 const REPORT_MODULE = 'analytics';
+/** The read permissions that gate the analytics endpoints; the territory scope is
+ *  resolved against these so a role holding either one is confined to its region(s)
+ *  rather than to nothing (task 2.13). */
+const ANALYTICS_SCOPE_PERMISSIONS = ['analytics.view', 'analytics.build'] as const;
 /** КЧС letterhead for exported report files. */
 const ORG_NAME = 'Комитет по чрезвычайным ситуациям и гражданской обороне';
 /** Russian column labels for the server-generated XLSX (the file is always ru). */
@@ -88,9 +92,11 @@ export class AnalyticsService {
   ) {}
 
   /** Territory data-scope for aggregates: a regional user's charts/reports cover
-   *  only their region(s); central/superadmin see all (task 2.13). */
+   *  only their region(s); central/superadmin see all (task 2.13). Resolved against
+   *  the analytics permissions that gate these endpoints — not `gis.view`, which an
+   *  analytics-only role need not hold (that would collapse the scope to match-nothing). */
   private async regionScope(user: AuthUser): Promise<SQL | undefined> {
-    const scope = await this.scope.getAccessibleRegions(user, 'gis.view');
+    const scope = await this.scope.getAccessibleRegions(user, ANALYTICS_SCOPE_PERMISSIONS);
     if (scope.global) return undefined;
     return or(
       inArray(incidents.regionId, scope.adminUnitIds),
