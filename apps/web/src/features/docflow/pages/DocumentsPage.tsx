@@ -31,7 +31,12 @@ export function DocumentsPage(): React.JSX.Element {
   const canControl = useCan('docflow.control');
   const canRegistry = canRegister || canControl;
 
-  const queues: DocumentQueue[] = canRegistry ? ['mine', 'drafts', 'registry'] : ['mine', 'drafts'];
+  const queues: DocumentQueue[] = [
+    'mine',
+    'to_approve',
+    'drafts',
+    ...(canRegistry ? (['registry'] as const) : []),
+  ];
   const [queue, setQueue] = useState<DocumentQueue>('mine');
   const [status, setStatus] = useState('');
   const [docClass, setDocClass] = useState('');

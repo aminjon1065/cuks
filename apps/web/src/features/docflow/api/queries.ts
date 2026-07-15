@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type {
   ChangeDocumentStatusInput,
   CorrespondentCategoryDto,
+  DirectoryUserDto,
+  RouteDto,
+  StartRouteInput,
   CorrespondentDto,
   CreateCorrespondentInput,
   CreateDocumentInput,
@@ -216,5 +219,55 @@ export function useChangeDocumentStatus() {
     mutationFn: ({ id, input }: { id: string; input: ChangeDocumentStatusInput }) =>
       api.post<DocumentDetailDto>(`/v1/docflow/documents/${id}/actions/status`, input),
     onSuccess: (_data, { id }) => invalidateDocuments(qc, id),
+  });
+}
+
+// ---- Routes ----------------------------------------------------------------
+
+export function useDocumentRoutes(documentId: string | null): UseQueryResult<RouteDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'routes'],
+    queryFn: () => api.get<RouteDto[]>(`/v1/docflow/documents/${documentId}/routes`),
+    enabled: !!documentId,
+  });
+}
+
+/** After a route mutation the document status changes too — refresh both. */
+function invalidateRoutes(qc: ReturnType<typeof useQueryClient>, documentId: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+}
+
+export function useStartRoute(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: StartRouteInput) =>
+      api.post<RouteDto[]>(`/v1/docflow/documents/${documentId}/route`, input),
+    onSuccess: () => invalidateRoutes(qc, documentId),
+  });
+}
+
+export function useActRouteStep(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      stepId,
+      action,
+      comment,
+    }: {
+      stepId: string;
+      action: 'approve' | 'reject';
+      comment?: string;
+    }) => api.post<RouteDto[]>(`/v1/docflow/route-steps/${stepId}/actions/${action}`, { comment }),
+    onSuccess: () => invalidateRoutes(qc, documentId),
+  });
+}
+
+export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserDto[]> {
+  const qs = search.trim() ? `?q=${encodeURIComponent(search.trim())}` : '';
+  return useQuery({
+    queryKey: ['directory', 'users', search.trim()],
+    queryFn: () => api.get<DirectoryUserDto[]>(`/v1/directory/users${qs}`),
+    staleTime: 60 * 1000,
   });
 }

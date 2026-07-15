@@ -32,6 +32,7 @@ import {
   useRegisterDocument,
 } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
+import { RouteSection } from '../components/RouteSection';
 
 const selectClass = cn(
   'h-9 w-full rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -98,6 +99,7 @@ export function DocumentCardPage(): React.JSX.Element {
       />
 
       <Requisites data={data} />
+      <RouteSection doc={data} />
       <Files data={data} />
 
       {registerOpen ? <RegisterDialog id={data.id} onClose={() => setRegisterOpen(false)} /> : null}
