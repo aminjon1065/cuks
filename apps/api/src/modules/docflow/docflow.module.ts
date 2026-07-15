@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { DocflowController } from './docflow.controller';
 import { DocumentsController } from './documents.controller';
 import { RoutesController } from './routes.controller';
@@ -22,6 +23,7 @@ import { SignaturesService } from './signatures.service';
  * internal ЭЦП (CA, device certificates, signing and verification).
  */
 @Module({
+  imports: [AuthModule],
   controllers: [
     DocflowController,
     DocumentsController,

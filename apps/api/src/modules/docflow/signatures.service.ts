@@ -27,6 +27,7 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { StorageService } from '../../common/storage/storage.service';
+import { PasswordService } from '../auth/password.service';
 import { canViewDocumentBase } from './document-visibility';
 import { CaService } from './ca.service';
 import { RoutesService } from './routes.service';
@@ -61,6 +62,7 @@ export class SignaturesService {
     private readonly storage: StorageService,
     private readonly ca: CaService,
     private readonly routes: RoutesService,
+    private readonly passwords: PasswordService,
   ) {}
 
   // --- Certificate activation ------------------------------------------------
@@ -151,6 +153,7 @@ export class SignaturesService {
     input: SignDocumentInput,
     actor: AuthUser,
   ): Promise<SignatureDto[]> {
+    await this.requireStepUp(actor, input.password);
     const doc = await this.requireSignableDoc(documentId, actor);
     const main = await this.currentMainVersion(documentId);
     if (!main) {
@@ -351,6 +354,20 @@ export class SignaturesService {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
     return doc;
+  }
+
+  /** Re-authenticate the signer (docs/09-security.md §4: signing is a conscious action).
+   *  A wrong password fails signing without leaking whether the user or password was off. */
+  private async requireStepUp(actor: AuthUser, password: string): Promise<void> {
+    const [row] = await this.db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, actor.id))
+      .limit(1);
+    const ok = row ? await this.passwords.verify(row.passwordHash, password) : false;
+    if (!ok) {
+      throw AppException.forbidden('docflow.sign.reauth_failed', 'Password confirmation failed');
+    }
   }
 
   private async requireUsableCertificate(

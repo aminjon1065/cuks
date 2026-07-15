@@ -425,6 +425,8 @@ export type ActivateCertificateInput = z.infer<typeof activateCertificateSchema>
 export const signDocumentSchema = z.object({
   certificateId: z.string().uuid(),
   signature: z.string().min(1).max(4000),
+  /** Step-up re-authentication — signing is a conscious action (docs/09-security.md §4). */
+  password: z.string().min(1).max(200),
 });
 export type SignDocumentInput = z.infer<typeof signDocumentSchema>;
 
