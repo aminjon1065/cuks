@@ -12,6 +12,13 @@ export interface PermissionScope {
   orgUnitIds: string[];
 }
 
+export interface RegionScope {
+  /** The user sees every territory (superadmin, a global role, or a central unit). */
+  global: boolean;
+  /** When not global, the `gis.admin_units` ids (regions/districts) the user may see. */
+  adminUnitIds: string[];
+}
+
 /**
  * Level-2 data scoping (docs/05 §3). Resolves which org units a user may act on
  * for a given permission, expanding each scoped unit to its subtree via the
@@ -48,6 +55,43 @@ export class ScopeService {
     ];
     const orgUnitIds = await this.expandSubtrees(scopedIds);
     return { global: false, orgUnitIds };
+  }
+
+  /**
+   * Territory scope for incident data (task 2.13, docs/modules/10 §1). Maps the
+   * user's scoped org units to the `gis.admin_units` they cover: superadmin, an
+   * unscoped role, or a central unit (no territory) all see everything; a regional
+   * управление is confined to its region.
+   */
+  async getAccessibleRegions(
+    user: Pick<AuthUser, 'id' | 'isSuperadmin'>,
+    permission: string,
+  ): Promise<RegionScope> {
+    if (user.isSuperadmin) return { global: true, adminUnitIds: [] };
+
+    const rows = await this.db
+      .select({ orgUnitId: userRoles.orgUnitId, adminUnitId: orgUnits.adminUnitId })
+      .from(userRoles)
+      .innerJoin(roles, and(eq(roles.id, userRoles.roleId), isNull(roles.deletedAt)))
+      .innerJoin(rolePermissions, eq(rolePermissions.roleId, roles.id))
+      .leftJoin(orgUnits, and(eq(orgUnits.id, userRoles.orgUnitId), isNull(orgUnits.deletedAt)))
+      .where(
+        and(
+          eq(userRoles.userId, user.id),
+          inArray(rolePermissions.permission, [permission, PERMISSION_WILDCARD]),
+        ),
+      );
+
+    if (rows.length === 0) return { global: false, adminUnitIds: [] };
+    // A null org-unit scope (global role) or a unit with no territory (the central
+    // apparatus) means the user sees all incidents regardless of region.
+    if (rows.some((r) => r.orgUnitId === null || r.adminUnitId === null)) {
+      return { global: true, adminUnitIds: [] };
+    }
+    const adminUnitIds = [
+      ...new Set(rows.map((r) => r.adminUnitId).filter((v): v is string => v !== null)),
+    ];
+    return { global: false, adminUnitIds };
   }
 
   /** All (non-deleted) org-unit ids in the subtrees rooted at the given units. */
