@@ -90,3 +90,103 @@ export interface AnalyticsSummaryDto {
   };
   latestReports: SummaryReportItem[];
 }
+
+// --- «Статистика ЧС» (docs/modules/10 §8, task 2.11) ---
+
+/**
+ * Statistics dashboard filter: period + region + incident type (docs/modules/10
+ * §8). Flat query params, matching the incident registry convention.
+ */
+export const analyticsStatsQuerySchema = z
+  .object({
+    from: isoDateTimeSchema,
+    to: isoDateTimeSchema,
+    regionId: z.string().uuid().optional(),
+    typeCode: z.string().trim().min(1).max(120).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (new Date(value.from) >= new Date(value.to)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '`from` must be before `to`',
+        path: ['from'],
+      });
+    }
+  });
+export type AnalyticsStatsQuery = z.infer<typeof analyticsStatsQuerySchema>;
+
+/** Month bucket (label `YYYY-MM`, Asia/Dushanbe) with counts and casualty totals. */
+export interface StatsByMonth {
+  month: string;
+  count: number;
+  dead: number;
+  injured: number;
+  damage: string;
+}
+
+/** Incident count by type (name resolved server-side). */
+export interface StatsByType {
+  typeCode: string;
+  typeName: string;
+  count: number;
+}
+
+/**
+ * Incident count by administrative unit. Region-level today (dev has only region
+ * geometry); the same shape carries districts once their boundaries are imported.
+ */
+export interface StatsByRegion {
+  regionId: string | null;
+  regionName: string;
+  count: number;
+}
+
+/** One day×hour heat cell. `dow` is ISO (1=Mon … 7=Sun), `hour` 0–23, both in
+ *  Asia/Dushanbe. */
+export interface StatsHeatCell {
+  dow: number;
+  hour: number;
+  count: number;
+}
+
+/** Casualty and damage totals by incident type. */
+export interface StatsCasualtiesByType {
+  typeCode: string;
+  typeName: string;
+  dead: number;
+  injured: number;
+  evacuated: number;
+  damage: string;
+}
+
+/** Overall totals for the filtered set. */
+export interface StatsTotals {
+  incidents: number;
+  dead: number;
+  injured: number;
+  evacuated: number;
+  damage: string;
+}
+
+export interface AnalyticsStatsDto {
+  filters: { from: string; to: string; regionId: string | null; typeCode: string | null };
+  totals: StatsTotals;
+  byMonth: StatsByMonth[];
+  byType: StatsByType[];
+  byRegion: StatsByRegion[];
+  heatmap: StatsHeatCell[];
+  casualtiesByType: StatsCasualtiesByType[];
+}
+
+/** A region boundary for the ECharts choropleth. GeoJSON `FeatureCollection`;
+ *  `properties.name` is the Russian name ECharts maps series values against. */
+export interface RegionFeature {
+  type: 'Feature';
+  id: string;
+  properties: { id: string; code: string; name: string };
+  geometry: unknown;
+}
+export interface RegionFeatureCollection {
+  type: 'FeatureCollection';
+  features: RegionFeature[];
+}
