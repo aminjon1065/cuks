@@ -160,6 +160,14 @@
     },
     "card": {
       "overview": "Реквизиты",
+      "summary": "Сводка",
+      "tabs": {
+        "overview": "Обзор",
+        "route": "Маршрут",
+        "resolutions": "Резолюции",
+        "links": "Связи",
+        "history": "История"
+      },
       "journal": "Журнал",
       "orgUnit": "Подразделение",
       "correspondent": "Корреспондент",
@@ -322,6 +330,48 @@
     "action": "Ознакомлен",
     "pending": "Ожидает",
     "doneToast": "Ознакомление зафиксировано"
+  },
+  "links": {
+    "subtitle": "Связанные документы",
+    "add": "Связать",
+    "added": "Связь добавлена",
+    "remove": "Убрать связь",
+    "searchPlaceholder": "Поиск по теме или номеру…",
+    "noMatches": "Ничего не найдено",
+    "empty": {
+      "title": "Связей нет",
+      "description": "Свяжите документ с ответом или связанным делом."
+    },
+    "kind": {
+      "related": "Связан",
+      "reply": "Ответ"
+    }
+  },
+  "history": {
+    "system": "Система",
+    "empty": {
+      "title": "История пуста",
+      "description": "События по документу появятся здесь."
+    },
+    "actions": {
+      "created": "Документ создан",
+      "file_added": "Прикреплён файл",
+      "route_started": "Отправлен по маршруту",
+      "route_step_done": "Шаг маршрута пройден",
+      "route_rejected": "Отклонён по маршруту",
+      "registered": "Зарегистрирован",
+      "status_changed": "Смена статуса",
+      "signed": "Подписан",
+      "resolution_added": "Добавлена резолюция",
+      "resolution_reported": "Отчёт по резолюции",
+      "resolution_done": "Резолюция исполнена",
+      "resolution_extended": "Срок резолюции продлён",
+      "resolution_cancelled": "Резолюция снята",
+      "acknowledged": "Ознакомление",
+      "linked": "Добавлена связь",
+      "unlinked": "Связь убрана",
+      "exported": "Экспорт PDF"
+    }
   },
   "errors": {
     "code_taken": "Журнал с таким кодом уже существует",

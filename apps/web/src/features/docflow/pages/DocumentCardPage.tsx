@@ -36,6 +36,11 @@ import { RouteSection } from '../components/RouteSection';
 import { ResolutionSection } from '../components/ResolutionSection';
 import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
+import { LinksSection } from '../components/LinksSection';
+import { HistorySection } from '../components/HistorySection';
+
+const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'history'] as const;
+type CardTab = (typeof CARD_TABS)[number];
 
 const selectClass = cn(
   'h-9 w-full rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -49,6 +54,7 @@ export function DocumentCardPage(): React.JSX.Element {
   const doc = useDocument(id ?? null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [tab, setTab] = useState<CardTab>('overview');
 
   if (doc.isPending) {
     return <Skeleton className="h-96 w-full rounded-md" />;
@@ -101,12 +107,51 @@ export function DocumentCardPage(): React.JSX.Element {
         }
       />
 
-      <Requisites data={data} />
-      <RouteSection doc={data} />
-      <SignatureSection doc={data} />
-      <AcknowledgementSection doc={data} />
-      <ResolutionSection doc={data} />
-      <Files data={data} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="flex flex-col gap-4">
+          <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-border">
+            {CARD_TABS.map((key) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  '-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
+                  tab === key
+                    ? 'border-primary text-text'
+                    : 'border-transparent text-text-muted hover:text-text',
+                )}
+              >
+                {t(`documents.card.tabs.${key}`)}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'overview' ? (
+            <>
+              <Requisites data={data} />
+              <Files data={data} />
+              <SignatureSection doc={data} />
+              <AcknowledgementSection doc={data} />
+            </>
+          ) : null}
+          {tab === 'route' ? <RouteSection doc={data} /> : null}
+          {tab === 'resolutions' ? <ResolutionSection doc={data} /> : null}
+          {tab === 'links' ? (
+            <section className="rounded-md border border-border bg-surface p-4">
+              <LinksSection doc={data} />
+            </section>
+          ) : null}
+          {tab === 'history' ? (
+            <section className="rounded-md border border-border bg-surface p-4">
+              <HistorySection doc={data} />
+            </section>
+          ) : null}
+        </div>
+
+        <SummaryCard data={data} />
+      </div>
 
       {registerOpen ? <RegisterDialog id={data.id} onClose={() => setRegisterOpen(false)} /> : null}
       {statusOpen ? <StatusDialog data={data} onClose={() => setStatusOpen(false)} /> : null}
@@ -125,6 +170,35 @@ export function DocumentCardPage(): React.JSX.Element {
       </Button>
     );
   }
+}
+
+/** The right-column quick summary (docs/modules/11 §7): срок, дело, корреспондент. */
+function SummaryCard({ data }: { data: DocumentDetailDto }): React.JSX.Element {
+  const { t } = useTranslation('docflow');
+  const rows: Array<[string, string]> = [
+    [t('documents.card.dueDate'), data.dueDate ? formatDateTime(data.dueDate) : '—'],
+    [t('documents.card.caseIndex'), data.caseIndex ?? '—'],
+    [t('documents.card.correspondent'), data.correspondentName ?? '—'],
+    [t('documents.columns.author'), data.authorName ?? '—'],
+    [t('documents.card.journal'), data.journalName ?? '—'],
+    [t('documents.card.regDate'), data.regDate ? formatDateTime(data.regDate) : '—'],
+  ];
+  return (
+    <aside className="h-max rounded-md border border-border bg-surface p-4 lg:sticky lg:top-4">
+      <h2 className="mb-3 text-sm font-semibold text-text">{t('documents.card.summary')}</h2>
+      <dl className="flex flex-col gap-2">
+        {rows.map(([label, value]) => (
+          <div
+            key={label}
+            className="flex flex-col gap-0.5 border-b border-border/50 pb-2 last:border-0"
+          >
+            <dt className="text-xs text-text-muted">{label}</dt>
+            <dd className="text-[13px] text-text">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
+  );
 }
 
 function Requisites({ data }: { data: DocumentDetailDto }): React.JSX.Element {

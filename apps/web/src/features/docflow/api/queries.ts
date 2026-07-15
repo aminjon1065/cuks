@@ -2,11 +2,16 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type {
   AcknowledgementSheetDto,
   ActivateCertificateInput,
+  AddDocumentFileInput,
   CertificateDto,
   ChangeDocumentStatusInput,
   CorrespondentCategoryDto,
+  CreateDocumentLinkInput,
   CreateResolutionInput,
   DirectoryUserDto,
+  DocumentHistoryEntryDto,
+  DocumentLinkDto,
+  DocumentQueueCountsDto,
   ExtendResolutionInput,
   ReportResolutionInput,
   ResolutionDto,
@@ -190,6 +195,58 @@ export function useDocument(id: string | null): UseQueryResult<DocumentDetailDto
     queryKey: [...documentsKey, id],
     queryFn: () => api.get<DocumentDetailDto>(`/v1/docflow/documents/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useQueueCounts(): UseQueryResult<DocumentQueueCountsDto> {
+  return useQuery({
+    queryKey: [...documentsKey, 'queue-counts'],
+    queryFn: () => api.get<DocumentQueueCountsDto>('/v1/docflow/documents/queue-counts'),
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useDocumentHistory(id: string | null): UseQueryResult<DocumentHistoryEntryDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, id, 'history'],
+    queryFn: () => api.get<DocumentHistoryEntryDto[]>(`/v1/docflow/documents/${id}/history`),
+    enabled: !!id,
+  });
+}
+
+export function useDocumentLinks(id: string | null): UseQueryResult<DocumentLinkDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, id, 'links'],
+    queryFn: () => api.get<DocumentLinkDto[]>(`/v1/docflow/documents/${id}/links`),
+    enabled: !!id,
+  });
+}
+
+export function useAddDocumentLink(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDocumentLinkInput) =>
+      api.post<DocumentLinkDto[]>(`/v1/docflow/documents/${documentId}/links`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...documentsKey, documentId, 'links'] }),
+  });
+}
+
+export function useRemoveDocumentLink(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: string) =>
+      api.delete<DocumentLinkDto[]>(`/v1/docflow/documents/${documentId}/links/${linkId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...documentsKey, documentId, 'links'] }),
+  });
+}
+
+/** Attach an already-uploaded file (fs node) to a draft document. */
+export function useAddDocumentFile(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddDocumentFileInput) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${documentId}/files`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...documentsKey, documentId] }),
   });
 }
 

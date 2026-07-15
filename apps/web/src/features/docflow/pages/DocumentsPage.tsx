@@ -13,9 +13,10 @@ import {
 } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
 import { formatDateTime } from '@/lib/format';
-import { useDocuments } from '../api/queries';
+import { useDocuments, useQueueCounts } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
 import { CreateDocumentDialog } from '../components/CreateDocumentDialog';
+import { QueueRowActions } from '../components/QueueRowActions';
 
 const PAGE_SIZE = 50;
 const selectClass = cn(
@@ -56,8 +57,21 @@ export function DocumentsPage(): React.JSX.Element {
     ...(search.trim() ? { search: search.trim() } : {}),
   };
   const list = useDocuments(query);
+  const counts = useQueueCounts();
   const total = list.data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Pending-work badges on the action/task queue tabs (docs/modules/11 §7).
+  const queueCount = (key: DocumentQueue): number | undefined => {
+    const c = counts.data;
+    if (!c) return undefined;
+    if (key === 'to_approve') return c.to_approve;
+    if (key === 'to_sign') return c.to_sign;
+    if (key === 'to_acknowledge') return c.to_acknowledge;
+    if (key === 'my_tasks') return c.my_tasks;
+    return undefined;
+  };
+  const isActionQueue = queue === 'to_approve' || queue === 'to_sign' || queue === 'to_acknowledge';
 
   const columns = useMemo<ColumnDef<DocumentListItemDto, unknown>[]>(
     () => [
@@ -109,8 +123,19 @@ export function DocumentsPage(): React.JSX.Element {
         header: t('documents.columns.date'),
         cell: ({ row }) => formatDateTime(row.original.regDate ?? row.original.createdAt),
       },
+      ...(isActionQueue
+        ? [
+            {
+              id: 'actions',
+              header: '',
+              cell: ({ row }: { row: { original: DocumentListItemDto } }) => (
+                <QueueRowActions doc={row.original} queue={queue} />
+              ),
+            },
+          ]
+        : []),
     ],
-    [t],
+    [t, isActionQueue, queue],
   );
 
   const resetPageAnd = (fn: () => void) => {
@@ -140,13 +165,18 @@ export function DocumentsPage(): React.JSX.Element {
             aria-selected={queue === key}
             onClick={() => resetPageAnd(() => setQueue(key))}
             className={cn(
-              '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
+              '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
               queue === key
                 ? 'border-primary text-text'
                 : 'border-transparent text-text-muted hover:text-text',
             )}
           >
             {t(`documents.queues.${key}`)}
+            {queueCount(key) ? (
+              <span className="rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary">
+                {queueCount(key)}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
