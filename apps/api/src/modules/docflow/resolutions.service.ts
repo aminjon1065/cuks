@@ -4,6 +4,7 @@ import { documents, resolutionExtensions, resolutions, users, type Database } fr
 import type {
   CreateResolutionInput,
   ExtendResolutionInput,
+  RemoveResolutionControlInput,
   ReportResolutionInput,
   ResolutionDto,
 } from '@cuks/shared';
@@ -263,6 +264,45 @@ export class ResolutionsService {
     });
   }
 
+  /** Remove a resolution from control (docs/modules/11 §5): keep it active, clear the
+   *  control flag; author or control officer only, with a reason (audited). */
+  async removeFromControl(
+    resolutionId: string,
+    input: RemoveResolutionControlInput,
+    actor: AuthUser,
+  ): Promise<ResolutionDto[]> {
+    return this.mutate(
+      resolutionId,
+      actor,
+      async (tx, res) => {
+        if (res.authorId !== actor.id && !isControlUser(actor)) {
+          throw AppException.forbidden(
+            'docflow.resolution.forbidden',
+            'Only the author or a controller may remove from control',
+          );
+        }
+        if (res.status !== 'active') {
+          throw AppException.conflict(
+            'docflow.resolution.not_active',
+            'The resolution is not active',
+          );
+        }
+        if (!res.isControl) {
+          throw AppException.conflict(
+            'docflow.resolution.not_controlled',
+            'The resolution is not on control',
+          );
+        }
+        await tx
+          .update(resolutions)
+          .set({ isControl: false })
+          .where(eq(resolutions.id, resolutionId));
+        return 'docflow.document.resolution_uncontrolled';
+      },
+      { reason: input.reason },
+    );
+  }
+
   // --- Read ------------------------------------------------------------------
 
   async forDocument(documentId: string, actor: AuthUser): Promise<ResolutionDto[]> {
@@ -349,6 +389,7 @@ export class ResolutionsService {
     resolutionId: string,
     actor: AuthUser,
     fn: (tx: Database, res: typeof resolutions.$inferSelect) => Promise<string>,
+    extraMeta?: Record<string, unknown>,
   ): Promise<ResolutionDto[]> {
     const { documentId, action } = await this.db.transaction(async (tx) => {
       const [res] = await tx
@@ -367,7 +408,7 @@ export class ResolutionsService {
       actorId: actor.id,
       entityType: 'document',
       entityId: documentId,
-      meta: { resolutionId },
+      meta: { resolutionId, ...extraMeta },
     });
     return this.forDocument(documentId, actor);
   }

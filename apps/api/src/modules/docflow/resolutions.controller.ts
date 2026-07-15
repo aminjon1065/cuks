@@ -4,9 +4,11 @@ import { z } from 'zod';
 import {
   createResolutionSchema,
   extendResolutionSchema,
+  removeResolutionControlSchema,
   reportResolutionSchema,
   type CreateResolutionInput,
   type ExtendResolutionInput,
+  type RemoveResolutionControlInput,
   type ReportResolutionInput,
   type ResolutionDto,
 } from '@cuks/shared';
@@ -100,5 +102,16 @@ export class ResolutionsController {
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
   ): Promise<ResolutionDto[]> {
     return this.resolutions.cancel(id, user);
+  }
+
+  @Post('resolutions/:id/actions/uncontrol')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Remove the resolution from control, keeping it active (with reason)' })
+  removeFromControl(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(removeResolutionControlSchema)) body: RemoveResolutionControlInput,
+  ): Promise<ResolutionDto[]> {
+    return this.resolutions.removeFromControl(id, body, user);
   }
 }
