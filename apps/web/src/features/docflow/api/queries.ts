@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type {
   ChangeDocumentStatusInput,
   CorrespondentCategoryDto,
+  CreateResolutionInput,
   DirectoryUserDto,
+  ExtendResolutionInput,
+  ReportResolutionInput,
+  ResolutionDto,
   RouteDto,
   StartRouteInput,
   CorrespondentDto,
@@ -260,6 +264,62 @@ export function useActRouteStep(documentId: string) {
       comment?: string;
     }) => api.post<RouteDto[]>(`/v1/docflow/route-steps/${stepId}/actions/${action}`, { comment }),
     onSuccess: () => invalidateRoutes(qc, documentId),
+  });
+}
+
+// ---- Resolutions -----------------------------------------------------------
+
+export function useDocumentResolutions(documentId: string | null): UseQueryResult<ResolutionDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'resolutions'],
+    queryFn: () => api.get<ResolutionDto[]>(`/v1/docflow/documents/${documentId}/resolutions`),
+    enabled: !!documentId,
+  });
+}
+
+/** A resolution mutation may change the document status too — refresh both. */
+function invalidateResolutions(qc: ReturnType<typeof useQueryClient>, documentId: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+}
+
+export function useCreateResolution(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateResolutionInput) =>
+      api.post<ResolutionDto[]>(`/v1/docflow/documents/${documentId}/resolutions`, input),
+    onSuccess: () => invalidateResolutions(qc, documentId),
+  });
+}
+
+export function useCreateSubResolution(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ parentId, input }: { parentId: string; input: CreateResolutionInput }) =>
+      api.post<ResolutionDto[]>(`/v1/docflow/resolutions/${parentId}/subresolutions`, input),
+    onSuccess: () => invalidateResolutions(qc, documentId),
+  });
+}
+
+type ResolutionActionBody = ReportResolutionInput | ExtendResolutionInput | Record<string, never>;
+
+export function useResolutionAction(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resolutionId,
+      action,
+      body,
+    }: {
+      resolutionId: string;
+      action: 'report' | 'done' | 'extend' | 'cancel';
+      body?: ResolutionActionBody;
+    }) =>
+      api.post<ResolutionDto[]>(
+        `/v1/docflow/resolutions/${resolutionId}/actions/${action}`,
+        body ?? {},
+      ),
+    onSuccess: () => invalidateResolutions(qc, documentId),
   });
 }
 
