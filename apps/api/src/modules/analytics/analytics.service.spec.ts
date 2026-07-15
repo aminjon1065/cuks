@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AnalyticsService } from './analytics.service';
 
+/** Global-scope stub — analytics territory-scoping is a no-op for these unit tests. */
+const SCOPE_STUB = {
+  getAccessibleRegions: async () => ({ global: true, adminUnitIds: [] as string[] }),
+};
+const ANALYTICS_USER = { id: 'u1', isSuperadmin: true } as never;
+
 /**
  * A db double. Every builder method returns the (thenable) builder, so awaiting at
  * any chain depth resolves to the rows chosen from the `select` projection shape.
@@ -78,9 +84,9 @@ describe('AnalyticsService.summary', () => {
         },
       ],
     });
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
 
-    const result = await service.summary(QUERY);
+    const result = await service.summary(QUERY, ANALYTICS_USER);
 
     expect(result.period).toEqual(QUERY);
     expect(result.kpis.incidents).toEqual({ value: 10, previous: 4 });
@@ -108,9 +114,9 @@ describe('AnalyticsService.summary', () => {
       latitude: 38.5,
     }));
     const db = fakeDb({ kpis: KPIS_ROW, active: many, activeTotal: 512, reports: [] });
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
 
-    const result = await service.summary(QUERY);
+    const result = await service.summary(QUERY, ANALYTICS_USER);
 
     expect(result.activeIncidents.points).toHaveLength(300);
     expect(result.activeIncidents.truncated).toBe(true);
@@ -184,14 +190,17 @@ describe('AnalyticsService.stats', () => {
       ],
       regions: [],
     });
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
 
-    const result = await service.stats({
-      from: '2026-01-01T00:00:00.000Z',
-      to: '2026-08-01T00:00:00.000Z',
-      regionId: 'r1',
-      typeCode: 'flood',
-    });
+    const result = await service.stats(
+      {
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-08-01T00:00:00.000Z',
+        regionId: 'r1',
+        typeCode: 'flood',
+      },
+      ANALYTICS_USER,
+    );
 
     expect(result.filters).toEqual({
       from: '2026-01-01T00:00:00.000Z',
@@ -208,11 +217,14 @@ describe('AnalyticsService.stats', () => {
   });
 
   it('nulls the optional filters when they are absent', async () => {
-    const service = new AnalyticsService(fakeStatsDb(EMPTY_STATS) as never);
-    const result = await service.stats({
-      from: '2026-01-01T00:00:00.000Z',
-      to: '2026-08-01T00:00:00.000Z',
-    });
+    const service = new AnalyticsService(fakeStatsDb(EMPTY_STATS) as never, SCOPE_STUB as never);
+    const result = await service.stats(
+      {
+        from: '2026-01-01T00:00:00.000Z',
+        to: '2026-08-01T00:00:00.000Z',
+      },
+      ANALYTICS_USER,
+    );
     expect(result.filters.regionId).toBeNull();
     expect(result.filters.typeCode).toBeNull();
   });
@@ -229,7 +241,7 @@ describe('AnalyticsService.stats', () => {
         },
       ],
     });
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
 
     const geo = await service.regionsGeoJson();
 
@@ -301,8 +313,11 @@ const TOTALS = { m0: 13, m1: '500.00' };
 
 describe('AnalyticsService.query', () => {
   it('maps grouped rows to keys/values and echoes the dimensions/metrics', async () => {
-    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
-    const result = await service.query(REPORT_QUERY as never);
+    const service = new AnalyticsService(
+      fakeReportDb(GROUPED, TOTALS) as never,
+      SCOPE_STUB as never,
+    );
+    const result = await service.query(REPORT_QUERY as never, ANALYTICS_USER);
     expect(result.dimensions).toEqual(['type']);
     expect(result.metrics).toEqual(['count', 'damage']);
     expect(result.compareYoY).toBe(false);
@@ -311,8 +326,14 @@ describe('AnalyticsService.query', () => {
   });
 
   it('attaches same-period-last-year figures when comparing (АППГ)', async () => {
-    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
-    const result = await service.query({ ...REPORT_QUERY, compareYoY: true } as never);
+    const service = new AnalyticsService(
+      fakeReportDb(GROUPED, TOTALS) as never,
+      SCOPE_STUB as never,
+    );
+    const result = await service.query(
+      { ...REPORT_QUERY, compareYoY: true } as never,
+      ANALYTICS_USER,
+    );
     expect(result.compareYoY).toBe(true);
     expect(result.rows[0]?.valuesPrev).toEqual([10, '500.00']);
     expect(result.totals.valuesPrev).toEqual([13, '500.00']);
@@ -323,23 +344,32 @@ describe('AnalyticsService.query', () => {
     const current = [{ d0: '2026-07', m0: 157, m1: 0 }];
     const prev = [{ d0: '2025-07', m0: 1, m1: 7 }];
     const db = fakeReportDbSeq([current, prev], { m0: 158, m1: 7 });
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
 
-    const result = await service.query({
-      from: '2025-08-01T00:00:00.000Z',
-      to: '2026-08-01T00:00:00.000Z',
-      groupBy: ['month'],
-      metrics: ['count', 'dead'],
-      compareYoY: true,
-    } as never);
+    const result = await service.query(
+      {
+        from: '2025-08-01T00:00:00.000Z',
+        to: '2026-08-01T00:00:00.000Z',
+        groupBy: ['month'],
+        metrics: ['count', 'dead'],
+        compareYoY: true,
+      } as never,
+      ANALYTICS_USER,
+    );
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toEqual({ keys: ['2026-07'], values: [157, 0], valuesPrev: [1, 7] });
   });
 
   it('exports a valid XLSX workbook (ZIP magic bytes)', async () => {
-    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
-    const buffer = await service.exportReport({ ...REPORT_QUERY, title: 'Отчёт' } as never);
+    const service = new AnalyticsService(
+      fakeReportDb(GROUPED, TOTALS) as never,
+      SCOPE_STUB as never,
+    );
+    const buffer = await service.exportReport(
+      { ...REPORT_QUERY, title: 'Отчёт' } as never,
+      ANALYTICS_USER,
+    );
     expect(buffer.length).toBeGreaterThan(100);
     expect(buffer[0]).toBe(0x50); // 'P'
     expect(buffer[1]).toBe(0x4b); // 'K'
@@ -360,7 +390,7 @@ describe('AnalyticsService reports', () => {
         from: () => ({ where: () => ({ orderBy: async () => [savedRow] }) }),
       }),
     };
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
     const reports = await service.listReports('u1');
     expect(reports[0]).toMatchObject({ id: 'rep1', name: 'Мой отчёт' });
     expect(reports[0]?.createdAt).toBe('2026-07-15T00:00:00.000Z');
@@ -370,7 +400,7 @@ describe('AnalyticsService reports', () => {
     const db = {
       update: () => ({ set: () => ({ where: () => ({ returning: async () => [] }) }) }),
     };
-    const service = new AnalyticsService(db as never);
+    const service = new AnalyticsService(db as never, SCOPE_STUB as never);
     await expect(service.removeReport('u1', 'missing')).rejects.toMatchObject({
       code: 'analytics.report.not_found',
     });

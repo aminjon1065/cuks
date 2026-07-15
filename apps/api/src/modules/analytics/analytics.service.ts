@@ -1,5 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, gte, isNull, lt, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from 'drizzle-orm';
 import {
   adminUnits,
   dictionaries,
@@ -27,8 +40,10 @@ import type {
   SummaryReportItem,
 } from '@cuks/shared';
 import { buildXlsx, type XlsxRow } from '@cuks/shared/office/xlsx';
+import type { AuthUser } from '../../common/auth/auth-user';
 import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
+import { ScopeService } from '../admin/scope.service';
 
 /** Report definitions are saved on the shared `saved_filters` table under this module. */
 const REPORT_MODULE = 'analytics';
@@ -67,18 +82,34 @@ const LATEST_REPORTS_LIMIT = 8;
  */
 @Injectable()
 export class AnalyticsService {
-  constructor(@Inject(DB) private readonly db: Database) {}
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly scope: ScopeService,
+  ) {}
 
-  async summary(query: AnalyticsSummaryQuery): Promise<AnalyticsSummaryDto> {
+  /** Territory data-scope for aggregates: a regional user's charts/reports cover
+   *  only their region(s); central/superadmin see all (task 2.13). */
+  private async regionScope(user: AuthUser): Promise<SQL | undefined> {
+    const scope = await this.scope.getAccessibleRegions(user, 'gis.view');
+    if (scope.global) return undefined;
+    return or(
+      inArray(incidents.regionId, scope.adminUnitIds),
+      inArray(incidents.districtId, scope.adminUnitIds),
+      inArray(incidents.jamoatId, scope.adminUnitIds),
+    );
+  }
+
+  async summary(query: AnalyticsSummaryQuery, user: AuthUser): Promise<AnalyticsSummaryDto> {
     const from = new Date(query.from);
     const to = new Date(query.to);
     // The previous window is the equal-length span immediately before `from`.
     const prevFrom = new Date(from.getTime() - (to.getTime() - from.getTime()));
+    const scope = await this.regionScope(user);
 
     const [kpis, activeIncidents, latestReports] = await Promise.all([
-      this.kpis(prevFrom, from, to),
-      this.activeIncidents(),
-      this.latestReports(),
+      this.kpis(prevFrom, from, to, scope),
+      this.activeIncidents(scope),
+      this.latestReports(scope),
     ]);
 
     return { period: { from: query.from, to: query.to }, kpis, activeIncidents, latestReports };
@@ -89,7 +120,7 @@ export class AnalyticsService {
    * the current window (`[from, to)`) from the previous one (`[prevFrom, from)`).
    * Counts and casualty sums come back as `int`; damage stays `numeric` (a string).
    */
-  private async kpis(prevFrom: Date, from: Date, to: Date): Promise<AnalyticsKpis> {
+  private async kpis(prevFrom: Date, from: Date, to: Date, scope?: SQL): Promise<AnalyticsKpis> {
     const inCurrent: SQL = sql`${incidents.occurredAt} >= ${from} and ${incidents.occurredAt} < ${to}`;
     const inPrevious: SQL = sql`${incidents.occurredAt} >= ${prevFrom} and ${incidents.occurredAt} < ${from}`;
     const sumInt = (col: AnyColumn, when: SQL) =>
@@ -118,6 +149,7 @@ export class AnalyticsService {
           isNull(incidents.deletedAt),
           sql`${incidents.occurredAt} >= ${prevFrom}`,
           sql`${incidents.occurredAt} < ${to}`,
+          ...(scope ? [scope] : []),
         ),
       );
 
@@ -133,8 +165,12 @@ export class AnalyticsService {
 
   /** Active = not closed, period-independent (the current operational picture).
    *  Centroid resolves both point and polygon incidents to one marker. */
-  private async activeIncidents(): Promise<AnalyticsSummaryDto['activeIncidents']> {
-    const openFilter = and(isNull(incidents.deletedAt), ne(incidents.status, 'closed'));
+  private async activeIncidents(scope?: SQL): Promise<AnalyticsSummaryDto['activeIncidents']> {
+    const openFilter = and(
+      isNull(incidents.deletedAt),
+      ne(incidents.status, 'closed'),
+      ...(scope ? [scope] : []),
+    );
     const rows = await this.db
       .select({
         id: incidents.id,
@@ -173,7 +209,7 @@ export class AnalyticsService {
     return { points, total, truncated };
   }
 
-  private async latestReports(): Promise<SummaryReportItem[]> {
+  private async latestReports(scope?: SQL): Promise<SummaryReportItem[]> {
     const rows = await this.db
       .select({
         id: incidentReports.id,
@@ -189,7 +225,7 @@ export class AnalyticsService {
       })
       .from(incidentReports)
       .innerJoin(incidents, eq(incidents.id, incidentReports.incidentId))
-      .where(isNull(incidents.deletedAt))
+      .where(and(isNull(incidents.deletedAt), ...(scope ? [scope] : [])))
       .orderBy(desc(incidentReports.reportedAt))
       .limit(LATEST_REPORTS_LIMIT);
 
@@ -214,8 +250,9 @@ export class AnalyticsService {
    * independent grouped queries run concurrently; time buckets (month, day-of-week,
    * hour) are computed in Asia/Dushanbe so they read as local operational time.
    */
-  async stats(query: AnalyticsStatsQuery): Promise<AnalyticsStatsDto> {
-    const where = and(...this.statsWhere(query));
+  async stats(query: AnalyticsStatsQuery, user: AuthUser): Promise<AnalyticsStatsDto> {
+    const scope = await this.regionScope(user);
+    const where = and(...this.statsWhere(query), ...(scope ? [scope] : []));
     const monthLocal = sql`date_trunc('month', ${incidents.occurredAt} ${LOCAL_TZ})`;
     const dowLocal = sql<number>`extract(isodow from ${incidents.occurredAt} ${LOCAL_TZ})::int`;
     const hourLocal = sql<number>`extract(hour from ${incidents.occurredAt} ${LOCAL_TZ})::int`;
@@ -353,12 +390,13 @@ export class AnalyticsService {
    * With `compareYoY` the same aggregation runs on the same period a year earlier and
    * the two are merged by dimension key («АППГ»).
    */
-  async query(input: ReportQuery): Promise<ReportResultDto> {
+  async query(input: ReportQuery, user: AuthUser): Promise<ReportResultDto> {
     const dimensions = dedupeDimensions(input.groupBy);
     const from = new Date(input.from);
     const to = new Date(input.to);
+    const scope = await this.regionScope(user);
 
-    const current = await this.runReport(input, dimensions, from, to);
+    const current = await this.runReport(input, dimensions, from, to, scope);
     if (!input.compareYoY) {
       return {
         dimensions,
@@ -369,7 +407,13 @@ export class AnalyticsService {
       };
     }
 
-    const prev = await this.runReport(input, dimensions, shiftYears(from, -1), shiftYears(to, -1));
+    const prev = await this.runReport(
+      input,
+      dimensions,
+      shiftYears(from, -1),
+      shiftYears(to, -1),
+      scope,
+    );
     // The `month` dimension key carries an absolute year (`YYYY-MM`), so the prior
     // window's months would never match the current ones. Shift the prev key's month
     // component forward a year so last year's 2025-07 aligns with this year's 2026-07.
@@ -414,8 +458,8 @@ export class AnalyticsService {
   }
 
   /** The report as an XLSX buffer with a КЧС letterhead (`POST /analytics/query/export`). */
-  async exportReport(input: ReportExportInput): Promise<Buffer> {
-    const result = await this.query(input);
+  async exportReport(input: ReportExportInput, user: AuthUser): Promise<Buffer> {
+    const result = await this.query(input, user);
     const dims = result.dimensions;
     const metrics = result.metrics;
 
@@ -496,8 +540,9 @@ export class AnalyticsService {
     dimensions: ReportDimension[],
     from: Date,
     to: Date,
+    scope?: SQL,
   ): Promise<{ rows: ReportRow[]; totals: (number | string)[] }> {
-    const where = and(...this.reportWhere(input, from, to));
+    const where = and(...this.reportWhere(input, from, to), ...(scope ? [scope] : []));
     const selection: Record<string, SQL> = {};
     const groupExprs: SQL[] = [];
     dimensions.forEach((dim, i) => {

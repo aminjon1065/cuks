@@ -38,8 +38,9 @@ export class AnalyticsController {
   @ApiOkResponse({ description: 'Operational summary for the selected period' })
   summary(
     @Query(new ZodValidationPipe(analyticsSummaryQuerySchema)) query: AnalyticsSummaryQuery,
+    @CurrentUser() user: AuthUser,
   ): Promise<AnalyticsSummaryDto> {
-    return this.analytics.summary(query);
+    return this.analytics.summary(query, user);
   }
 
   @Get('stats')
@@ -48,8 +49,9 @@ export class AnalyticsController {
   @ApiOkResponse({ description: 'Aggregated incident statistics for the filter' })
   stats(
     @Query(new ZodValidationPipe(analyticsStatsQuerySchema)) query: AnalyticsStatsQuery,
+    @CurrentUser() user: AuthUser,
   ): Promise<AnalyticsStatsDto> {
-    return this.analytics.stats(query);
+    return this.analytics.stats(query, user);
   }
 
   @Get('regions.geojson')
@@ -68,8 +70,9 @@ export class AnalyticsController {
   @ApiOkResponse({ description: 'Aggregated report table' })
   query(
     @Body(new ZodValidationPipe(reportQuerySchema)) body: ReportQuery,
+    @CurrentUser() user: AuthUser,
   ): Promise<ReportResultDto> {
-    return this.analytics.query(body);
+    return this.analytics.query(body, user);
   }
 
   @Post('query/export')
@@ -78,11 +81,12 @@ export class AnalyticsController {
   @ApiOkResponse({ description: 'XLSX workbook attachment' })
   async exportQuery(
     @Body(new ZodValidationPipe(reportExportSchema)) body: ReportExportInput,
+    @CurrentUser() user: AuthUser,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<Buffer> {
     reply.header('content-disposition', 'attachment; filename="report.xlsx"');
     reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    return this.analytics.exportReport(body);
+    return this.analytics.exportReport(body, user);
   }
 
   @Get('reports')
