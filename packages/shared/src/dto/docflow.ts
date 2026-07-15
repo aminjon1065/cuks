@@ -9,6 +9,7 @@ import {
   JOURNAL_SEQ_RESETS,
   ROUTE_ASSIGNEE_TYPES,
   ROUTE_STEP_KINDS,
+  type ControlSeverity,
   type DocumentLinkKind,
   type DocClass,
   type DocumentConfidentiality,
@@ -390,6 +391,51 @@ export const extendResolutionSchema = z.object({
   reason: z.string().min(1).max(1000),
 });
 export type ExtendResolutionInput = z.infer<typeof extendResolutionSchema>;
+
+/** Remove a resolution from control (docs/modules/11 §5) — keeps it active, clears the
+ *  control flag; requires a reason (audited). */
+export const removeResolutionControlSchema = z.object({
+  reason: z.string().min(1).max(1000),
+});
+export type RemoveResolutionControlInput = z.infer<typeof removeResolutionControlSchema>;
+
+/** notification_outbox topic for docflow deadline reminders/escalations (task 3.8). The
+ *  worker inserts rows under this topic; a docflow API dispatcher fans them out. */
+export const DOCFLOW_DEADLINE_TOPIC = 'docflow.deadline';
+
+export const DOCFLOW_DEADLINE_TIERS = ['due3', 'due1', 'due0', 'overdue', 'escalation'] as const;
+export type DocflowDeadlineTier = (typeof DOCFLOW_DEADLINE_TIERS)[number];
+
+/** Outbox payload the worker writes and the dispatcher validates + fans out. */
+export const docflowDeadlinePayloadSchema = z.object({
+  resolutionId: z.string().uuid(),
+  documentId: z.string().uuid(),
+  tier: z.enum(DOCFLOW_DEADLINE_TIERS),
+  subject: z.string(),
+  dueDate: z.string(),
+  recipientUserIds: z.array(z.string().uuid()).min(1),
+});
+export type DocflowDeadlinePayload = z.infer<typeof docflowDeadlinePayloadSchema>;
+
+/** One row of the «На контроле» view (docs/modules/11 §5): a controlled resolution or a
+ *  document with a due date, with its deadline severity. */
+export interface ControlItemDto {
+  kind: 'resolution' | 'document';
+  /** The resolution id (kind=resolution) or the document id (kind=document). */
+  id: string;
+  documentId: string;
+  regNumber: string | null;
+  subject: string;
+  documentStatus: DocumentStatus;
+  /** The instruction text (kind=resolution) or null (kind=document). */
+  resolutionText: string | null;
+  executorName: string | null;
+  authorName: string | null;
+  dueDate: string | null;
+  severity: ControlSeverity;
+  /** Whether the caller may extend / remove from control (author or control officer). */
+  canManage: boolean;
+}
 
 export interface ResolutionExtensionDto {
   id: string;

@@ -289,3 +289,57 @@ export type CertificateKind = (typeof CERTIFICATE_KINDS)[number];
  *  (`reply` = the source document answers the target). Shown bidirectionally on both cards. */
 export const DOCUMENT_LINK_KINDS = ['related', 'reply'] as const;
 export type DocumentLinkKind = (typeof DOCUMENT_LINK_KINDS)[number];
+
+// --- Execution control / контроль (docs/modules/11 §5, task 3.8) ---
+
+/** Deadline severity for the «На контроле» color scale (docs/modules/11 §5): more than
+ *  3 days out = `normal`, within 3 days = `warning`, past due = `overdue`. */
+export const CONTROL_SEVERITIES = ['normal', 'warning', 'overdue'] as const;
+export type ControlSeverity = (typeof CONTROL_SEVERITIES)[number];
+
+/** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
+const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** The Asia/Dushanbe calendar day of a UTC instant, as a day number (floored). */
+function dushanbeDay(ms: number): number {
+  return Math.floor((ms + DUSHANBE_OFFSET_MS) / 86_400_000);
+}
+
+/** Whole Asia/Dushanbe calendar days from `now` until `due` (negative = overdue). */
+export function deadlineDaysLeft(dueIso: string, now: Date): number {
+  return dushanbeDay(new Date(dueIso).getTime()) - dushanbeDay(now.getTime());
+}
+
+export function deadlineSeverity(dueIso: string | null, now: Date): ControlSeverity {
+  if (!dueIso) return 'normal';
+  const days = deadlineDaysLeft(dueIso, now);
+  if (days < 0) return 'overdue';
+  if (days <= 3) return 'warning';
+  return 'normal';
+}
+
+export interface DeadlineClassification {
+  severity: ControlSeverity;
+  /** A pre-due reminder day (−3 / −1 / 0), else null. */
+  reminder: 'due3' | 'due1' | 'due0' | null;
+  /** Past due (fires an overdue reminder daily). */
+  overdue: boolean;
+  /** Overdue by more than 5 days (escalation to the subdivision head). */
+  escalation: boolean;
+}
+
+/**
+ * Classify a controlled deadline for the daily sweep (docs/modules/11 §5). Reminders go
+ * out at 3 days, 1 day and on the due day; once overdue, an overdue reminder fires every
+ * day, and past 5 days overdue it escalates. Pure + timezone-correct (Dushanbe days) so
+ * the worker and its tests agree.
+ */
+export function classifyDeadline(dueIso: string, now: Date): DeadlineClassification {
+  const days = deadlineDaysLeft(dueIso, now);
+  return {
+    severity: days < 0 ? 'overdue' : days <= 3 ? 'warning' : 'normal',
+    reminder: days === 3 ? 'due3' : days === 1 ? 'due1' : days === 0 ? 'due0' : null,
+    overdue: days < 0,
+    escalation: days <= -6,
+  };
+}
