@@ -161,6 +161,18 @@ test('signatures: route → sign → verify the full outgoing cycle, and a file 
   );
   expect(approved.ok(), `approve ${approved.status()}`).toBeTruthy();
 
+  // A signing step cannot be completed by plain approval — it must be signed (no bypass
+  // of the crypto/2FA/password controls).
+  const afterApprove = await json<RouteDto[]>(
+    await admin.get(`/api/v1/docflow/documents/${doc.id}/routes`),
+  );
+  const signStep = afterApprove[0]!.steps.find((s) => s.kind === 'sign' && s.canAct)!;
+  const bypass = await admin.post(`/api/v1/docflow/route-steps/${signStep.id}/actions/approve`, {
+    headers,
+    data: {},
+  });
+  expect(bypass.status(), 'approving a sign step is refused').toBe(409);
+
   // Activate a device certificate and sign the server's canonical payload.
   const signer = await makeSigner();
   const cert = await json<CertificateDto>(

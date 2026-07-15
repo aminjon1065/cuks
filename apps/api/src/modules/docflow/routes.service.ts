@@ -336,6 +336,16 @@ export class RoutesService {
           'You may not act on this step',
         );
       }
+      // A signing step is completed only by producing a cryptographic signature
+      // (SignaturesService.sign) — never by a plain approval, which would advance the
+      // route with no signature and bypass the 2FA/password/certificate controls
+      // (docs/09-security.md §4). Declining to sign still goes through reject.
+      if (action === 'approve' && step.kind === 'sign') {
+        throw AppException.conflict(
+          'docflow.route_step.sign_required',
+          'A signing step must be completed by signing',
+        );
+      }
       const now = new Date();
       if (action === 'reject') {
         await tx

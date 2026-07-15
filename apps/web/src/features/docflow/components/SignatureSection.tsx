@@ -86,7 +86,10 @@ export function SignatureSection({ doc }: { doc: DocumentDetailDto }): React.JSX
                 label={s.valid ? t('signatures.valid') : t('signatures.invalid')}
               />
               <span className="text-xs text-text-muted">{formatDateTime(s.signedAt)}</span>
-              <Link to={`/verify/${s.id}`} className="ml-auto text-xs text-primary hover:underline">
+              <Link
+                to={`/app/verify/${s.id}`}
+                className="ml-auto text-xs text-primary hover:underline"
+              >
                 {t('signatures.verifyLink')}
               </Link>
             </li>

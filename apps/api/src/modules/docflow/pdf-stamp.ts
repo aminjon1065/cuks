@@ -27,6 +27,19 @@ const MUTED = rgb(0.42, 0.45, 0.5);
 const OK = rgb(0.13, 0.55, 0.29);
 const BAD = rgb(0.79, 0.16, 0.19);
 
+// Display time in Asia/Dushanbe (CLAUDE.md §2), like every other user-facing surface.
+const DUSHANBE = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Asia/Dushanbe',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+function localTime(iso: string): string {
+  return DUSHANBE.format(new Date(iso));
+}
+
 /**
  * Build the "отметка об ЭЦП" PDF (docs/09-security.md §4): a standalone A4 artifact
  * listing each signature (who, position, when, certificate serial, validity) with a QR
@@ -63,7 +76,7 @@ export async function buildStampPdf(input: StampInput): Promise<Uint8Array> {
   }
 
   // Footer: when this artifact was produced.
-  page.drawText(`Сформировано: ${input.generatedAt}`, {
+  page.drawText(`Сформировано: ${localTime(input.generatedAt)}`, {
     x: MARGIN,
     y: MARGIN - 18,
     size: 9,
@@ -105,7 +118,7 @@ async function drawSignatureBlock(
   };
   line(sig.signerName, 4, 13);
   line(sig.signerPosition ?? '—', 22, 10, MUTED);
-  line(`Подписано: ${sig.signedAt}`, 40, 10, MUTED);
+  line(`Подписано: ${localTime(sig.signedAt)}`, 40, 10, MUTED);
   line(`Сертификат: ${sig.certificateSerial}`, 56, 10, MUTED);
   line(
     sig.valid ? 'Подпись действительна' : 'Подпись недействительна',

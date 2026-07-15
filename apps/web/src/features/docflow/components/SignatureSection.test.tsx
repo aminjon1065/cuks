@@ -85,7 +85,7 @@ describe('SignatureSection', () => {
     expect(await screen.findByText('Начальник Н.')).toBeInTheDocument();
     expect(screen.getByText('Действительна')).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'Проверить' });
-    expect(link).toHaveAttribute('href', '/verify/sig1');
+    expect(link).toHaveAttribute('href', '/app/verify/sig1');
   });
 
   it('offers the Sign action when the caller has an active signing step', async () => {
