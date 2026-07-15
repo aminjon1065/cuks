@@ -34,6 +34,7 @@ export function DocumentsPage(): React.JSX.Element {
   const queues: DocumentQueue[] = [
     'mine',
     'to_approve',
+    'to_sign',
     'my_tasks',
     'drafts',
     ...(canRegistry ? (['registry'] as const) : []),

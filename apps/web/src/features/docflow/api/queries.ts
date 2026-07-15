@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  ActivateCertificateInput,
+  CertificateDto,
   ChangeDocumentStatusInput,
   CorrespondentCategoryDto,
   CreateResolutionInput,
@@ -8,7 +10,11 @@ import type {
   ReportResolutionInput,
   ResolutionDto,
   RouteDto,
+  SignatureDto,
+  SignDocumentInput,
+  SignPayloadDto,
   StartRouteInput,
+  VerifyResultDto,
   CorrespondentDto,
   CreateCorrespondentInput,
   CreateDocumentInput,
@@ -329,5 +335,57 @@ export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserD
     queryKey: ['directory', 'users', search.trim()],
     queryFn: () => api.get<DirectoryUserDto[]>(`/v1/directory/users${qs}`),
     staleTime: 60 * 1000,
+  });
+}
+
+// ---- Signatures (ЭЦП) ------------------------------------------------------
+
+export function useDocumentSignatures(documentId: string | null): UseQueryResult<SignatureDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'signatures'],
+    queryFn: () => api.get<SignatureDto[]>(`/v1/docflow/documents/${documentId}/signatures`),
+    enabled: !!documentId,
+  });
+}
+
+export function useMyCertificates(): UseQueryResult<CertificateDto[]> {
+  return useQuery({
+    queryKey: [...docflowKey, 'certificates'],
+    queryFn: () => api.get<CertificateDto[]>('/v1/signatures/certificates'),
+  });
+}
+
+export function useActivateCertificate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ActivateCertificateInput) =>
+      api.post<CertificateDto>('/v1/signatures/activate', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [...docflowKey, 'certificates'] }),
+  });
+}
+
+/** Fetch the canonical payload to sign for a document's current file version. */
+export function fetchSignPayload(documentId: string): Promise<SignPayloadDto> {
+  return api.get<SignPayloadDto>(`/v1/docflow/documents/${documentId}/sign-payload`);
+}
+
+export function useSignDocument(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SignDocumentInput) =>
+      api.post<SignatureDto[]>(`/v1/docflow/documents/${documentId}/actions/sign`, input),
+    onSuccess: () => {
+      // Signing advances the route step and freezes the file — refresh the whole card.
+      void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+      void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+    },
+  });
+}
+
+export function useVerifySignature(signatureId: string | null): UseQueryResult<VerifyResultDto> {
+  return useQuery({
+    queryKey: [...docflowKey, 'verify', signatureId],
+    queryFn: () => api.get<VerifyResultDto>(`/v1/verify/${signatureId}`),
+    enabled: !!signatureId,
   });
 }

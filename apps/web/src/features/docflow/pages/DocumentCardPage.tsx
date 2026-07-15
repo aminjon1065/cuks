@@ -34,6 +34,7 @@ import {
 import { documentStatusTone } from '../lib/document';
 import { RouteSection } from '../components/RouteSection';
 import { ResolutionSection } from '../components/ResolutionSection';
+import { SignatureSection } from '../components/SignatureSection';
 
 const selectClass = cn(
   'h-9 w-full rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -101,6 +102,7 @@ export function DocumentCardPage(): React.JSX.Element {
 
       <Requisites data={data} />
       <RouteSection doc={data} />
+      <SignatureSection doc={data} />
       <ResolutionSection doc={data} />
       <Files data={data} />
 
