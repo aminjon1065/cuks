@@ -165,3 +165,15 @@ export type GisDbAccountKind = (typeof GIS_DB_ACCOUNT_KINDS)[number];
 /** Publication state of a registry layer to GeoServer WMS/WFS (docs/modules/10 §7). */
 export const GIS_PUBLISH_STATES = ['unpublished', 'published', 'error'] as const;
 export type GisPublishState = (typeof GIS_PUBLISH_STATES)[number];
+
+// --- Docflow (docs/modules/11, phase 3) ---
+
+/** Registration-journal document class (docs/modules/11 §3): the registration
+ *  books are grouped by the direction of the document flow. */
+export const DOC_CLASSES = ['incoming', 'outgoing', 'internal', 'citizens'] as const;
+export type DocClass = (typeof DOC_CLASSES)[number];
+
+/** How a journal's registration sequence resets (docs/modules/11 §3). `yearly` is
+ *  the norm (numbers restart each year); `never` is a continuous book. */
+export const JOURNAL_SEQ_RESETS = ['yearly', 'never'] as const;
+export type JournalSeqReset = (typeof JOURNAL_SEQ_RESETS)[number];

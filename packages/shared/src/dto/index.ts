@@ -13,3 +13,4 @@ export * from './gis-integration';
 export * from './directory';
 export * from './incidents';
 export * from './analytics';
+export * from './docflow';
