@@ -12,3 +12,4 @@ export * from './gis';
 export * from './gis-integration';
 export * from './directory';
 export * from './incidents';
+export * from './analytics';
