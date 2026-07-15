@@ -35,6 +35,7 @@ export function DocumentsPage(): React.JSX.Element {
     'mine',
     'to_approve',
     'to_sign',
+    'to_acknowledge',
     'my_tasks',
     'drafts',
     ...(canRegistry ? (['registry'] as const) : []),

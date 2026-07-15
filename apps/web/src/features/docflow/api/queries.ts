@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  AcknowledgementSheetDto,
   ActivateCertificateInput,
   CertificateDto,
   ChangeDocumentStatusInput,
@@ -388,6 +389,32 @@ export function useVerifySignature(signatureId: string | null): UseQueryResult<V
     queryKey: [...docflowKey, 'verify', signatureId],
     queryFn: () => api.get<VerifyResultDto>(`/v1/verify/${signatureId}`),
     enabled: !!signatureId,
+  });
+}
+
+// ---- Acknowledgements (ознакомление) --------------------------------------
+
+export function useDocumentAcquaintances(
+  documentId: string | null,
+): UseQueryResult<AcknowledgementSheetDto> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'acquaintances'],
+    queryFn: () =>
+      api.get<AcknowledgementSheetDto>(`/v1/docflow/documents/${documentId}/acquaintances`),
+    enabled: !!documentId,
+  });
+}
+
+export function useAcknowledge(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stepId: string) =>
+      api.post<AcknowledgementSheetDto>(`/v1/docflow/route-steps/${stepId}/actions/acknowledge`),
+    onSuccess: () => {
+      // Acknowledging may complete the step and advance the route — refresh the card.
+      void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+      void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+    },
   });
 }
 
