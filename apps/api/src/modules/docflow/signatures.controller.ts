@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   activateCertificateSchema,
@@ -86,5 +87,23 @@ export class SignaturesController {
     @Param('signatureId', new ZodValidationPipe(uuidSchema)) signatureId: string,
   ): Promise<VerifyResultDto> {
     return this.signatures.verify(signatureId, user);
+  }
+
+  @Post('docflow/documents/:id/export-pdf')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Export a stamped PDF with the signature table + QR codes' })
+  async exportPdf(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    const { bytes, filename } = await this.signatures.exportPdf(id, user);
+    const ascii = filename.replace(/[^\x20-\x7E]/g, '_');
+    reply.header(
+      'content-disposition',
+      `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    reply.type('application/pdf');
+    return Buffer.from(bytes);
   }
 }

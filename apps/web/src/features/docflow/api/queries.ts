@@ -33,6 +33,7 @@ import type {
   UpdateJournalInput,
   UpdateNomenclatureInput,
 } from '@cuks/shared';
+import { CSRF_COOKIE, CSRF_HEADER } from '@cuks/shared';
 import { api } from '@/lib/api-client';
 
 /** Query-key factory for the docflow reference data (docs/04 §Frontend). */
@@ -388,4 +389,32 @@ export function useVerifySignature(signatureId: string | null): UseQueryResult<V
     queryFn: () => api.get<VerifyResultDto>(`/v1/verify/${signatureId}`),
     enabled: !!signatureId,
   });
+}
+
+/** Download the stamped-PDF artifact (a binary POST — bypasses the JSON api client). */
+export async function exportSignedPdf(documentId: string): Promise<void> {
+  const csrf = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE}=([^;]*)`))?.[1];
+  const res = await fetch(`/api/v1/docflow/documents/${documentId}/export-pdf`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: csrf ? { [CSRF_HEADER]: decodeURIComponent(csrf) } : {},
+  });
+  if (!res.ok) throw new Error(`export failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition')) ?? 'signatures.pdf';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8?.[1]) return decodeURIComponent(utf8[1]);
+  const plain = header.match(/filename="?([^";]+)"?/i);
+  return plain?.[1] ?? null;
 }

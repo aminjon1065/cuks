@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, PenLine, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { Button, EmptyState, Skeleton, StatusBadge } from '@cuks/ui';
+import { BadgeCheck, Download, PenLine, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Button, EmptyState, Skeleton, StatusBadge, toast } from '@cuks/ui';
 import type { DocumentDetailDto } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
 import { formatDateTime } from '@/lib/format';
-import { useDocumentRoutes, useDocumentSignatures } from '../api/queries';
+import { exportSignedPdf, useDocumentRoutes, useDocumentSignatures } from '../api/queries';
 import { SignDialog } from './SignDialog';
 
 /** The card «Подписи» block (docs/modules/11 §6): existing signatures with a live
@@ -24,6 +24,18 @@ export function SignatureSection({ doc }: { doc: DocumentDetailDto }): React.JSX
   );
   const canSign = useCan('docflow.sign') && hasSignStep;
   const signatures = query.data ?? [];
+  const [exporting, setExporting] = useState(false);
+
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      await exportSignedPdf(doc.id);
+    } catch {
+      toast({ title: t('signatures.exportFailed'), tone: 'danger' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <section className="rounded-md border border-border bg-surface p-4">
@@ -31,11 +43,23 @@ export function SignatureSection({ doc }: { doc: DocumentDetailDto }): React.JSX
         <h2 className="flex items-center gap-2 text-sm font-semibold text-text">
           <BadgeCheck className="size-4" /> {t('signatures.title')}
         </h2>
-        {canSign ? (
-          <Button size="sm" onClick={() => setSignOpen(true)}>
-            <PenLine className="size-4" /> {t('signatures.sign.action')}
-          </Button>
-        ) : null}
+        <div className="flex gap-2">
+          {signatures.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={exporting}
+              onClick={() => void exportPdf()}
+            >
+              <Download className="size-4" /> {t('signatures.export')}
+            </Button>
+          ) : null}
+          {canSign ? (
+            <Button size="sm" onClick={() => setSignOpen(true)}>
+              <PenLine className="size-4" /> {t('signatures.sign.action')}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {query.isPending ? (

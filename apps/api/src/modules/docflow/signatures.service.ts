@@ -27,10 +27,12 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { StorageService } from '../../common/storage/storage.service';
+import { ConfigService } from '../../config/config.service';
 import { PasswordService } from '../auth/password.service';
 import { canViewDocumentBase } from './document-visibility';
 import { CaService } from './ca.service';
 import { RoutesService } from './routes.service';
+import { buildStampPdf, type StampSignature } from './pdf-stamp';
 import {
   fromBase64,
   importUserPublicKey,
@@ -63,6 +65,7 @@ export class SignaturesService {
     private readonly ca: CaService,
     private readonly routes: RoutesService,
     private readonly passwords: PasswordService,
+    private readonly config: ConfigService,
   ) {}
 
   // --- Certificate activation ------------------------------------------------
@@ -241,11 +244,7 @@ export class SignaturesService {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
     const rows = await this.db
-      .select({
-        sig: signatures,
-        userName: users.shortName,
-        serial: certificates.serial,
-      })
+      .select({ sig: signatures, cert: certificates, userName: users.shortName })
       .from(signatures)
       .innerJoin(certificates, eq(certificates.id, signatures.certificateId))
       .leftJoin(users, eq(users.id, signatures.userId))
@@ -253,17 +252,19 @@ export class SignaturesService {
       .orderBy(asc(signatures.signedAt));
 
     const currentHash = await this.currentMainHash(documentId);
-    return rows.map(({ sig, userName, serial }) => ({
-      id: sig.id,
-      userId: sig.userId,
-      userName: userName ?? null,
-      certificateId: sig.certificateId,
-      certificateSerial: serial,
-      algorithm: sig.algorithm,
-      context: sig.context,
-      signedAt: sig.signedAt.toISOString(),
-      valid: currentHash !== null && this.payloadFileHash(sig.payload) === currentHash,
-    }));
+    return Promise.all(
+      rows.map(async ({ sig, cert, userName }) => ({
+        id: sig.id,
+        userId: sig.userId,
+        userName: userName ?? null,
+        certificateId: sig.certificateId,
+        certificateSerial: cert.serial,
+        algorithm: sig.algorithm,
+        context: sig.context,
+        signedAt: sig.signedAt.toISOString(),
+        valid: (await this.computeValidity(sig, cert, currentHash)).valid,
+      })),
+    );
   }
 
   /** Verify a signature (docs/09-security.md §4). Available to any authenticated user;
@@ -278,25 +279,8 @@ export class SignaturesService {
     if (!row) throw AppException.notFound('docflow.signature.not_found', 'Signature not found');
     const { sig, cert } = row;
 
-    const body = this.certificateBodyOf(cert);
-    const [signatureOk, chainOk, currentHash] = await Promise.all([
-      importUserPublicKey(fromBase64(cert.publicKeySpki))
-        .then((key) => userVerify(key, fromBase64(sig.signature), utf8(sig.payload)))
-        .catch(() => false),
-      this.ca.verifyCertificate(body, cert.caSignature),
-      this.currentMainHash(sig.documentId),
-    ]);
-    // Valid at signing time = not revoked, or revoked only after this signature was made.
-    const revocationOk = !cert.revokedAt || cert.revokedAt > sig.signedAt;
-    const fileHashOk = currentHash !== null && this.payloadFileHash(sig.payload) === currentHash;
-
-    const checks: VerifyCheckDto[] = [
-      { key: 'signature', ok: signatureOk },
-      { key: 'chain', ok: chainOk },
-      { key: 'revocation', ok: revocationOk },
-      { key: 'file_hash', ok: fileHashOk },
-    ];
-    const valid = checks.every((c) => c.ok);
+    const currentHash = await this.currentMainHash(sig.documentId);
+    const { valid, checks } = await this.computeValidity(sig, cert, currentHash);
 
     const [doc] = await this.db
       .select()
@@ -319,7 +303,83 @@ export class SignaturesService {
     };
   }
 
+  /** Build the stamped-PDF artifact (docs/09-security.md §4): a separate document listing
+   *  the signatures with QR codes to their verification pages. The original is untouched. */
+  async exportPdf(
+    documentId: string,
+    actor: AuthUser,
+  ): Promise<{ bytes: Uint8Array; filename: string }> {
+    const [doc] = await this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)))
+      .limit(1);
+    if (!doc || !(await this.canViewDocument(documentId, doc, actor))) {
+      throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    }
+    const rows = await this.db
+      .select({ sig: signatures, cert: certificates })
+      .from(signatures)
+      .innerJoin(certificates, eq(certificates.id, signatures.certificateId))
+      .where(eq(signatures.documentId, documentId))
+      .orderBy(asc(signatures.signedAt));
+    const currentHash = await this.currentMainHash(documentId);
+    const origin = this.config.get('APP_ORIGIN');
+
+    const stampSignatures: StampSignature[] = await Promise.all(
+      rows.map(async ({ sig, cert }) => ({
+        signatureId: sig.id,
+        signerName: cert.subjectFullName,
+        signerPosition: cert.subjectPosition,
+        certificateSerial: cert.serial,
+        signedAt: sig.signedAt.toISOString(),
+        valid: (await this.computeValidity(sig, cert, currentHash)).valid,
+        verifyUrl: `${origin}/app/verify/${sig.id}`,
+      })),
+    );
+    const bytes = await buildStampPdf({
+      documentSubject: doc.subject,
+      documentRegNumber: doc.regNumber,
+      signatures: stampSignatures,
+      generatedAt: new Date().toISOString(),
+    });
+    this.audit.log({
+      action: 'docflow.document.exported',
+      actorId: actor.id,
+      entityType: 'document',
+      entityId: documentId,
+    });
+    return { bytes, filename: `${doc.regNumber ?? documentId}-signatures.pdf` };
+  }
+
   // --- Internals -------------------------------------------------------------
+
+  /** The full verification of one signature: cryptographic validity, chain to the CA,
+   *  revocation-at-signing, and whether the current file still matches. Shared by the
+   *  card block, the verify page and the PDF stamp. */
+  private async computeValidity(
+    sig: typeof signatures.$inferSelect,
+    cert: typeof certificates.$inferSelect,
+    currentHash: string | null,
+  ): Promise<{ valid: boolean; checks: VerifyCheckDto[] }> {
+    const [signatureOk, chainOk] = await Promise.all([
+      importUserPublicKey(fromBase64(cert.publicKeySpki))
+        .then((key) => userVerify(key, fromBase64(sig.signature), utf8(sig.payload)))
+        .catch(() => false),
+      this.ca.verifyCertificate(this.certificateBodyOf(cert), cert.caSignature),
+    ]);
+    const checks: VerifyCheckDto[] = [
+      { key: 'signature', ok: signatureOk },
+      { key: 'chain', ok: chainOk },
+      // Valid at signing time = not revoked, or revoked only after this signature.
+      { key: 'revocation', ok: !cert.revokedAt || cert.revokedAt > sig.signedAt },
+      {
+        key: 'file_hash',
+        ok: currentHash !== null && this.payloadFileHash(sig.payload) === currentHash,
+      },
+    ];
+    return { valid: checks.every((c) => c.ok), checks };
+  }
 
   /** True if the caller may see the document (base visibility, or route/sign step, or
    *  a signature they made). Signers must be able to see what they signed. */
