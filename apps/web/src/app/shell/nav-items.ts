@@ -67,6 +67,12 @@ export const ADMIN_NAV: NavItem[] = [
     permission: 'docflow.register',
   },
   {
+    key: 'docflowReports',
+    path: '/app/docs/reports',
+    icon: BarChart3,
+    permission: 'docflow.reports.view',
+  },
+  {
     key: 'docflowSettings',
     path: '/app/docs/settings',
     icon: FileText,

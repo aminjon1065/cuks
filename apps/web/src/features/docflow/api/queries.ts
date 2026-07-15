@@ -9,6 +9,8 @@ import type {
   CorrespondentCategoryDto,
   CreateDocumentLinkInput,
   CreateResolutionInput,
+  DisciplineReportDto,
+  DisciplineReportQuery,
   RemoveResolutionControlInput,
   DirectoryUserDto,
   DocumentHistoryEntryDto,
@@ -421,6 +423,46 @@ export function useControlResolutionAction() {
       api.post<ResolutionDto[]>(`/v1/docflow/resolutions/${resolutionId}/actions/${action}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: controlKey }),
   });
+}
+
+// ---- Executive-discipline report (docs/modules/11 §5, task 3.9) -----------
+
+export const reportsKey = [...docflowKey, 'reports'] as const;
+
+/** Build the `?from&to&orgUnitId` query string for the discipline endpoints. */
+function disciplineParams(query: DisciplineReportQuery): string {
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  if (query.orgUnitId) params.set('orgUnitId', query.orgUnitId);
+  return params.toString();
+}
+
+export function useDisciplineReport(
+  query: DisciplineReportQuery,
+  enabled = true,
+): UseQueryResult<DisciplineReportDto> {
+  return useQuery({
+    queryKey: [...reportsKey, 'discipline', query.from, query.to, query.orgUnitId ?? null],
+    queryFn: () =>
+      api.get<DisciplineReportDto>(`/v1/docflow/reports/discipline?${disciplineParams(query)}`),
+    enabled,
+  });
+}
+
+/** Download the discipline report as XLSX (a binary GET — bypasses the JSON api client). */
+export async function exportDisciplineXlsx(query: DisciplineReportQuery): Promise<void> {
+  const res = await fetch(`/api/v1/docflow/reports/discipline/export?${disciplineParams(query)}`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`export failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition')) ?? 'discipline.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserDto[]> {
