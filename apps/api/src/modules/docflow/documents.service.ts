@@ -34,6 +34,7 @@ import { DocflowNumberingService } from './docflow-numbering.service';
 import { canViewDocumentBase, hasRegistryAccess } from './document-visibility';
 import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
+import { AcknowledgementsService } from './acknowledgements.service';
 
 export interface DocumentStatusChangePlan {
   status: DocumentStatus;
@@ -77,6 +78,7 @@ export class DocumentsService {
     private readonly numbering: DocflowNumberingService,
     private readonly routes: RoutesService,
     private readonly resolutions: ResolutionsService,
+    private readonly acknowledgements: AcknowledgementsService,
   ) {}
 
   async create(input: CreateDocumentInput, actor: AuthUser): Promise<DocumentDetailDto> {
@@ -122,9 +124,11 @@ export class DocumentsService {
         ? await this.routes.approvalQueueDocumentIds(user.id)
         : query.queue === 'to_sign'
           ? await this.routes.signQueueDocumentIds(user.id)
-          : query.queue === 'my_tasks'
-            ? await this.resolutions.myTasksDocumentIds(user.id)
-            : undefined;
+          : query.queue === 'to_acknowledge'
+            ? await this.acknowledgements.toAcknowledgeDocumentIds(user.id)
+            : query.queue === 'my_tasks'
+              ? await this.resolutions.myTasksDocumentIds(user.id)
+              : undefined;
     const where = and(...this.whereFor(query, user, queueDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
@@ -186,7 +190,8 @@ export class DocumentsService {
       const assignments = await this.routes.actorAssignments(user.id);
       const participant =
         (await this.routes.isRouteParticipant(id, assignments)) ||
-        (await this.resolutions.isResolutionParticipant(id, user.id));
+        (await this.resolutions.isResolutionParticipant(id, user.id)) ||
+        (await this.acknowledgements.isAcquaintance(id, user.id));
       if (!participant) {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
@@ -550,9 +555,10 @@ export class DocumentsService {
         break;
       case 'to_approve':
       case 'to_sign':
+      case 'to_acknowledge':
       case 'my_tasks':
-        // Documents the caller has an active approve/sign step (to_approve/to_sign) or an
-        // active resolution to execute (my_tasks). An empty id set yields `false` (no rows).
+        // Documents the caller has an active approve/sign/acknowledge step, or an active
+        // resolution to execute (my_tasks). An empty id set yields `false` (no rows).
         where.push(inArray(documents.id, queueDocIds ?? []));
         break;
       case 'registry':

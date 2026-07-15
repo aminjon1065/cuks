@@ -5,6 +5,7 @@ import { DocumentsController } from './documents.controller';
 import { RoutesController } from './routes.controller';
 import { ResolutionsController } from './resolutions.controller';
 import { SignaturesController } from './signatures.controller';
+import { AcknowledgementsController } from './acknowledgements.controller';
 import { CorrespondentsService } from './correspondents.service';
 import { DocflowDictionariesService } from './docflow-dictionaries.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
@@ -15,6 +16,7 @@ import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
 import { CaService } from './ca.service';
 import { SignaturesService } from './signatures.service';
+import { AcknowledgementsService } from './acknowledgements.service';
 
 /**
  * Docflow module (docs/modules/11). Task 3.1 lands the reference-data layer
@@ -30,6 +32,7 @@ import { SignaturesService } from './signatures.service';
     RoutesController,
     ResolutionsController,
     SignaturesController,
+    AcknowledgementsController,
   ],
   providers: [
     JournalsService,
@@ -42,6 +45,7 @@ import { SignaturesService } from './signatures.service';
     ResolutionsService,
     CaService,
     SignaturesService,
+    AcknowledgementsService,
   ],
   exports: [DocflowNumberingService, JournalsService],
 })

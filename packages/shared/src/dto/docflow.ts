@@ -531,4 +531,6 @@ export interface AcknowledgementSheetDto {
   acknowledged: number;
   /** True when the caller has an unacknowledged line on an active acknowledge step. */
   canAcknowledge: boolean;
+  /** The active acknowledge step the caller acknowledges against (null when none). */
+  stepId: string | null;
 }

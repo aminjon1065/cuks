@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import {
+  acquaintances,
   documents,
   orgUnits,
   positions,
@@ -24,6 +25,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
+import { NotificationsService } from '../notifications/notifications.service';
 import { canViewDocumentBase } from './document-visibility';
 import { planApproval, type RouteStepState } from './route-engine';
 
@@ -42,6 +44,7 @@ export class RoutesService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // --- Assignment resolution -------------------------------------------------
@@ -188,7 +191,7 @@ export class RoutesService {
     tx: Database,
     route: { id: string; documentId: string },
     stepId: string,
-    decision: 'approved' | 'signed',
+    decision: 'approved' | 'signed' | 'acknowledged',
     comment: string | null,
     actorId: string,
     now: Date,
@@ -217,6 +220,93 @@ export class RoutesService {
         .update(documents)
         .set({ status: 'pending_registration' })
         .where(eq(documents.id, route.documentId));
+    }
+  }
+
+  // --- Acknowledge expansion (task 3.6) --------------------------------------
+
+  /** The users behind a step assignee (docs/modules/11 §3): the user itself, the holders
+   *  of a position, or every member of a subdivision (an acknowledge step «разворачивается
+   *  в список сотрудников»). */
+  private async resolveAssigneeUsers(
+    tx: Database,
+    assigneeType: string,
+    assigneeId: string,
+  ): Promise<string[]> {
+    if (assigneeType === 'user') return [assigneeId];
+    if (assigneeType === 'position') {
+      const rows = await tx
+        .select({ userId: userPositions.userId })
+        .from(userPositions)
+        .where(eq(userPositions.positionId, assigneeId));
+      return [...new Set(rows.map((r) => r.userId))];
+    }
+    // org_unit — every member with a (non-deleted) position in the subdivision.
+    const rows = await tx
+      .select({ userId: userPositions.userId })
+      .from(userPositions)
+      .innerJoin(
+        positions,
+        and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+      )
+      .where(eq(positions.orgUnitId, assigneeId));
+    return [...new Set(rows.map((r) => r.userId))];
+  }
+
+  /**
+   * Ensure every ACTIVE acknowledge step on the document's active route has its
+   * acquaintance rows (expanding a subdivision to its members), then notify newly-added
+   * people. Idempotent — safe to call after any route mutation that may have activated an
+   * acknowledge step (docs/modules/11 §6, task 3.6).
+   */
+  async expandAndNotifyAcknowledge(documentId: string): Promise<void> {
+    const added = await this.db.transaction(async (tx) => {
+      const [route] = await tx
+        .select({ id: routes.id })
+        .from(routes)
+        .where(and(eq(routes.documentId, documentId), eq(routes.status, 'active')))
+        .limit(1);
+      if (!route) return [];
+      const steps = await tx
+        .select()
+        .from(routeSteps)
+        .where(
+          and(
+            eq(routeSteps.routeId, route.id),
+            eq(routeSteps.kind, 'acknowledge'),
+            eq(routeSteps.status, 'active'),
+          ),
+        );
+      const fresh: string[] = [];
+      for (const step of steps) {
+        const userIds = await this.resolveAssigneeUsers(tx, step.assigneeType, step.assigneeId);
+        if (userIds.length === 0) continue;
+        const existing = await tx
+          .select({ userId: acquaintances.userId })
+          .from(acquaintances)
+          .where(eq(acquaintances.routeStepId, step.id));
+        const have = new Set(existing.map((e) => e.userId));
+        const toAdd = userIds.filter((u) => !have.has(u));
+        if (toAdd.length === 0) continue;
+        await tx
+          .insert(acquaintances)
+          .values(toAdd.map((userId) => ({ documentId, routeStepId: step.id, userId })))
+          .onConflictDoNothing();
+        fresh.push(...toAdd);
+      }
+      return fresh;
+    });
+    if (added.length > 0) {
+      void this.notifications.notifyMany({
+        userIds: [...new Set(added)],
+        type: 'docflow.document.acknowledge_requested',
+        title: 'Ознакомление с документом',
+        body: 'Вам направлен документ на ознакомление',
+        entityType: 'document',
+        entityId: documentId,
+        priority: 'normal',
+        emailMode: 'offline',
+      });
     }
   }
 
@@ -302,6 +392,8 @@ export class RoutesService {
       entityId: documentId,
       meta: { steps: stepDefs.length },
     });
+    // If the first group is an acknowledge step, expand the sheet and notify readers.
+    await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
   }
 
@@ -382,6 +474,8 @@ export class RoutesService {
       entityId: documentId,
       meta: { stepId },
     });
+    // Approving may have activated an acknowledge step — expand its sheet and notify.
+    if (action === 'approve') await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
   }
 

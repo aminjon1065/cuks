@@ -226,6 +226,8 @@ export class SignaturesService {
       entityType: 'document',
       entityId: documentId,
     });
+    // Signing may have activated an acknowledge step — expand its sheet and notify.
+    await this.routes.expandAndNotifyAcknowledge(documentId);
     return this.forDocument(documentId, actor);
   }
 
