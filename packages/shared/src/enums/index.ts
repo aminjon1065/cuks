@@ -177,3 +177,54 @@ export type DocClass = (typeof DOC_CLASSES)[number];
  *  the norm (numbers restart each year); `never` is a continuous book. */
 export const JOURNAL_SEQ_RESETS = ['yearly', 'never'] as const;
 export type JournalSeqReset = (typeof JOURNAL_SEQ_RESETS)[number];
+
+/** Document lifecycle (docs/modules/11 §3/§4). `draft → on_route → pending_registration
+ *  → registered → in_progress → completed → archived`, with `rejected` (a route step
+ *  rejected it, back to the author) and `recalled` (the author withdrew it). */
+export const DOCUMENT_STATUSES = [
+  'draft',
+  'on_route',
+  'pending_registration',
+  'registered',
+  'in_progress',
+  'completed',
+  'archived',
+  'rejected',
+  'recalled',
+] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+/**
+ * Allowed status transitions (docs/modules/11 §4). A DAG with two back-edges for
+ * rework (`rejected → draft`) and re-opening a recalled draft. `register` is a
+ * dedicated action that moves `draft`/`pending_registration → registered` while
+ * minting the journal number; the plain lifecycle advance covers the rest.
+ */
+export const DOCUMENT_STATUS_TRANSITIONS: Record<DocumentStatus, readonly DocumentStatus[]> = {
+  draft: ['on_route', 'registered', 'recalled'],
+  on_route: ['pending_registration', 'rejected', 'recalled'],
+  pending_registration: ['registered', 'rejected'],
+  registered: ['in_progress', 'archived'],
+  in_progress: ['completed'],
+  completed: ['archived'],
+  rejected: ['draft', 'recalled'],
+  recalled: ['draft'],
+  archived: [],
+};
+
+/** True if `to` is a permitted next status from `from` (docs/modules/11 §4). */
+export function documentTransitionAllowed(from: DocumentStatus, to: DocumentStatus): boolean {
+  return DOCUMENT_STATUS_TRANSITIONS[from].includes(to);
+}
+
+/** Confidentiality grade (docs/modules/11 §3). `dsp` = restricted (allow-list only). */
+export const DOCUMENT_CONFIDENTIALITY = ['normal', 'dsp'] as const;
+export type DocumentConfidentiality = (typeof DOCUMENT_CONFIDENTIALITY)[number];
+
+/** How an outgoing document is dispatched (docs/modules/11 §3). */
+export const DOCUMENT_DELIVERY = ['mail', 'email', 'courier', 'fax'] as const;
+export type DocumentDelivery = (typeof DOCUMENT_DELIVERY)[number];
+
+/** A document file's role (docs/modules/11 §3): the main body vs an attachment. */
+export const DOCUMENT_FILE_KINDS = ['main', 'attachment'] as const;
+export type DocumentFileKind = (typeof DOCUMENT_FILE_KINDS)[number];

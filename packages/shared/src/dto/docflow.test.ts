@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { documentTransitionAllowed } from '../enums/index';
 import {
   correspondentsQuerySchema,
   createCorrespondentSchema,
+  createDocumentSchema,
   createJournalSchema,
   createNomenclatureSchema,
+  registerDocumentSchema,
 } from './docflow';
 
 describe('createJournalSchema', () => {
@@ -59,6 +62,51 @@ describe('createCorrespondentSchema', () => {
 
   it('rejects an empty name', () => {
     expect(createCorrespondentSchema.safeParse({ name: '' }).success).toBe(false);
+  });
+});
+
+describe('createDocumentSchema', () => {
+  const base = { docClass: 'internal', typeCode: 'order', subject: 'О мерах' };
+
+  it('accepts a minimal draft and defaults confidentiality to normal', () => {
+    const parsed = createDocumentSchema.parse(base);
+    expect(parsed.confidentiality).toBe('normal');
+  });
+
+  it('requires a non-empty subject and a known doc class', () => {
+    expect(createDocumentSchema.safeParse({ ...base, subject: '' }).success).toBe(false);
+    expect(createDocumentSchema.safeParse({ ...base, docClass: 'nope' }).success).toBe(false);
+  });
+
+  it('validates the access list as uuids', () => {
+    expect(createDocumentSchema.safeParse({ ...base, accessList: ['not-a-uuid'] }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('registerDocumentSchema', () => {
+  it('requires a journal uuid', () => {
+    expect(registerDocumentSchema.safeParse({ journalId: 'x' }).success).toBe(false);
+    expect(
+      registerDocumentSchema.safeParse({ journalId: '0190a000-0000-7000-8000-000000000001' })
+        .success,
+    ).toBe(true);
+  });
+});
+
+describe('documentTransitionAllowed', () => {
+  it('permits the forward lifecycle and the rework back-edges', () => {
+    expect(documentTransitionAllowed('draft', 'on_route')).toBe(true);
+    expect(documentTransitionAllowed('pending_registration', 'registered')).toBe(true);
+    expect(documentTransitionAllowed('registered', 'in_progress')).toBe(true);
+    expect(documentTransitionAllowed('rejected', 'draft')).toBe(true);
+  });
+
+  it('rejects skips and moves out of a terminal state', () => {
+    expect(documentTransitionAllowed('draft', 'completed')).toBe(false);
+    expect(documentTransitionAllowed('archived', 'in_progress')).toBe(false);
+    expect(documentTransitionAllowed('registered', 'draft')).toBe(false);
   });
 });
 
