@@ -61,14 +61,19 @@ function tokenFromForwardedUri(uri: string | undefined): string | undefined {
   return new URLSearchParams(uri.slice(q + 1)).get('token') ?? undefined;
 }
 
-/** For a scoped token: incident tiles (`incidents_mvt`) must carry a `region`
- *  filter within the user's scope; other sources (boundaries, facilities) pass
- *  through. Returns true when the request is allowed (task 2.13). */
-function incidentTileInScope(uri: string | undefined, regionIds: string[]): boolean {
+/** For a scoped token: incident tiles (`incidents_mvt`) must carry exactly one
+ *  `region` filter within the user's scope; other sources (boundaries, facilities)
+ *  pass through. A repeated `region` param is rejected outright: this gate reads the
+ *  first value (URLSearchParams.get semantics) while Martin resolves duplicate query
+ *  keys last-wins, so accepting more than one would let an in-scope value gate an
+ *  out-of-scope tile (a confused-deputy bypass, task 2.13). Returns true when allowed.
+ *  Exported for the regression test. */
+export function incidentTileInScope(uri: string | undefined, regionIds: string[]): boolean {
   if (!uri || !uri.includes('/incidents_mvt/')) return true;
   const q = uri.indexOf('?');
-  const region = q < 0 ? null : new URLSearchParams(uri.slice(q + 1)).get('region');
-  return region !== null && regionIds.includes(region);
+  if (q < 0) return false;
+  const regions = new URLSearchParams(uri.slice(q + 1)).getAll('region');
+  return regions.length === 1 && regionIds.includes(regions[0]!);
 }
 
 /**
