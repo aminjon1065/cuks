@@ -264,3 +264,21 @@ export type RouteAssigneeType = (typeof ROUTE_ASSIGNEE_TYPES)[number];
  *  the executor reports it `done`, or the author `cancelled` it. */
 export const RESOLUTION_STATUSES = ['active', 'done', 'cancelled'] as const;
 export type ResolutionStatus = (typeof RESOLUTION_STATUSES)[number];
+
+// --- Digital signatures / ЭЦП (docs/09-security.md §4, task 3.5) ---
+
+/** What a signature attests (docs/09-security.md §4): a route approval (`approve`), a
+ *  full signing (`sign`), or a lightweight acknowledgement (`acknowledge`, task 3.6). */
+export const SIGNATURE_CONTEXTS = ['approve', 'sign', 'acknowledge'] as const;
+export type SignatureContext = (typeof SIGNATURE_CONTEXTS)[number];
+
+/** The only signature algorithm (docs/09-security.md §4): ECDSA P-256 over SHA-256.
+ *  A second (state qualified) type may be added in v2. */
+export const SIGNATURE_ALGORITHMS = ['ECDSA_P256_SHA256'] as const;
+export type SignatureAlgorithm = (typeof SIGNATURE_ALGORITHMS)[number];
+
+/** A certificate's role (docs/09-security.md §4). User certificates are `device` — one
+ *  per device, each with its own key; the CA root lives in the `ca_data` volume, not this
+ *  table. `kind` leaves room for future certificate classes. */
+export const CERTIFICATE_KINDS = ['device'] as const;
+export type CertificateKind = (typeof CERTIFICATE_KINDS)[number];

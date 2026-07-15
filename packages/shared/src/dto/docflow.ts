@@ -20,6 +20,8 @@ import {
   type RouteStepDecision,
   type RouteStepKind,
   type RouteStepStatus,
+  type SignatureAlgorithm,
+  type SignatureContext,
 } from '../enums/index';
 
 // --- Journals (docs/modules/11 §1/§3) ---
@@ -270,6 +272,7 @@ export const DOCUMENT_QUEUES = [
   'authored',
   'registry',
   'to_approve',
+  'to_sign',
   'my_tasks',
 ] as const;
 export type DocumentQueue = (typeof DOCUMENT_QUEUES)[number];
@@ -403,4 +406,104 @@ export interface ResolutionDto {
   canManage: boolean;
   /** Children are the same shape (sub-resolutions), nested by the server. */
   children: ResolutionDto[];
+}
+
+// --- Digital signatures / ЭЦП (docs/09-security.md §4, task 3.5) ---
+
+/** Activate signing on a device: the browser generates an ECDSA P-256 key
+ *  (`extractable: false`, kept in IndexedDB) and sends its public key (SPKI, base64) so
+ *  the CA can issue a certificate. `deviceLabel` names the device for later revocation. */
+export const activateCertificateSchema = z.object({
+  publicKeySpki: z.string().min(1).max(4000),
+  deviceLabel: z.string().min(1).max(120),
+});
+export type ActivateCertificateInput = z.infer<typeof activateCertificateSchema>;
+
+/** Sign a document at its active `sign` route step. The client fetches the canonical
+ *  sign payload (GET .../sign-payload), signs it with the device key, and posts the
+ *  raw (IEEE P1363) ECDSA signature as base64 together with the certificate used. */
+export const signDocumentSchema = z.object({
+  certificateId: z.string().uuid(),
+  signature: z.string().min(1).max(4000),
+});
+export type SignDocumentInput = z.infer<typeof signDocumentSchema>;
+
+/**
+ * The exact string that is signed for a document (docs/09-security.md §4): a
+ * deterministic JSON of the file-version hash plus the card requisites. The explicit
+ * key order and the JSON encoding MUST be identical on the browser (which signs) and
+ * the server (which verifies) — do not reorder fields or the signature breaks.
+ */
+export function buildSignPayload(input: {
+  fileSha256: string;
+  regNumber: string | null;
+  regDate: string | null;
+  subject: string;
+}): string {
+  return JSON.stringify({
+    v: 1,
+    fileSha256: input.fileSha256,
+    regNumber: input.regNumber ?? null,
+    regDate: input.regDate ?? null,
+    subject: input.subject,
+  });
+}
+
+/** The bytes the client must sign: the server's canonical payload plus the components
+ *  that produced it (so the modal can show what is being signed). */
+export interface SignPayloadDto {
+  /** The exact canonical string to sign (deterministic JSON). */
+  payload: string;
+  /** SHA-256 (hex) of the file version being signed. */
+  fileSha256: string;
+  /** The requisites snapshot embedded in the payload. */
+  requisites: { regNumber: string | null; regDate: string | null; subject: string };
+  /** The file version id that will be recorded as signed. */
+  docVersionId: string;
+}
+
+export interface CertificateDto {
+  id: string;
+  serial: string;
+  kind: string;
+  deviceLabel: string;
+  subject: { username: string; fullName: string; position: string | null };
+  notBefore: string;
+  notAfter: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface SignatureDto {
+  id: string;
+  userId: string;
+  userName: string | null;
+  certificateId: string;
+  certificateSerial: string;
+  algorithm: SignatureAlgorithm;
+  context: SignatureContext;
+  signedAt: string;
+  /** True if this signature still verifies against the document's current file version. */
+  valid: boolean;
+}
+
+/** A single check in the verification report, with a human-readable label. */
+export interface VerifyCheckDto {
+  key: 'signature' | 'chain' | 'revocation' | 'file_hash';
+  ok: boolean;
+}
+
+/** The result of GET /verify/:signatureId (docs/09-security.md §4). */
+export interface VerifyResultDto {
+  signatureId: string;
+  valid: boolean;
+  checks: VerifyCheckDto[];
+  signerName: string | null;
+  signerPosition: string | null;
+  certificateSerial: string;
+  context: SignatureContext;
+  signedAt: string;
+  documentId: string;
+  documentSubject: string;
+  documentRegNumber: string | null;
 }

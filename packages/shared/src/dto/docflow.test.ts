@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { documentTransitionAllowed } from '../enums/index';
 import {
+  buildSignPayload,
   correspondentsQuerySchema,
   createCorrespondentSchema,
   createDocumentSchema,
@@ -115,6 +116,44 @@ describe('documentTransitionAllowed', () => {
     expect(documentTransitionAllowed('draft', 'completed')).toBe(false);
     expect(documentTransitionAllowed('archived', 'in_progress')).toBe(false);
     expect(documentTransitionAllowed('registered', 'draft')).toBe(false);
+  });
+});
+
+describe('buildSignPayload', () => {
+  const base = {
+    fileSha256: 'abc123',
+    regNumber: 'П-2026/0007',
+    regDate: '2026-07-15',
+    subject: 'Приказ',
+  };
+
+  it('is deterministic and order-independent of the input object', () => {
+    const a = buildSignPayload(base);
+    const b = buildSignPayload({
+      subject: 'Приказ',
+      regDate: '2026-07-15',
+      regNumber: 'П-2026/0007',
+      fileSha256: 'abc123',
+    });
+    expect(a).toBe(b);
+    // Canonical field order is fixed (client & server must agree byte-for-byte).
+    expect(a).toBe(
+      '{"v":1,"fileSha256":"abc123","regNumber":"П-2026/0007","regDate":"2026-07-15","subject":"Приказ"}',
+    );
+  });
+
+  it('normalizes missing requisites to null (unregistered document)', () => {
+    expect(
+      buildSignPayload({ fileSha256: 'h', regNumber: null, regDate: null, subject: 'X' }),
+    ).toBe('{"v":1,"fileSha256":"h","regNumber":null,"regDate":null,"subject":"X"}');
+  });
+
+  it('changes when the file hash or any requisite changes (tamper detection)', () => {
+    expect(buildSignPayload({ ...base, fileSha256: 'different' })).not.toBe(buildSignPayload(base));
+    expect(buildSignPayload({ ...base, subject: 'Другой' })).not.toBe(buildSignPayload(base));
+    expect(buildSignPayload({ ...base, regNumber: 'П-2026/0008' })).not.toBe(
+      buildSignPayload(base),
+    );
   });
 });
 
