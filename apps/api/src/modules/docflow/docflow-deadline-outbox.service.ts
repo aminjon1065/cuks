@@ -117,6 +117,8 @@ export class DocflowDeadlineOutboxService implements OnModuleInit, OnModuleDestr
 
   private async deliver(payload: DocflowDeadlinePayload, dedupeKey: string): Promise<void> {
     const overdue = payload.tier === 'overdue' || payload.tier === 'escalation';
+    // ДСП: the notification carries only the registration number, never the subject (docs/09 §3).
+    const body = payload.confidential ? (payload.regNumber ?? 'Документ ДСП') : payload.subject;
     await this.notifications.notifyMany({
       userIds: payload.recipientUserIds,
       type: `docflow.deadline.${payload.tier}`,
@@ -126,7 +128,7 @@ export class DocflowDeadlineOutboxService implements OnModuleInit, OnModuleDestr
           : overdue
             ? 'Поручение просрочено'
             : 'Приближается срок поручения',
-      body: payload.subject,
+      body,
       entityType: 'document',
       entityId: payload.documentId,
       priority: overdue ? 'critical' : 'normal',

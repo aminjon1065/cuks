@@ -54,6 +54,7 @@ export class DeadlinesProcessor extends WorkerHost {
         authorId: resolutions.authorId,
         dueDate: resolutions.dueDate,
         subject: documents.subject,
+        regNumber: documents.regNumber,
         confidentiality: documents.confidentiality,
         docAuthorId: documents.authorId,
         accessList: documents.accessList,
@@ -76,7 +77,13 @@ export class DeadlinesProcessor extends WorkerHost {
       try {
         const dueIso = r.dueDate!.toISOString();
         const c = classifyDeadline(dueIso, now);
-        const base = { documentId: r.documentId, subject: r.subject, dueDate: dueIso };
+        const base = {
+          documentId: r.documentId,
+          subject: r.subject,
+          regNumber: r.regNumber,
+          confidential: r.confidentiality === 'dsp',
+          dueDate: dueIso,
+        };
 
         if (c.reminder) {
           emitted += await this.emit(r.resolutionId, day, c.reminder, [r.executorId], base);
@@ -120,7 +127,13 @@ export class DeadlinesProcessor extends WorkerHost {
     day: string,
     tier: DocflowDeadlineTier,
     recipientUserIds: string[],
-    base: { documentId: string; subject: string; dueDate: string },
+    base: {
+      documentId: string;
+      subject: string;
+      regNumber: string | null;
+      confidential: boolean;
+      dueDate: string;
+    },
   ): Promise<number> {
     const recipients = [...new Set(recipientUserIds)];
     if (recipients.length === 0) return 0;
