@@ -88,9 +88,11 @@ export function DocumentCardPage(): React.JSX.Element {
                 <FileCheck2 className="size-4" /> {t('documents.register.action')}
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
-              {t('documents.status.action')}
-            </Button>
+            {data.canChangeStatus ? (
+              <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
+                {t('documents.status.action')}
+              </Button>
+            ) : null}
           </div>
         }
       />

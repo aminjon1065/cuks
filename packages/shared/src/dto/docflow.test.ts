@@ -98,9 +98,14 @@ describe('registerDocumentSchema', () => {
 describe('documentTransitionAllowed', () => {
   it('permits the forward lifecycle and the rework back-edges', () => {
     expect(documentTransitionAllowed('draft', 'on_route')).toBe(true);
-    expect(documentTransitionAllowed('pending_registration', 'registered')).toBe(true);
+    expect(documentTransitionAllowed('on_route', 'pending_registration')).toBe(true);
     expect(documentTransitionAllowed('registered', 'in_progress')).toBe(true);
     expect(documentTransitionAllowed('rejected', 'draft')).toBe(true);
+  });
+
+  it('never allows a manual change into "registered" (that is the register action only)', () => {
+    expect(documentTransitionAllowed('draft', 'registered')).toBe(false);
+    expect(documentTransitionAllowed('pending_registration', 'registered')).toBe(false);
   });
 
   it('rejects skips and moves out of a terminal state', () => {

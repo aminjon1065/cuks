@@ -195,15 +195,16 @@ export const DOCUMENT_STATUSES = [
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /**
- * Allowed status transitions (docs/modules/11 §4). A DAG with two back-edges for
- * rework (`rejected → draft`) and re-opening a recalled draft. `register` is a
- * dedicated action that moves `draft`/`pending_registration → registered` while
- * minting the journal number; the plain lifecycle advance covers the rest.
+ * Allowed manual (`changeStatus`) transitions (docs/modules/11 §4). A DAG with two
+ * back-edges for rework (`rejected → draft`) and re-opening a recalled draft.
+ * `registered` is intentionally NOT a target here: reaching it is the dedicated
+ * `register` action, which mints the journal number and sets the status directly —
+ * so a plain status change can never register a document without a number.
  */
 export const DOCUMENT_STATUS_TRANSITIONS: Record<DocumentStatus, readonly DocumentStatus[]> = {
-  draft: ['on_route', 'registered', 'recalled'],
+  draft: ['on_route', 'recalled'],
   on_route: ['pending_registration', 'rejected', 'recalled'],
-  pending_registration: ['registered', 'rejected'],
+  pending_registration: ['rejected'],
   registered: ['in_progress', 'archived'],
   in_progress: ['completed'],
   completed: ['archived'],

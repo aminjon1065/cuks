@@ -46,6 +46,18 @@ describe('planDocumentStatusChange', () => {
     );
   });
 
+  it('never lets a manual status change reach "registered" (register is the only path)', () => {
+    // The number is minted only by register(); a plain author must not self-register.
+    expectRejected(
+      () => planDocumentStatusChange('draft', { status: 'registered' }),
+      'docflow.document.invalid_transition',
+    );
+    expectRejected(
+      () => planDocumentStatusChange('pending_registration', { status: 'registered' }),
+      'docflow.document.invalid_transition',
+    );
+  });
+
   it('requires a reason to reject or recall', () => {
     expectRejected(
       () => planDocumentStatusChange('on_route', { status: 'rejected' }),

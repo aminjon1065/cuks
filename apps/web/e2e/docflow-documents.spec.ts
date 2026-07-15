@@ -63,6 +63,34 @@ test('docflow: create → register mints a journal number, then advance the stat
   await admin.dispose();
 });
 
+test('docflow: an author cannot self-register via a status change', async () => {
+  // e2e_user is an employee (docflow.create, NOT docflow.register). Reaching
+  // "registered" must go through the register action (which mints a number), never a
+  // plain status change — otherwise a document would be registered without a number.
+  const author = await apiLogin(E2E_USER.username, E2E_USER.password);
+  const headers = { ...(await csrfHeaders(author)), 'content-type': 'application/json' };
+  const draft = (await (
+    await author.post('/api/v1/docflow/documents', {
+      headers,
+      data: { docClass: 'internal', typeCode: 'memo', subject: `Self-reg ${Date.now()}` },
+    })
+  ).json()) as DocumentDto;
+
+  const res = await author.post(`/api/v1/docflow/documents/${draft.id}/actions/status`, {
+    headers,
+    data: { status: 'registered' },
+  });
+  expect(res.status(), 'draft → registered is not a manual transition').toBe(422);
+
+  const after = (await (
+    await author.get(`/api/v1/docflow/documents/${draft.id}`)
+  ).json()) as DocumentDto;
+  expect(after.status).toBe('draft');
+  expect(after.regNumber).toBeNull();
+
+  await author.dispose();
+});
+
 test('docflow: a ДСП document is invisible to a non-participant', async () => {
   const author = await apiLogin(E2E_USER.username, E2E_USER.password);
   const other = await apiLogin(E2E_USER2.username, E2E_USER2.password);

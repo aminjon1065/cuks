@@ -255,4 +255,5 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   files: DocumentFileDto[];
   canEdit: boolean;
   canRegister: boolean;
+  canChangeStatus: boolean;
 }

@@ -11,6 +11,7 @@ import {
   type Database,
 } from '@cuks/db';
 import {
+  DOCUMENT_STATUS_TRANSITIONS,
   documentTransitionAllowed,
   type AddDocumentFileInput,
   type ChangeDocumentStatusInput,
@@ -228,6 +229,11 @@ export class DocumentsService {
       canRegister:
         this.hasRegistryAccess(user) &&
         (row.status === 'draft' || row.status === 'pending_registration'),
+      // The author or the chancellery/control may drive the lifecycle, and only when
+      // a manual transition exists (mirrors changeStatus's authority + the policy graph).
+      canChangeStatus:
+        (row.authorId === user.id || this.hasRegistryAccess(user)) &&
+        DOCUMENT_STATUS_TRANSITIONS[row.status].length > 0,
     };
   }
 
@@ -290,7 +296,11 @@ export class DocumentsService {
         .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
         .limit(1)
         .for('update');
-      if (!doc) throw AppException.notFound('docflow.document.not_found', 'Document not found');
+      if (!doc || !this.canView(doc, actor)) {
+        // ДСП isolation applies to the write side too: a chancellery not on the
+        // allow-list must not register a document it cannot even see.
+        throw AppException.notFound('docflow.document.not_found', 'Document not found');
+      }
       if (doc.status !== 'draft' && doc.status !== 'pending_registration') {
         throw AppException.conflict(
           'docflow.document.not_registrable',
@@ -380,6 +390,14 @@ export class DocumentsService {
         'The referenced file does not exist',
       );
     await this.db.transaction(async (tx) => {
+      // Lock the document so concurrent main uploads serialise — otherwise two would
+      // both insert an is_current main row and collide on document_files_current_main_uq.
+      await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, id))
+        .limit(1)
+        .for('update');
       let version = 1;
       if (input.kind === 'main') {
         // A new main body supersedes the previous current version.
