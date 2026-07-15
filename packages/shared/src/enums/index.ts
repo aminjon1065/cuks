@@ -259,3 +259,8 @@ export type RouteStepDecision = (typeof ROUTE_STEP_DECISIONS)[number];
 /** Who a step is assigned to (docs/modules/11 §3): a user, a position, or an org unit. */
 export const ROUTE_ASSIGNEE_TYPES = ['user', 'position', 'org_unit'] as const;
 export type RouteAssigneeType = (typeof ROUTE_ASSIGNEE_TYPES)[number];
+
+/** Resolution lifecycle (docs/modules/11 §3): an issued instruction is `active` until
+ *  the executor reports it `done`, or the author `cancelled` it. */
+export const RESOLUTION_STATUSES = ['active', 'done', 'cancelled'] as const;
+export type ResolutionStatus = (typeof RESOLUTION_STATUSES)[number];

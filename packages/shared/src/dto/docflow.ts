@@ -14,6 +14,7 @@ import {
   type DocumentFileKind,
   type DocumentStatus,
   type JournalSeqReset,
+  type ResolutionStatus,
   type RouteAssigneeType,
   type RouteStatus,
   type RouteStepDecision,
@@ -263,7 +264,14 @@ export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export const updateDocumentSchema = createDocumentSchema.partial().omit({ docClass: true });
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 
-export const DOCUMENT_QUEUES = ['mine', 'drafts', 'authored', 'registry', 'to_approve'] as const;
+export const DOCUMENT_QUEUES = [
+  'mine',
+  'drafts',
+  'authored',
+  'registry',
+  'to_approve',
+  'my_tasks',
+] as const;
 export type DocumentQueue = (typeof DOCUMENT_QUEUES)[number];
 
 export const listDocumentsQuerySchema = z.object({
@@ -340,4 +348,59 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   canEdit: boolean;
   canRegister: boolean;
   canChangeStatus: boolean;
+}
+
+// --- Resolutions (docs/modules/11 §3/§5, task 3.4) ---
+
+export const createResolutionSchema = z.object({
+  text: z.string().min(1).max(5000),
+  executorId: z.string().uuid(),
+  coExecutors: z.array(z.string().uuid()).max(50).optional(),
+  dueDate: z.string().datetime().nullish(),
+  isControl: z.boolean().optional(),
+});
+export type CreateResolutionInput = z.infer<typeof createResolutionSchema>;
+
+/** The executor's report on a resolution (docs/modules/11 §5). */
+export const reportResolutionSchema = z.object({ report: z.string().min(1).max(5000) });
+export type ReportResolutionInput = z.infer<typeof reportResolutionSchema>;
+
+/** Move a controlled resolution's due date, with a reason (docs/modules/11 §5). */
+export const extendResolutionSchema = z.object({
+  newDue: z.string().datetime(),
+  reason: z.string().min(1).max(1000),
+});
+export type ExtendResolutionInput = z.infer<typeof extendResolutionSchema>;
+
+export interface ResolutionExtensionDto {
+  id: string;
+  oldDue: string | null;
+  newDue: string;
+  reason: string;
+  extendedByName: string | null;
+  createdAt: string;
+}
+
+export interface ResolutionDto {
+  id: string;
+  parentId: string | null;
+  authorId: string;
+  authorName: string | null;
+  executorId: string;
+  executorName: string | null;
+  coExecutors: string[];
+  coExecutorNames: string[];
+  text: string;
+  dueDate: string | null;
+  isControl: boolean;
+  status: ResolutionStatus;
+  report: string | null;
+  doneAt: string | null;
+  createdAt: string;
+  extensions: ResolutionExtensionDto[];
+  /** Whether the caller may report/complete (executor/co-executor) or manage (author/control). */
+  canReport: boolean;
+  canManage: boolean;
+  /** Children are the same shape (sub-resolutions), nested by the server. */
+  children: ResolutionDto[];
 }
