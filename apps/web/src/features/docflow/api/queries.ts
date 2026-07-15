@@ -178,15 +178,18 @@ function documentsPath(query: ListDocumentsQuery): string {
   if (query.docClass) params.set('docClass', query.docClass);
   if (query.journalId) params.set('journalId', query.journalId);
   if (query.search) params.set('search', query.search);
+  if (query.year) params.set('year', String(query.year));
   return `/v1/docflow/documents?${params}`;
 }
 
 export function useDocuments(
   query: ListDocumentsQuery,
+  options?: { enabled?: boolean },
 ): UseQueryResult<PaginatedResult<DocumentListItemDto>> {
   return useQuery({
     queryKey: [...documentsKey, 'list', query],
     queryFn: () => api.get<PaginatedResult<DocumentListItemDto>>(documentsPath(query)),
+    enabled: options?.enabled ?? true,
   });
 }
 

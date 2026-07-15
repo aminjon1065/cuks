@@ -54,6 +54,12 @@ export const ADMIN_NAV: NavItem[] = [
     permission: 'gis.pg.access',
   },
   {
+    key: 'docflowJournals',
+    path: '/app/docs/journals',
+    icon: FileText,
+    permission: 'docflow.register',
+  },
+  {
     key: 'docflowSettings',
     path: '/app/docs/settings',
     icon: FileText,
