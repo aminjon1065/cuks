@@ -32,6 +32,7 @@ import { DB } from '../../common/db/db.module';
 import { DocflowNumberingService } from './docflow-numbering.service';
 import { canViewDocumentBase, hasRegistryAccess } from './document-visibility';
 import { RoutesService } from './routes.service';
+import { ResolutionsService } from './resolutions.service';
 
 export interface DocumentStatusChangePlan {
   status: DocumentStatus;
@@ -74,6 +75,7 @@ export class DocumentsService {
     private readonly audit: AuditService,
     private readonly numbering: DocflowNumberingService,
     private readonly routes: RoutesService,
+    private readonly resolutions: ResolutionsService,
   ) {}
 
   async create(input: CreateDocumentInput, actor: AuthUser): Promise<DocumentDetailDto> {
@@ -112,12 +114,15 @@ export class DocumentsService {
     query: ListDocumentsQuery,
     user: AuthUser,
   ): Promise<PaginatedResult<DocumentListItemDto>> {
-    // The «На согласование» queue is defined by active route steps, resolved first.
-    const approvalDocIds =
+    // The «На согласование» / «Мои поручения» queues are defined by route steps and
+    // resolutions respectively, resolved to document ids first.
+    const queueDocIds =
       query.queue === 'to_approve'
         ? await this.routes.approvalQueueDocumentIds(user.id)
-        : undefined;
-    const where = and(...this.whereFor(query, user, approvalDocIds));
+        : query.queue === 'my_tasks'
+          ? await this.resolutions.myTasksDocumentIds(user.id)
+          : undefined;
+    const where = and(...this.whereFor(query, user, queueDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
       this.db
@@ -176,7 +181,10 @@ export class DocumentsService {
     if (!row) throw AppException.notFound('docflow.document.not_found', 'Document not found');
     if (!canViewDocumentBase(row, user)) {
       const assignments = await this.routes.actorAssignments(user.id);
-      if (!(await this.routes.isRouteParticipant(id, assignments))) {
+      const participant =
+        (await this.routes.isRouteParticipant(id, assignments)) ||
+        (await this.resolutions.isResolutionParticipant(id, user.id));
+      if (!participant) {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
     }
@@ -500,7 +508,7 @@ export class DocumentsService {
     return row;
   }
 
-  private whereFor(query: ListDocumentsQuery, user: AuthUser, approvalDocIds?: string[]): SQL[] {
+  private whereFor(query: ListDocumentsQuery, user: AuthUser, queueDocIds?: string[]): SQL[] {
     const where: SQL[] = [isNull(documents.deletedAt)];
     if (query.status) where.push(eq(documents.status, query.status));
     if (query.docClass) where.push(eq(documents.docClass, query.docClass));
@@ -524,9 +532,10 @@ export class DocumentsService {
         where.push(eq(documents.authorId, user.id));
         break;
       case 'to_approve':
-        // Documents the caller has an active approve step on (resolved by RoutesService).
-        // An empty id set yields `false` (no rows) — an approver still sees the docs.
-        where.push(inArray(documents.id, approvalDocIds ?? []));
+      case 'my_tasks':
+        // Documents the caller has an active approve step (to_approve) or an active
+        // resolution to execute (my_tasks). An empty id set yields `false` (no rows).
+        where.push(inArray(documents.id, queueDocIds ?? []));
         break;
       case 'registry':
         // The chancellery/control registry: all non-ДСП docs + one's own ДСП-access.
