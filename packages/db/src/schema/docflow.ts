@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
   DOC_CLASSES,
@@ -17,6 +18,7 @@ import {
   DOCUMENT_FILE_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
+  RESOLUTION_STATUSES,
   ROUTE_ASSIGNEE_TYPES,
   ROUTE_STATUSES,
   ROUTE_STEP_DECISIONS,
@@ -324,4 +326,67 @@ export const routeTemplates = appSchema.table(
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [index('route_templates_active_idx').on(t.isActive)],
+);
+
+/**
+ * app.resolutions — a leader's instruction on a document (docs/modules/11 §3/§5).
+ * The executor is responsible; co_executors assist; `is_control` + `due_date` put it
+ * on the control view. Sub-resolutions nest via `parent_id`. `report`/`done_at` record
+ * execution. Task 3.4.
+ */
+export const resolutions = appSchema.table(
+  'resolutions',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id').references((): AnyPgColumn => resolutions.id, {
+      onDelete: 'cascade',
+    }),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    executorId: uuid('executor_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    coExecutors: uuid('co_executors')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    text: text('text').notNull(),
+    dueDate: timestamp('due_date', { withTimezone: true }),
+    isControl: boolean('is_control').notNull().default(false),
+    status: text('status', { enum: RESOLUTION_STATUSES }).notNull().default('active'),
+    report: text('report'),
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index('resolutions_document_idx').on(t.documentId),
+    index('resolutions_executor_idx').on(t.executorId, t.status),
+    // The «Мои поручения» queue also matches co-executors (uuid[] containment).
+    index('resolutions_co_executors_idx').using('gin', t.coExecutors),
+  ],
+);
+
+/**
+ * app.resolution_extensions — the accumulating deadline-extension log of a controlled
+ * resolution (docs/modules/11 §5): who moved the old due date to the new one, and why.
+ */
+export const resolutionExtensions = appSchema.table(
+  'resolution_extensions',
+  {
+    id: primaryId(),
+    resolutionId: uuid('resolution_id')
+      .notNull()
+      .references(() => resolutions.id, { onDelete: 'cascade' }),
+    oldDue: timestamp('old_due', { withTimezone: true }),
+    newDue: timestamp('new_due', { withTimezone: true }).notNull(),
+    reason: text('reason').notNull(),
+    extendedBy: uuid('extended_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('resolution_extensions_resolution_idx').on(t.resolutionId)],
 );
