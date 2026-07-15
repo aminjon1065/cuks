@@ -54,6 +54,9 @@ export class DeadlinesProcessor extends WorkerHost {
         authorId: resolutions.authorId,
         dueDate: resolutions.dueDate,
         subject: documents.subject,
+        confidentiality: documents.confidentiality,
+        docAuthorId: documents.authorId,
+        accessList: documents.accessList,
       })
       .from(resolutions)
       .innerJoin(
@@ -88,7 +91,16 @@ export class DeadlinesProcessor extends WorkerHost {
           );
         }
         if (c.escalation) {
-          const heads = await this.subdivisionHeads(r.executorId);
+          let heads = await this.subdivisionHeads(r.executorId);
+          if (r.confidentiality === 'dsp') {
+            // ДСП documents never leak outside the allow-list (docs/modules/11 §2). A
+            // subdivision head who is neither the document author nor access-listed has no
+            // clearance for the subject, so the escalation would carry it to them via a
+            // critical (force-on) notification — drop such heads. Non-ДСП documents are
+            // visible to owner-subdivision leadership, so their heads stay.
+            const cleared = new Set<string>([r.docAuthorId, ...r.accessList]);
+            heads = heads.filter((id) => cleared.has(id));
+          }
           if (heads.length) {
             emitted += await this.emit(r.resolutionId, day, 'escalation', heads, base);
           }

@@ -57,6 +57,9 @@ const resolutionRow = (over: Partial<Record<string, unknown>>) => ({
   authorId: 'author',
   subject: 'Приказ',
   dueDate: new Date('2026-07-15T06:00:00.000Z'),
+  confidentiality: 'normal',
+  docAuthorId: 'author',
+  accessList: [] as string[],
   ...over,
 });
 
@@ -104,6 +107,40 @@ describe('DeadlinesProcessor', () => {
   it('emits nothing on a quiet day (2 days out, not a reminder tier)', async () => {
     const inserted = await run([resolutionRow({ dueDate: new Date('2026-07-17T06:00:00.000Z') })]);
     expect(inserted).toHaveLength(0);
+  });
+
+  it('does not escalate a ДСП document to a head outside the allow-list', async () => {
+    const inserted = await run(
+      [
+        resolutionRow({
+          dueDate: new Date('2026-07-08T06:00:00.000Z'), // 7 days overdue → escalation tier
+          confidentiality: 'dsp',
+          docAuthorId: 'author',
+          accessList: [], // the head is not access-listed
+        }),
+      ],
+      [{ userId: 'head' }],
+    );
+    const tiers = inserted.map((r) => (r.payload as { tier: string }).tier);
+    // The overdue reminder (executor + author, both participants) still fires; the escalation
+    // to the uncleared head is dropped so the ДСП subject never reaches them.
+    expect(tiers).toEqual(['overdue']);
+  });
+
+  it('escalates a ДСП document to a head who is on the allow-list', async () => {
+    const inserted = await run(
+      [
+        resolutionRow({
+          dueDate: new Date('2026-07-08T06:00:00.000Z'),
+          confidentiality: 'dsp',
+          accessList: ['head'], // the head has clearance
+        }),
+      ],
+      [{ userId: 'head' }],
+    );
+    const esc = inserted.find((r) => (r.payload as { tier: string }).tier === 'escalation');
+    expect(esc, 'a cleared head is still escalated to').toBeTruthy();
+    expect((esc!.payload as { recipientUserIds: string[] }).recipientUserIds).toEqual(['head']);
   });
 });
 
