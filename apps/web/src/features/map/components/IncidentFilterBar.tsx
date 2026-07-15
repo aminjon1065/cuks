@@ -11,6 +11,9 @@ export interface IncidentFilterBarProps {
   loading: boolean;
   error: boolean;
   panelCollapsed: boolean;
+  /** For a territory-confined user (task 2.13): the region select is pinned to these
+   *  and cannot be cleared, since incident tiles for other regions are denied. */
+  lockedRegionIds: readonly string[] | null;
   onChange: (value: IncidentFilterState) => void;
   onReset: () => void;
   onRetry: () => void;
@@ -27,12 +30,22 @@ export function IncidentFilterBar({
   loading,
   error,
   panelCollapsed,
+  lockedRegionIds,
   onChange,
   onReset,
   onRetry,
 }: IncidentFilterBarProps): React.JSX.Element {
   const { t, i18n } = useTranslation('map');
   const tajik = i18n.resolvedLanguage === 'tg';
+  // A confined user's region is fixed, so show only their region(s) — a removable
+  // chip or an "all regions" option would suggest a choice they don't have.
+  const regionOptions = useMemo(
+    () =>
+      lockedRegionIds
+        ? (options?.regions.filter((region) => lockedRegionIds.includes(region.id)) ?? [])
+        : (options?.regions ?? []),
+    [lockedRegionIds, options],
+  );
   const chips = useMemo(() => {
     const result: Array<{ key: string; label: string; onRemove: () => void }> = [];
     const type = options?.types.find((item) => item.code === value.typeCode);
@@ -51,7 +64,7 @@ export function IncidentFilterBar({
         onRemove: () => onChange({ ...value, status: '' }),
       });
     }
-    if (region) {
+    if (region && !lockedRegionIds) {
       result.push({
         key: 'region',
         label: tajik ? region.nameTg : region.nameRu,
@@ -59,7 +72,7 @@ export function IncidentFilterBar({
       });
     }
     return result;
-  }, [onChange, options, t, tajik, value]);
+  }, [lockedRegionIds, onChange, options, t, tajik, value]);
 
   return (
     <div
@@ -137,12 +150,13 @@ export function IncidentFilterBar({
           </label>
           <select
             id="incident-region-filter"
-            className={cn(selectClass, 'w-full md:w-48')}
+            className={cn(selectClass, 'w-full md:w-48', lockedRegionIds && 'opacity-70')}
             value={value.regionId}
+            disabled={Boolean(lockedRegionIds)}
             onChange={(event) => onChange({ ...value, regionId: event.target.value })}
           >
-            <option value="">{t('filters.allRegions')}</option>
-            {options?.regions.map((region) => (
+            {!lockedRegionIds && <option value="">{t('filters.allRegions')}</option>}
+            {regionOptions.map((region) => (
               <option key={region.id} value={region.id}>
                 {tajik ? region.nameTg : region.nameRu}
               </option>

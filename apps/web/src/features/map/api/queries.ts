@@ -17,6 +17,7 @@ import {
   type GisImportDto,
   type GisLayerDto,
   type IncidentMapFilterOptionsResponse,
+  type IncidentScopeResponse,
   type PatchGisFeatureInput,
   type TileTokenResponse,
 } from '@cuks/shared';
@@ -49,6 +50,17 @@ export function useIncidentMapFilterOptions(): UseQueryResult<IncidentMapFilterO
   return useQuery({
     queryKey: [...mapKey, 'incident-filter-options'],
     queryFn: () => api.get<IncidentMapFilterOptionsResponse>('/v1/gis/incidents/filter-options'),
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/** The caller's incident territory scope (task 2.13). For a confined user the map
+ *  defaults and locks its region filter to `regionIds` so incident tiles — which the
+ *  tile-auth gate confines to those regions — resolve instead of 403-ing. */
+export function useIncidentScope(): UseQueryResult<IncidentScopeResponse> {
+  return useQuery({
+    queryKey: [...mapKey, 'incident-scope'],
+    queryFn: () => api.get<IncidentScopeResponse>('/v1/gis/incident-scope'),
     staleTime: 30 * 60 * 1000,
   });
 }

@@ -16,6 +16,7 @@ import {
   useDeleteGisLayer,
   useGisLayers,
   useIncidentMapFilterOptions,
+  useIncidentScope,
   useMartinCatalog,
   usePatchGisFeature,
   usePublishLayer,
@@ -89,7 +90,19 @@ export function MapPage(): React.JSX.Element {
   const tokenQuery = useTileToken();
   const catalogQuery = useMartinCatalog(tokenQuery.data?.token);
   const filterOptionsQuery = useIncidentMapFilterOptions();
+  const scopeQuery = useIncidentScope();
   const layersQuery = useGisLayers();
+
+  // A territory-confined user (task 2.13) may only fetch incident tiles for their
+  // own region — the tile-auth gate rejects the rest. Lock the region filter to
+  // that region so the incident layer resolves rather than 403-ing.
+  const lockedRegionIds = useMemo(
+    () =>
+      scopeQuery.data && !scopeQuery.data.global && scopeQuery.data.regionIds.length > 0
+        ? scopeQuery.data.regionIds
+        : null,
+    [scopeQuery.data],
+  );
 
   // Keep the freshest token in a ref (read per tile request). Assigned during
   // render — not in an effect — so it is already set when MapView's init effect
@@ -114,8 +127,22 @@ export function MapPage(): React.JSX.Element {
     useCallback(() => setIncidentRevision((value) => value + 1), []),
   );
   const resetIncidentFilters = useCallback(() => {
-    setIncidentFilters(defaultIncidentFilters());
-  }, []);
+    setIncidentFilters({
+      ...defaultIncidentFilters(),
+      ...(lockedRegionIds ? { regionId: lockedRegionIds[0] } : {}),
+    });
+  }, [lockedRegionIds]);
+
+  // Pin a confined user's region as soon as their scope loads (and keep it pinned
+  // if they somehow land on a foreign region), so incident tiles stay in scope.
+  useEffect(() => {
+    if (!lockedRegionIds) return;
+    setIncidentFilters((current) =>
+      lockedRegionIds.includes(current.regionId)
+        ? current
+        : { ...current, regionId: lockedRegionIds[0] as string },
+    );
+  }, [lockedRegionIds]);
   const [panelCollapsed, setPanelCollapsed] = useState<boolean>(
     () => typeof localStorage !== 'undefined' && localStorage.getItem(PANEL_KEY) === '1',
   );
@@ -536,6 +563,7 @@ export function MapPage(): React.JSX.Element {
                 loading={filterOptionsQuery.isPending}
                 error={filterOptionsQuery.isError}
                 panelCollapsed={panelCollapsed}
+                lockedRegionIds={lockedRegionIds}
                 onChange={setIncidentFilters}
                 onReset={resetIncidentFilters}
                 onRetry={() => void filterOptionsQuery.refetch()}

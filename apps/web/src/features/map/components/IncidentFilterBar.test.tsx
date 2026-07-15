@@ -17,20 +17,27 @@ const options: IncidentMapFilterOptionsResponse = {
       parentNameTg: 'Гидрологические',
     },
   ],
-  regions: [{ id: 'r1', code: 'TJ-DU', nameRu: 'Душанбе', nameTg: 'Душанбе' }],
+  regions: [
+    { id: 'r1', code: 'TJ-DU', nameRu: 'Душанбе', nameTg: 'Душанбе' },
+    { id: 'r2', code: 'TJ-KT', nameRu: 'Хатлон', nameTg: 'Хатлон' },
+  ],
 };
 
-function renderBar() {
+function renderBar(lockedRegionIds: readonly string[] | null = null) {
   const onChange = vi.fn();
   const onReset = vi.fn();
   render(
     <I18nextProvider i18n={i18n}>
       <IncidentFilterBar
-        value={defaultIncidentFilters(new Date('2026-07-14T00:00:00Z'))}
+        value={{
+          ...defaultIncidentFilters(new Date('2026-07-14T00:00:00Z')),
+          regionId: lockedRegionIds ? (lockedRegionIds[0] as string) : '',
+        }}
         options={options}
         loading={false}
         error={false}
         panelCollapsed={false}
+        lockedRegionIds={lockedRegionIds}
         onChange={onChange}
         onReset={onReset}
         onRetry={vi.fn()}
@@ -54,5 +61,16 @@ describe('IncidentFilterBar', () => {
     const { onReset } = renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it('pins the region select for a territory-confined user', () => {
+    renderBar(['r2']);
+    const regionSelect = screen.getByRole('combobox', { name: 'Регион' }) as HTMLSelectElement;
+    expect(regionSelect).toBeDisabled();
+    expect(regionSelect.value).toBe('r2');
+    // Only the confined region — no "all regions" and no other region.
+    expect(screen.getByRole('option', { name: 'Хатлон' })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Все регионы' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Душанбе' })).toBeNull();
   });
 });
