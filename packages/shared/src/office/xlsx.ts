@@ -122,8 +122,16 @@ export function buildZip(files: Readonly<Record<string, Uint8Array | string>>): 
   return concat([...locals, ...central, end]);
 }
 
+// Characters outside XML 1.0's legal Char range — the C0 controls except tab/LF/CR. They have
+// no valid character reference either, so a raw one anywhere in the sheet makes it non-well-formed
+// and Excel/LibreOffice reject the whole workbook. Names come from user input (org units, people),
+// so strip these before escaping — matching what openpyxl and friends do. The control chars in
+// the class are exactly the target of this rule, so no-control-regex is intentionally disabled.
+// eslint-disable-next-line no-control-regex
+const XML_ILLEGAL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g;
+
 function escapeXml(value: string): string {
-  return value.replace(/[<>&"']/g, (char) => {
+  return value.replace(XML_ILLEGAL, '').replace(/[<>&"']/g, (char) => {
     if (char === '<') return '&lt;';
     if (char === '>') return '&gt;';
     if (char === '&') return '&amp;';
