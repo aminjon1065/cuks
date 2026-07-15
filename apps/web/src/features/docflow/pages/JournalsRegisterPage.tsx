@@ -34,11 +34,13 @@ export function JournalsRegisterPage(): React.JSX.Element {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   const journal = journalId || activeJournals[0]?.id || '';
+  // The register lists every document registered in this journal that year — regardless of
+  // its current lifecycle status (a resolution advances it to in_progress etc., but it stays
+  // in the register). journalId + year (reg_date) already scope it to registered documents.
   const query: ListDocumentsQuery = {
     page: 1,
     limit: 200,
     queue: 'registry',
-    status: 'registered',
     year,
     ...(journal ? { journalId: journal } : {}),
   };

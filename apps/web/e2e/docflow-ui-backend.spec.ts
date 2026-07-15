@@ -150,25 +150,37 @@ test('docflow 3.7: the journals register filters by year', async () => {
   expect(reg.ok(), `register ${reg.status()}`).toBeTruthy();
   const thisYear = new Date().getFullYear();
 
-  const inYear = await json<{ items: DocumentDto[] }>(
-    await admin.get(
-      `/api/v1/docflow/documents?queue=registry&journalId=${journalId}&year=${thisYear}&page=1&limit=200`,
-    ),
-  );
+  const register = async (y: number) =>
+    json<{ items: DocumentDto[] }>(
+      await admin.get(
+        `/api/v1/docflow/documents?queue=registry&journalId=${journalId}&year=${y}&page=1&limit=200`,
+      ),
+    );
+
+  const inYear = await register(thisYear);
   expect(
     inYear.items.some((d) => d.id === doc.id),
     'registered doc in this year',
   ).toBeTruthy();
 
-  const pastYear = await json<{ items: DocumentDto[] }>(
-    await admin.get(
-      `/api/v1/docflow/documents?queue=registry&journalId=${journalId}&year=${thisYear - 3}&page=1&limit=200`,
-    ),
-  );
+  const pastYear = await register(thisYear - 3);
   expect(
     pastYear.items.some((d) => d.id === doc.id),
     'not in a past year',
   ).toBeFalsy();
+
+  // Advancing the document past `registered` must NOT drop it from the register — the
+  // registration book stays complete for its journal + year.
+  const advanced = await admin.post(`/api/v1/docflow/documents/${doc.id}/actions/status`, {
+    headers,
+    data: { status: 'in_progress' },
+  });
+  expect(advanced.ok(), `advance ${advanced.status()}`).toBeTruthy();
+  const afterAdvance = await register(thisYear);
+  expect(
+    afterAdvance.items.some((d) => d.id === doc.id),
+    'still in the register after advancing status',
+  ).toBeTruthy();
 
   await admin.dispose();
 });
