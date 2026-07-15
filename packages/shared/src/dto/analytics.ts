@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { IncidentStatus } from '../enums/index';
+import { INCIDENT_STATUSES, type IncidentStatus } from '../enums/index';
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 
@@ -189,4 +189,84 @@ export interface RegionFeature {
 export interface RegionFeatureCollection {
   type: 'FeatureCollection';
   features: RegionFeature[];
+}
+
+// --- Конструктор отчётов (docs/modules/10 §8, task 2.12) ---
+
+/** Dimensions a report can group by. */
+export const REPORT_DIMENSIONS = ['type', 'region', 'month'] as const;
+export type ReportDimension = (typeof REPORT_DIMENSIONS)[number];
+
+/** Aggregates a report can show (count of incidents, casualty sums, damage sum). */
+export const REPORT_METRICS = ['count', 'dead', 'injured', 'evacuated', 'damage'] as const;
+export type ReportMetric = (typeof REPORT_METRICS)[number];
+
+const reportQueryObject = z.object({
+  from: isoDateTimeSchema,
+  to: isoDateTimeSchema,
+  typeCode: z.string().trim().min(1).max(120).optional(),
+  severity: z.coerce.number().int().min(1).max(5).optional(),
+  status: z.enum(INCIDENT_STATUSES).optional(),
+  regionId: z.string().uuid().optional(),
+  /** 0–3 grouping dimensions (empty = a single grand-total row). */
+  groupBy: z.array(z.enum(REPORT_DIMENSIONS)).max(3),
+  /** At least one aggregate column. */
+  metrics: z.array(z.enum(REPORT_METRICS)).min(1),
+  /** Add a same-period-last-year («АППГ») comparison. */
+  compareYoY: z.boolean().optional(),
+});
+
+function requireFromBeforeTo(value: { from: string; to: string }, ctx: z.RefinementCtx): void {
+  if (new Date(value.from) >= new Date(value.to)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '`from` must be before `to`',
+      path: ['from'],
+    });
+  }
+}
+
+/** The report-constructor query (`POST /analytics/query`). */
+export const reportQuerySchema = reportQueryObject.superRefine(requireFromBeforeTo);
+export type ReportQuery = z.infer<typeof reportQuerySchema>;
+
+/** The same query plus a title, for the XLSX export (`POST /analytics/query/export`). */
+export const reportExportSchema = reportQueryObject
+  .extend({ title: z.string().trim().max(200).optional() })
+  .superRefine(requireFromBeforeTo);
+export type ReportExportInput = z.infer<typeof reportExportSchema>;
+
+/**
+ * One aggregated row. `keys` are the resolved dimension values in `dimensions`
+ * order (e.g. `['Наводнение', 'Душанбе']`); `values` are the metric values in
+ * `metrics` order (casualties are numbers, damage a numeric string). `valuesPrev`
+ * carries the same-period-last-year figures when the report compares to АППГ.
+ */
+export interface ReportRow {
+  keys: string[];
+  values: (number | string)[];
+  valuesPrev?: (number | string)[];
+}
+
+export interface ReportResultDto {
+  dimensions: ReportDimension[];
+  metrics: ReportMetric[];
+  compareYoY: boolean;
+  rows: ReportRow[];
+  totals: { values: (number | string)[]; valuesPrev?: (number | string)[] };
+}
+
+/** Save the current report definition (`POST /analytics/reports`). Stored on the
+ *  generic `saved_filters` table (module `analytics`). */
+export const saveReportSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  query: reportQuerySchema,
+});
+export type SaveReportInput = z.infer<typeof saveReportSchema>;
+
+export interface SavedReportDto {
+  id: string;
+  name: string;
+  query: ReportQuery;
+  createdAt: string;
 }
