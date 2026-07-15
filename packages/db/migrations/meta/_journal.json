@@ -239,6 +239,13 @@
       "when": 1784118649390,
       "tag": "0033_aberrant_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784118650390,
+      "tag": "0034_dsp_read_log",
+      "breakpoints": true
     }
   ]
 }
