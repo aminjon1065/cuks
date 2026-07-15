@@ -5,9 +5,11 @@ import type {
   AddDocumentFileInput,
   CertificateDto,
   ChangeDocumentStatusInput,
+  ControlItemDto,
   CorrespondentCategoryDto,
   CreateDocumentLinkInput,
   CreateResolutionInput,
+  RemoveResolutionControlInput,
   DirectoryUserDto,
   DocumentHistoryEntryDto,
   DocumentLinkDto,
@@ -388,6 +390,36 @@ export function useResolutionAction(documentId: string) {
         body ?? {},
       ),
     onSuccess: () => invalidateResolutions(qc, documentId),
+  });
+}
+
+// ---- Execution control (контроль) -----------------------------------------
+
+export const controlKey = [...docflowKey, 'control'] as const;
+
+export function useControlList(): UseQueryResult<ControlItemDto[]> {
+  return useQuery({
+    queryKey: controlKey,
+    queryFn: () => api.get<ControlItemDto[]>('/v1/docflow/control'),
+  });
+}
+
+/** Extend a controlled resolution's deadline or remove it from control (docs/modules/11
+ *  §5) — refreshes the flat control list. */
+export function useControlResolutionAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      resolutionId,
+      action,
+      body,
+    }: {
+      resolutionId: string;
+      action: 'extend' | 'uncontrol';
+      body: ExtendResolutionInput | RemoveResolutionControlInput;
+    }) =>
+      api.post<ResolutionDto[]>(`/v1/docflow/resolutions/${resolutionId}/actions/${action}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: controlKey }),
   });
 }
 

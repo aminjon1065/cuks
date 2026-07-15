@@ -1,4 +1,5 @@
 import {
+  AlarmClock,
   KeyRound,
   BarChart3,
   CalendarClock,
@@ -52,6 +53,12 @@ export const ADMIN_NAV: NavItem[] = [
     path: '/app/admin/gis-access',
     icon: KeyRound,
     permission: 'gis.pg.access',
+  },
+  {
+    key: 'docflowControl',
+    path: '/app/docs/control',
+    icon: AlarmClock,
+    permission: 'docflow.control',
   },
   {
     key: 'docflowJournals',
