@@ -406,16 +406,55 @@ export const DOCFLOW_DEADLINE_TOPIC = 'docflow.deadline';
 export const DOCFLOW_DEADLINE_TIERS = ['due3', 'due1', 'due0', 'overdue', 'escalation'] as const;
 export type DocflowDeadlineTier = (typeof DOCFLOW_DEADLINE_TIERS)[number];
 
-/** Outbox payload the worker writes and the dispatcher validates + fans out. */
+/** Outbox payload the worker writes and the dispatcher validates + fans out. For a ДСП document
+ *  the dispatcher shows only `regNumber` (never `subject`) in the notification (docs/09 §3). */
 export const docflowDeadlinePayloadSchema = z.object({
   resolutionId: z.string().uuid(),
   documentId: z.string().uuid(),
   tier: z.enum(DOCFLOW_DEADLINE_TIERS),
   subject: z.string(),
+  regNumber: z.string().nullable().optional(),
+  confidential: z.boolean().optional(),
   dueDate: z.string(),
   recipientUserIds: z.array(z.string().uuid()).min(1),
 });
 export type DocflowDeadlinePayload = z.infer<typeof docflowDeadlinePayloadSchema>;
+
+// --- ДСП confidentiality / access list (docs/09-security.md §3, task 3.10) ---
+
+/** Set a document's confidentiality grif and its access list (allow-list). ДСП requires the
+ *  `docflow.confidential.view` permission AND membership in this list to view. */
+export const setDocumentAccessSchema = z.object({
+  confidentiality: z.enum(DOCUMENT_CONFIDENTIALITY),
+  accessList: z.array(z.string().uuid()).max(500).default([]),
+});
+export type SetDocumentAccessInput = z.infer<typeof setDocumentAccessSchema>;
+
+/** A member of a document's access list, resolved for display. */
+export interface DocumentAccessMemberDto {
+  userId: string;
+  name: string | null;
+}
+
+/** The document's current confidentiality + resolved access-list members (the «Доступ» section). */
+export interface DocumentAccessDto {
+  confidentiality: DocumentConfidentiality;
+  members: DocumentAccessMemberDto[];
+  /** Whether the caller may change the grif / access list (author or confidential.view holder). */
+  canManage: boolean;
+}
+
+export const READ_LOG_ENTITY_TYPES = ['document', 'file'] as const;
+export type ReadLogEntityType = (typeof READ_LOG_ENTITY_TYPES)[number];
+
+/** One ДСП access-trail entry — who opened the document (or downloaded a file), and when. */
+export interface ReadLogEntryDto {
+  id: string;
+  entityType: ReadLogEntityType;
+  actorId: string;
+  actorName: string | null;
+  createdAt: string;
+}
 
 /** One row of the «На контроле» view (docs/modules/11 §5): a controlled resolution or a
  *  document with a due date, with its deadline severity. */
