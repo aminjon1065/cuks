@@ -24,6 +24,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { EventsModule } from './modules/events/events.module';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { DocflowModule } from './modules/docflow/docflow.module';
 import { FilesModule } from './modules/files/files.module';
 import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
@@ -86,6 +87,7 @@ import { UsersModule } from './modules/users/users.module';
     GisModule,
     IncidentsModule,
     AnalyticsModule,
+    DocflowModule,
     DirectoryModule,
     HealthModule,
   ],
