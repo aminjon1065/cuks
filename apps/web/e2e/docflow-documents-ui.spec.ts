@@ -52,9 +52,30 @@ test('docflow UI: create a document and register it from the card', async ({ pag
   );
 });
 
+test('docflow UI: the card shows five tabs and a history feed', async ({ page }) => {
+  await createAndRegister(page);
+
+  // The five card tabs are present.
+  for (const name of ['Обзор', 'Маршрут', 'Резолюции', 'Связи', 'История']) {
+    await expect(page.getByRole('tab', { name })).toBeVisible();
+  }
+  // История lists the document's audit events, attributed to the actor (the actor name
+  // appears only in the history feed, not in the header/status badge).
+  await page.getByRole('tab', { name: 'История' }).click();
+  await expect(page.getByText(/E2E Админ/).first()).toBeVisible();
+
+  // The journals register screen opens and lists the registered document's number.
+  await page.goto('/app/docs/journals');
+  await expect(
+    page.getByRole('main').getByRole('heading', { name: 'Журналы регистрации' }),
+  ).toBeVisible();
+});
+
 test('docflow UI: issue a resolution from the card', async ({ page }) => {
   await createAndRegister(page);
 
+  // Resolutions live on their own tab now.
+  await page.getByRole('tab', { name: 'Резолюции' }).click();
   // Open the resolution dialog from the card and pick an executor from the directory.
   await page.getByRole('button', { name: 'Добавить резолюцию' }).click();
   const dialog = page.getByRole('dialog');
