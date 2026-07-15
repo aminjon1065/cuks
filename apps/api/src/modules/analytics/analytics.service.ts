@@ -1,6 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, gte, isNull, lt, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import { adminUnits, dictionaries, incidentReports, incidents, type Database } from '@cuks/db';
+import {
+  adminUnits,
+  dictionaries,
+  incidentReports,
+  incidents,
+  savedFilters,
+  type Database,
+} from '@cuks/db';
 import type {
   AnalyticsKpis,
   AnalyticsStatsDto,
@@ -9,9 +16,37 @@ import type {
   AnalyticsSummaryQuery,
   ActiveIncidentPoint,
   RegionFeatureCollection,
+  ReportDimension,
+  ReportExportInput,
+  ReportMetric,
+  ReportQuery,
+  ReportResultDto,
+  ReportRow,
+  SavedReportDto,
+  SaveReportInput,
   SummaryReportItem,
 } from '@cuks/shared';
+import { buildXlsx, type XlsxRow } from '@cuks/shared/office/xlsx';
 import { DB } from '../../common/db/db.module';
+import { AppException } from '../../common/exceptions/app.exception';
+
+/** Report definitions are saved on the shared `saved_filters` table under this module. */
+const REPORT_MODULE = 'analytics';
+/** КЧС letterhead for exported report files. */
+const ORG_NAME = 'Комитет по чрезвычайным ситуациям и гражданской обороне';
+/** Russian column labels for the server-generated XLSX (the file is always ru). */
+const DIMENSION_LABELS: Record<ReportDimension, string> = {
+  type: 'Вид ЧС',
+  region: 'Регион',
+  month: 'Месяц',
+};
+const METRIC_LABELS: Record<ReportMetric, string> = {
+  count: 'ЧС',
+  dead: 'Погибшие',
+  injured: 'Пострадавшие',
+  evacuated: 'Эвакуированные',
+  damage: 'Ущерб, сомони',
+};
 
 /** Time buckets (month, day-of-week, hour) are computed in the mandated display
  *  zone (CLAUDE.md §2) so they read as local operational time. Inlined as a SQL
@@ -310,4 +345,280 @@ export class AnalyticsService {
     if (query.typeCode) where.push(eq(incidents.typeCode, query.typeCode));
     return where;
   }
+
+  // --- Конструктор отчётов (docs/modules/10 §8, task 2.12) ---
+
+  /**
+   * Aggregate incidents by the chosen dimensions and metrics (`POST /analytics/query`).
+   * With `compareYoY` the same aggregation runs on the same period a year earlier and
+   * the two are merged by dimension key («АППГ»).
+   */
+  async query(input: ReportQuery): Promise<ReportResultDto> {
+    const dimensions = dedupeDimensions(input.groupBy);
+    const from = new Date(input.from);
+    const to = new Date(input.to);
+
+    const current = await this.runReport(input, dimensions, from, to);
+    if (!input.compareYoY) {
+      return {
+        dimensions,
+        metrics: input.metrics,
+        compareYoY: false,
+        rows: current.rows,
+        totals: { values: current.totals },
+      };
+    }
+
+    const prev = await this.runReport(input, dimensions, shiftYears(from, -1), shiftYears(to, -1));
+    // The `month` dimension key carries an absolute year (`YYYY-MM`), so the prior
+    // window's months would never match the current ones. Shift the prev key's month
+    // component forward a year so last year's 2025-07 aligns with this year's 2026-07.
+    const monthIndex = dimensions.indexOf('month');
+    const alignPrevKeys = (keys: string[]): string[] =>
+      monthIndex < 0
+        ? keys
+        : keys.map((key, i) => (i === monthIndex ? shiftMonthKeyYear(key, 1) : key));
+
+    const prevByKey = new Map(
+      prev.rows.map((row) => [joinKeys(alignPrevKeys(row.keys)), row.values]),
+    );
+    const seen = new Set<string>();
+    const rows: ReportRow[] = current.rows.map((row) => {
+      const key = joinKeys(row.keys);
+      seen.add(key);
+      return {
+        keys: row.keys,
+        values: row.values,
+        valuesPrev: prevByKey.get(key) ?? zeroMetrics(input.metrics),
+      };
+    });
+    // Groups present a year ago but not now still belong in an АППГ comparison, shown
+    // under the current-year label they correspond to.
+    for (const row of prev.rows) {
+      const alignedKeys = alignPrevKeys(row.keys);
+      if (!seen.has(joinKeys(alignedKeys))) {
+        rows.push({
+          keys: alignedKeys,
+          values: zeroMetrics(input.metrics),
+          valuesPrev: row.values,
+        });
+      }
+    }
+    return {
+      dimensions,
+      metrics: input.metrics,
+      compareYoY: true,
+      rows,
+      totals: { values: current.totals, valuesPrev: prev.totals },
+    };
+  }
+
+  /** The report as an XLSX buffer with a КЧС letterhead (`POST /analytics/query/export`). */
+  async exportReport(input: ReportExportInput): Promise<Buffer> {
+    const result = await this.query(input);
+    const dims = result.dimensions;
+    const metrics = result.metrics;
+
+    const header: XlsxRow = [
+      ...dims.map((d) => DIMENSION_LABELS[d]),
+      ...metrics.map((m) => METRIC_LABELS[m]),
+      ...(result.compareYoY ? metrics.map((m) => `${METRIC_LABELS[m]} (АППГ)`) : []),
+    ];
+    const rows: XlsxRow[] = [
+      [ORG_NAME],
+      ...(input.title ? [[input.title] as XlsxRow] : []),
+      [`Период: ${input.from.slice(0, 10)} — ${input.to.slice(0, 10)}`],
+      [],
+      header,
+      ...result.rows.map((row) => [
+        ...row.keys,
+        ...row.values,
+        ...(result.compareYoY ? (row.valuesPrev ?? []) : []),
+      ]),
+    ];
+    // A totals line only when grouped — «Итого» under the first dimension, blanks
+    // under the rest so the metric values stay under their headers. With no grouping
+    // the single data row already IS the grand total, so no extra line is added.
+    if (dims.length > 0) {
+      rows.push([
+        'Итого',
+        ...dims.slice(1).map(() => ''),
+        ...result.totals.values,
+        ...(result.compareYoY ? (result.totals.valuesPrev ?? []) : []),
+      ]);
+    }
+
+    return Buffer.from(buildXlsx(rows, 'Отчёт'));
+  }
+
+  async listReports(userId: string): Promise<SavedReportDto[]> {
+    const rows = await this.db
+      .select()
+      .from(savedFilters)
+      .where(
+        and(
+          eq(savedFilters.userId, userId),
+          eq(savedFilters.module, REPORT_MODULE),
+          isNull(savedFilters.deletedAt),
+        ),
+      )
+      .orderBy(desc(savedFilters.createdAt));
+    return rows.map(toSavedReport);
+  }
+
+  async saveReport(userId: string, input: SaveReportInput): Promise<SavedReportDto> {
+    const [row] = await this.db
+      .insert(savedFilters)
+      .values({ userId, module: REPORT_MODULE, name: input.name, params: input.query })
+      .returning();
+    return toSavedReport(row!);
+  }
+
+  async removeReport(userId: string, id: string): Promise<void> {
+    const [row] = await this.db
+      .update(savedFilters)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(savedFilters.id, id),
+          eq(savedFilters.userId, userId),
+          eq(savedFilters.module, REPORT_MODULE),
+          isNull(savedFilters.deletedAt),
+        ),
+      )
+      .returning({ id: savedFilters.id });
+    if (!row) throw AppException.notFound('analytics.report.not_found', 'Report not found');
+  }
+
+  /** One aggregation pass over a window: grouped rows + grand totals. */
+  private async runReport(
+    input: ReportQuery,
+    dimensions: ReportDimension[],
+    from: Date,
+    to: Date,
+  ): Promise<{ rows: ReportRow[]; totals: (number | string)[] }> {
+    const where = and(...this.reportWhere(input, from, to));
+    const selection: Record<string, SQL> = {};
+    const groupExprs: SQL[] = [];
+    dimensions.forEach((dim, i) => {
+      const expr = dimensionExpr(dim);
+      selection[`d${i}`] = expr;
+      groupExprs.push(expr);
+    });
+    input.metrics.forEach((metric, i) => {
+      selection[`m${i}`] = metricExpr(metric);
+    });
+
+    let builder = this.db.select(selection).from(incidents).$dynamic();
+    if (dimensions.includes('type')) {
+      builder = builder.leftJoin(
+        dictionaries,
+        and(eq(dictionaries.type, 'incident_type'), eq(dictionaries.code, incidents.typeCode)),
+      );
+    }
+    if (dimensions.includes('region')) {
+      builder = builder.leftJoin(adminUnits, eq(adminUnits.id, incidents.regionId));
+    }
+    builder = builder.where(where);
+    if (groupExprs.length > 0) builder = builder.groupBy(...groupExprs).orderBy(...groupExprs);
+    const raw = (await builder) as Record<string, number | string>[];
+
+    const rows: ReportRow[] = raw.map((r) => ({
+      keys: dimensions.map((_, i) => String(r[`d${i}`])),
+      values: input.metrics.map((_, i) => r[`m${i}`]!),
+    }));
+
+    // Grand totals: the same metrics with no grouping (and so no joins).
+    const totalsSelection: Record<string, SQL> = {};
+    input.metrics.forEach((metric, i) => {
+      totalsSelection[`m${i}`] = metricExpr(metric);
+    });
+    const [totalsRow] = (await this.db
+      .select(totalsSelection)
+      .from(incidents)
+      .where(where)) as Record<string, number | string>[];
+    const totals = input.metrics.map((_, i) => totalsRow![`m${i}`]!);
+
+    return { rows, totals };
+  }
+
+  private reportWhere(input: ReportQuery, from: Date, to: Date): SQL[] {
+    const where: SQL[] = [
+      isNull(incidents.deletedAt),
+      gte(incidents.occurredAt, from),
+      lt(incidents.occurredAt, to),
+    ];
+    if (input.regionId) where.push(eq(incidents.regionId, input.regionId));
+    if (input.typeCode) where.push(eq(incidents.typeCode, input.typeCode));
+    if (input.severity) where.push(eq(incidents.severity, input.severity));
+    if (input.status) where.push(eq(incidents.status, input.status));
+    return where;
+  }
+}
+
+/** SELECT/GROUP-BY expression for a report dimension (its resolved display value). */
+function dimensionExpr(dimension: ReportDimension): SQL {
+  switch (dimension) {
+    case 'type':
+      return sql`coalesce(${dictionaries.nameRu}, ${incidents.typeCode})`;
+    case 'region':
+      return sql`coalesce(${adminUnits.nameRu}, '—')`;
+    case 'month':
+      return sql`to_char(date_trunc('month', ${incidents.occurredAt} ${LOCAL_TZ}), 'YYYY-MM')`;
+  }
+}
+
+/** Aggregate expression for a report metric (int counts/casualties, string money). */
+function metricExpr(metric: ReportMetric): SQL {
+  switch (metric) {
+    case 'count':
+      return sql<number>`count(*)::int`;
+    case 'dead':
+      return sql<number>`coalesce(sum(${incidents.dead}), 0)::int`;
+    case 'injured':
+      return sql<number>`coalesce(sum(${incidents.injured}), 0)::int`;
+    case 'evacuated':
+      return sql<number>`coalesce(sum(${incidents.evacuated}), 0)::int`;
+    case 'damage':
+      return sql<string>`round(coalesce(sum(${incidents.damageEst}), 0), 2)::text`;
+  }
+}
+
+/** Preserve order, drop duplicate dimensions. */
+function dedupeDimensions(dimensions: ReportDimension[]): ReportDimension[] {
+  return [...new Set(dimensions)];
+}
+
+/** Zero values matching the metric list (money as a numeric string). */
+function zeroMetrics(metrics: ReportMetric[]): (number | string)[] {
+  return metrics.map((metric) => (metric === 'damage' ? '0.00' : 0));
+}
+
+const KEY_SEP = '\u241f';
+
+/** Join dimension keys with a separator that cannot appear in a name. */
+function joinKeys(keys: string[]): string {
+  return keys.join(KEY_SEP);
+}
+
+/** Shift a `YYYY-MM` month key by whole years (for the АППГ alignment). */
+function shiftMonthKeyYear(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split('-');
+  return `${Number(year) + delta}-${month}`;
+}
+
+/** Shift an instant by whole years (for the same-period-last-year comparison). */
+function shiftYears(date: Date, delta: number): Date {
+  const shifted = new Date(date);
+  shifted.setUTCFullYear(shifted.getUTCFullYear() + delta);
+  return shifted;
+}
+
+function toSavedReport(row: typeof savedFilters.$inferSelect): SavedReportDto {
+  return {
+    id: row.id,
+    name: row.name,
+    query: row.params as ReportQuery,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

@@ -242,3 +242,137 @@ describe('AnalyticsService.stats', () => {
     expect((geo.features[0]?.geometry as { type: string }).type).toBe('MultiPolygon');
   });
 });
+
+/** A db double for the report constructor: a `select` projecting `d0` is a grouped
+ *  query (returns the grouped rows); one with only `m*` keys is the totals query. */
+function fakeReportDb(grouped: Record<string, unknown>[], totals: Record<string, unknown>) {
+  return {
+    select(shape: Record<string, unknown>) {
+      const rows = Object.keys(shape).includes('d0') ? grouped : [totals];
+      const builder: Record<string, unknown> = {
+        from: () => builder,
+        $dynamic: () => builder,
+        leftJoin: () => builder,
+        where: () => builder,
+        groupBy: () => builder,
+        orderBy: () => builder,
+        then: (resolve: (value: unknown) => void) => resolve(rows),
+      };
+      return builder;
+    },
+  };
+}
+
+/** Like {@link fakeReportDb} but returns a different grouped set per grouped query
+ *  (current pass, then the year-earlier pass) so YoY alignment can be exercised. */
+function fakeReportDbSeq(
+  groupedByCall: Record<string, unknown>[][],
+  totals: Record<string, unknown>,
+) {
+  let grouped = 0;
+  return {
+    select(shape: Record<string, unknown>) {
+      const rows = Object.keys(shape).includes('d0') ? (groupedByCall[grouped++] ?? []) : [totals];
+      const builder: Record<string, unknown> = {
+        from: () => builder,
+        $dynamic: () => builder,
+        leftJoin: () => builder,
+        where: () => builder,
+        groupBy: () => builder,
+        orderBy: () => builder,
+        then: (resolve: (value: unknown) => void) => resolve(rows),
+      };
+      return builder;
+    },
+  };
+}
+
+const REPORT_QUERY = {
+  from: '2026-01-01T00:00:00.000Z',
+  to: '2026-08-01T00:00:00.000Z',
+  groupBy: ['type'] as const,
+  metrics: ['count', 'damage'] as const,
+};
+const GROUPED = [
+  { d0: 'Наводнение', m0: 10, m1: '500.00' },
+  { d0: 'Пожар', m0: 3, m1: '0.00' },
+];
+const TOTALS = { m0: 13, m1: '500.00' };
+
+describe('AnalyticsService.query', () => {
+  it('maps grouped rows to keys/values and echoes the dimensions/metrics', async () => {
+    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
+    const result = await service.query(REPORT_QUERY as never);
+    expect(result.dimensions).toEqual(['type']);
+    expect(result.metrics).toEqual(['count', 'damage']);
+    expect(result.compareYoY).toBe(false);
+    expect(result.rows[0]).toEqual({ keys: ['Наводнение'], values: [10, '500.00'] });
+    expect(result.totals.values).toEqual([13, '500.00']);
+  });
+
+  it('attaches same-period-last-year figures when comparing (АППГ)', async () => {
+    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
+    const result = await service.query({ ...REPORT_QUERY, compareYoY: true } as never);
+    expect(result.compareYoY).toBe(true);
+    expect(result.rows[0]?.valuesPrev).toEqual([10, '500.00']);
+    expect(result.totals.valuesPrev).toEqual([13, '500.00']);
+  });
+
+  it('aligns the month grouping to the same month last year, without a duplicate row', async () => {
+    // The prev pass yields prior-year month keys; they must align onto the current row.
+    const current = [{ d0: '2026-07', m0: 157, m1: 0 }];
+    const prev = [{ d0: '2025-07', m0: 1, m1: 7 }];
+    const db = fakeReportDbSeq([current, prev], { m0: 158, m1: 7 });
+    const service = new AnalyticsService(db as never);
+
+    const result = await service.query({
+      from: '2025-08-01T00:00:00.000Z',
+      to: '2026-08-01T00:00:00.000Z',
+      groupBy: ['month'],
+      metrics: ['count', 'dead'],
+      compareYoY: true,
+    } as never);
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toEqual({ keys: ['2026-07'], values: [157, 0], valuesPrev: [1, 7] });
+  });
+
+  it('exports a valid XLSX workbook (ZIP magic bytes)', async () => {
+    const service = new AnalyticsService(fakeReportDb(GROUPED, TOTALS) as never);
+    const buffer = await service.exportReport({ ...REPORT_QUERY, title: 'Отчёт' } as never);
+    expect(buffer.length).toBeGreaterThan(100);
+    expect(buffer[0]).toBe(0x50); // 'P'
+    expect(buffer[1]).toBe(0x4b); // 'K'
+  });
+});
+
+describe('AnalyticsService reports', () => {
+  const savedRow = {
+    id: 'rep1',
+    name: 'Мой отчёт',
+    params: REPORT_QUERY,
+    createdAt: new Date('2026-07-15T00:00:00.000Z'),
+  };
+
+  it('lists saved reports as DTOs', async () => {
+    const db = {
+      select: () => ({
+        from: () => ({ where: () => ({ orderBy: async () => [savedRow] }) }),
+      }),
+    };
+    const service = new AnalyticsService(db as never);
+    const reports = await service.listReports('u1');
+    expect(reports[0]).toMatchObject({ id: 'rep1', name: 'Мой отчёт' });
+    expect(reports[0]?.createdAt).toBe('2026-07-15T00:00:00.000Z');
+  });
+
+  it('404s when deleting a report that is not mine', async () => {
+    const db = {
+      update: () => ({ set: () => ({ where: () => ({ returning: async () => [] }) }) }),
+    };
+    const service = new AnalyticsService(db as never);
+    await expect(service.removeReport('u1', 'missing')).rejects.toMatchObject({
+      code: 'analytics.report.not_found',
+    });
+  });
+});
