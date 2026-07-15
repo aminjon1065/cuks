@@ -1,7 +1,24 @@
 import { sql } from 'drizzle-orm';
-import { boolean, customType, index, integer, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { DOC_CLASSES, JOURNAL_SEQ_RESETS } from '@cuks/shared';
+import {
+  boolean,
+  customType,
+  index,
+  integer,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import {
+  DOC_CLASSES,
+  DOCUMENT_CONFIDENTIALITY,
+  DOCUMENT_DELIVERY,
+  DOCUMENT_FILE_KINDS,
+  DOCUMENT_STATUSES,
+  JOURNAL_SEQ_RESETS,
+} from '@cuks/shared';
 import { appSchema, createdAt, deletedAt, primaryId, updatedAt } from './_shared';
+import { fsNodes } from './fs';
 import { orgUnits } from './org';
 import { users } from './users';
 
@@ -120,5 +137,100 @@ export const nomenclature = appSchema.table(
       .on(t.index)
       .where(sql`${t.deletedAt} is null`),
     index('nomenclature_active_sort_idx').on(t.isActive, t.sort),
+  ],
+);
+
+/**
+ * app.documents — the document card (docs/modules/11 §3). Unregistered until the
+ * chancellery assigns a journal + number (reg_number/reg_date null until then). The
+ * status machine (draft → … → archived, + rejected/recalled) is enforced in the
+ * service via the shared transition policy. Money-free; times are timestamptz.
+ * `access_list` holds the extra viewers for a ДСП (restricted) document. `case_index`
+ * files the document into a nomenclature case (by value, no FK — the case list is
+ * curated separately). Soft-deleted; FTS over subject + summary + reg_number.
+ */
+export const documents = appSchema.table(
+  'documents',
+  {
+    id: primaryId(),
+    journalId: uuid('journal_id').references(() => journals.id, { onDelete: 'restrict' }),
+    regNumber: text('reg_number'),
+    regDate: timestamp('reg_date', { withTimezone: true }),
+    docClass: text('doc_class', { enum: DOC_CLASSES }).notNull(),
+    typeCode: text('type_code').notNull(),
+    subject: text('subject').notNull(),
+    summary: text('summary'),
+    orgUnitId: uuid('org_unit_id').references(() => orgUnits.id, { onDelete: 'restrict' }),
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    status: text('status', { enum: DOCUMENT_STATUSES }).notNull().default('draft'),
+    confidentiality: text('confidentiality', { enum: DOCUMENT_CONFIDENTIALITY })
+      .notNull()
+      .default('normal'),
+    accessList: uuid('access_list')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    dueDate: timestamp('due_date', { withTimezone: true }),
+    caseIndex: text('case_index'),
+    correspondentId: uuid('correspondent_id').references(() => correspondents.id, {
+      onDelete: 'restrict',
+    }),
+    outgoingNumber: text('outgoing_number'),
+    outgoingDate: timestamp('outgoing_date', { withTimezone: true }),
+    delivery: text('delivery', { enum: DOCUMENT_DELIVERY }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    // FTS over subject + summary + reg_number (docs/07 §Поиск, config `russian`).
+    searchTsv: tsvector('search_tsv').generatedAlwaysAs(
+      sql`to_tsvector('russian', "subject" || ' ' || coalesce("summary", '') || ' ' || coalesce("reg_number", ''))`,
+    ),
+  },
+  (t) => [
+    // A registration number is unique within its journal (backstops the counter).
+    uniqueIndex('documents_journal_reg_number_uq')
+      .on(t.journalId, t.regNumber)
+      .where(sql`${t.regNumber} is not null`),
+    index('documents_status_idx').on(t.status),
+    index('documents_author_idx').on(t.authorId),
+    index('documents_org_unit_idx').on(t.orgUnitId),
+    index('documents_journal_idx').on(t.journalId),
+    index('documents_search_idx').using('gin', t.searchTsv),
+  ],
+);
+
+/**
+ * app.document_files — a document's files with per-kind versioning (docs/modules/11
+ * §3). The `main` body is versioned (v1, v2, … with a single `is_current`); each
+ * `attachment` is its own row. A new `main` version is free until the first
+ * signature freezes the file (enforced once `signatures` lands in task 3.5). The
+ * file itself lives in `fs_nodes` (a `system`-space node).
+ */
+export const documentFiles = appSchema.table(
+  'document_files',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => fsNodes.id, { onDelete: 'restrict' }),
+    kind: text('kind', { enum: DOCUMENT_FILE_KINDS }).notNull(),
+    version: integer('version').notNull().default(1),
+    title: text('title'),
+    isCurrent: boolean('is_current').notNull().default(true),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    index('document_files_document_idx').on(t.documentId),
+    // Exactly one current main body per document.
+    uniqueIndex('document_files_current_main_uq')
+      .on(t.documentId)
+      .where(sql`${t.kind} = 'main' and ${t.isCurrent}`),
   ],
 );
