@@ -111,8 +111,10 @@ export class DocflowController {
     return this.correspondents.create(body, user);
   }
 
+  // Editing an existing shared directory entry is a management action (like removal),
+  // reserved for the chancellery — only create-on-the-fly is open to docflow.use.
   @Patch('correspondents/:id')
-  @RequirePermission('docflow.use')
+  @RequirePermission('docflow.journals.manage')
   patchCorrespondent(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

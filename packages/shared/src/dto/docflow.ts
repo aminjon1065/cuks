@@ -80,7 +80,11 @@ export type UpdateCorrespondentInput = z.infer<typeof updateCorrespondentSchema>
 
 export const correspondentsQuerySchema = z.object({
   search: z.string().max(200).optional(),
-  activeOnly: z.coerce.boolean().optional(),
+  // Query strings only — avoid z.coerce.boolean (which turns "false" into true).
+  activeOnly: z.preprocess(
+    (v) => (v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional(),
+  ),
 });
 export type CorrespondentsQuery = z.infer<typeof correspondentsQuerySchema>;
 

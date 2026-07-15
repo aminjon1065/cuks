@@ -63,8 +63,11 @@ describe('createCorrespondentSchema', () => {
 });
 
 describe('correspondentsQuerySchema', () => {
-  it('coerces activeOnly from a query string', () => {
+  it('parses activeOnly from a query string without the coerce footgun', () => {
     expect(correspondentsQuerySchema.parse({ activeOnly: 'true' }).activeOnly).toBe(true);
+    // z.coerce.boolean would turn the string "false" into true — this must be false.
+    expect(correspondentsQuerySchema.parse({ activeOnly: 'false' }).activeOnly).toBe(false);
+    expect(correspondentsQuerySchema.parse({}).activeOnly).toBeUndefined();
     expect(correspondentsQuerySchema.parse({ search: 'мчс' }).search).toBe('мчс');
   });
 });

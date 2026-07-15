@@ -18,7 +18,7 @@ const SEARCH_LIMIT = 50;
 /**
  * Correspondent directory (docs/07 §correspondents). Read + create-on-the-fly is
  * open to `docflow.use` (the registration wizard searches and adds inline); editing
- * and removal are the same permission for now (chancellery data). Soft-deleted.
+ * and removal are chancellery actions (`docflow.journals.manage`). Soft-deleted.
  */
 @Injectable()
 export class CorrespondentsService {
