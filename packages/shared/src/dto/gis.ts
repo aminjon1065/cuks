@@ -43,6 +43,13 @@ export interface IncidentMapFilterOptionsResponse {
   regions: IncidentRegionFilterOption[];
 }
 
+/** The caller's incident territory scope (`GET /gis/incident-scope`, task 2.13).
+ *  `global` = sees all; otherwise incidents are confined to `regionIds`. */
+export interface IncidentScopeResponse {
+  global: boolean;
+  regionIds: string[];
+}
+
 // --- Layer registry + drawn features (docs/modules/10 §3/§4/§9; task 2.7) ---
 
 /**
