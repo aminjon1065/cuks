@@ -1,14 +1,22 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
-import { incidentReports, incidents, type Database } from '@cuks/db';
+import { and, desc, eq, gte, isNull, lt, ne, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { adminUnits, dictionaries, incidentReports, incidents, type Database } from '@cuks/db';
 import type {
   AnalyticsKpis,
+  AnalyticsStatsDto,
+  AnalyticsStatsQuery,
   AnalyticsSummaryDto,
   AnalyticsSummaryQuery,
   ActiveIncidentPoint,
+  RegionFeatureCollection,
   SummaryReportItem,
 } from '@cuks/shared';
 import { DB } from '../../common/db/db.module';
+
+/** Time buckets (month, day-of-week, hour) are computed in the mandated display
+ *  zone (CLAUDE.md §2) so they read as local operational time. Inlined as a SQL
+ *  literal (not a bind param) so it stays identical between SELECT and GROUP BY. */
+const LOCAL_TZ = sql.raw("at time zone 'Asia/Dushanbe'");
 
 /** The inset map shows the most severe active incidents; the cap keeps the payload
  *  bounded and is surfaced (never silently truncated) via `truncated`/`total`. */
@@ -51,8 +59,10 @@ export class AnalyticsService {
     const inPrevious: SQL = sql`${incidents.occurredAt} >= ${prevFrom} and ${incidents.occurredAt} < ${from}`;
     const sumInt = (col: AnyColumn, when: SQL) =>
       sql<number>`coalesce(sum(${col}) filter (where ${when}), 0)::int`;
+    // `round(..., 2)::text` avoids re-capping the SUM to the column's precision
+    // (sum() is unbounded numeric), which would overflow on very large totals.
     const sumMoney = (when: SQL) =>
-      sql<string>`coalesce(sum(${incidents.damageEst}) filter (where ${when}), 0)::numeric(18, 2)`;
+      sql<string>`round(coalesce(sum(${incidents.damageEst}) filter (where ${when}), 0), 2)::text`;
 
     const [row] = await this.db
       .select({
@@ -160,5 +170,144 @@ export class AnalyticsService {
       dead: row.dead,
       injured: row.injured,
     }));
+  }
+
+  // --- «Статистика ЧС» (docs/modules/10 §8, task 2.11) ---
+
+  /**
+   * Aggregates for the statistics dashboard, over the filtered incident set. Six
+   * independent grouped queries run concurrently; time buckets (month, day-of-week,
+   * hour) are computed in Asia/Dushanbe so they read as local operational time.
+   */
+  async stats(query: AnalyticsStatsQuery): Promise<AnalyticsStatsDto> {
+    const where = and(...this.statsWhere(query));
+    const monthLocal = sql`date_trunc('month', ${incidents.occurredAt} ${LOCAL_TZ})`;
+    const dowLocal = sql<number>`extract(isodow from ${incidents.occurredAt} ${LOCAL_TZ})::int`;
+    const hourLocal = sql<number>`extract(hour from ${incidents.occurredAt} ${LOCAL_TZ})::int`;
+    const typeName = sql<string>`coalesce(${dictionaries.nameRu}, ${incidents.typeCode})`;
+    const typeJoin = and(
+      eq(dictionaries.type, 'incident_type'),
+      eq(dictionaries.code, incidents.typeCode),
+    );
+    const sumInt = (col: AnyColumn) => sql<number>`coalesce(sum(${col}), 0)::int`;
+    // `round(..., 2)::text` keeps two decimals without re-capping the SUM to the
+    // column's own precision — sum() is unbounded numeric, so a `::numeric(18,2)`
+    // cast would overflow on very large totals.
+    const sumMoney = sql<string>`round(coalesce(sum(${incidents.damageEst}), 0), 2)::text`;
+
+    const [totalsRow, byMonth, byType, byRegion, heatmap, casualtiesByType] = await Promise.all([
+      this.db
+        .select({
+          incidents: sql<number>`count(*)::int`,
+          dead: sumInt(incidents.dead),
+          injured: sumInt(incidents.injured),
+          evacuated: sumInt(incidents.evacuated),
+          damage: sumMoney,
+        })
+        .from(incidents)
+        .where(where),
+      this.db
+        .select({
+          month: sql<string>`to_char(${monthLocal}, 'YYYY-MM')`,
+          count: sql<number>`count(*)::int`,
+          dead: sumInt(incidents.dead),
+          injured: sumInt(incidents.injured),
+          damage: sumMoney,
+        })
+        .from(incidents)
+        .where(where)
+        .groupBy(monthLocal)
+        .orderBy(monthLocal),
+      this.db
+        .select({ typeCode: incidents.typeCode, typeName, count: sql<number>`count(*)::int` })
+        .from(incidents)
+        .leftJoin(dictionaries, typeJoin)
+        .where(where)
+        .groupBy(incidents.typeCode, dictionaries.nameRu)
+        .orderBy(desc(sql`count(*)`)),
+      this.db
+        .select({
+          regionId: incidents.regionId,
+          regionName: sql<string>`coalesce(${adminUnits.nameRu}, '—')`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(incidents)
+        .leftJoin(adminUnits, eq(adminUnits.id, incidents.regionId))
+        .where(where)
+        .groupBy(incidents.regionId, adminUnits.nameRu)
+        .orderBy(desc(sql`count(*)`)),
+      this.db
+        .select({ dow: dowLocal, hour: hourLocal, count: sql<number>`count(*)::int` })
+        .from(incidents)
+        .where(where)
+        .groupBy(dowLocal, hourLocal),
+      this.db
+        .select({
+          typeCode: incidents.typeCode,
+          typeName,
+          dead: sumInt(incidents.dead),
+          injured: sumInt(incidents.injured),
+          evacuated: sumInt(incidents.evacuated),
+          damage: sumMoney,
+        })
+        .from(incidents)
+        .leftJoin(dictionaries, typeJoin)
+        .where(where)
+        .groupBy(incidents.typeCode, dictionaries.nameRu)
+        .orderBy(
+          desc(sql`coalesce(sum(${incidents.dead}), 0) + coalesce(sum(${incidents.injured}), 0)`),
+        ),
+    ]);
+
+    return {
+      filters: {
+        from: query.from,
+        to: query.to,
+        regionId: query.regionId ?? null,
+        typeCode: query.typeCode ?? null,
+      },
+      totals: totalsRow[0]!,
+      byMonth,
+      byType,
+      byRegion,
+      heatmap,
+      casualtiesByType,
+    };
+  }
+
+  /** Region boundaries as a GeoJSON `FeatureCollection` for the ECharts choropleth.
+   *  Geometry is simplified to keep the payload small (the inset is low-detail). */
+  async regionsGeoJson(): Promise<RegionFeatureCollection> {
+    const rows = await this.db
+      .select({
+        id: adminUnits.id,
+        code: adminUnits.code,
+        name: adminUnits.nameRu,
+        geojson: sql<string>`ST_AsGeoJSON(ST_SimplifyPreserveTopology(${adminUnits.geom}, 0.005))`,
+      })
+      .from(adminUnits)
+      .where(eq(adminUnits.level, 'region'))
+      .orderBy(adminUnits.code);
+
+    return {
+      type: 'FeatureCollection',
+      features: rows.map((row) => ({
+        type: 'Feature',
+        id: row.id,
+        properties: { id: row.id, code: row.code, name: row.name },
+        geometry: JSON.parse(row.geojson) as unknown,
+      })),
+    };
+  }
+
+  private statsWhere(query: AnalyticsStatsQuery): SQL[] {
+    const where: SQL[] = [
+      isNull(incidents.deletedAt),
+      gte(incidents.occurredAt, new Date(query.from)),
+      lt(incidents.occurredAt, new Date(query.to)),
+    ];
+    if (query.regionId) where.push(eq(incidents.regionId, query.regionId));
+    if (query.typeCode) where.push(eq(incidents.typeCode, query.typeCode));
+    return where;
   }
 }

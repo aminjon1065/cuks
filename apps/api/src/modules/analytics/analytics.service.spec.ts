@@ -117,3 +117,128 @@ describe('AnalyticsService.summary', () => {
     expect(result.activeIncidents.total).toBe(512);
   });
 });
+
+/** A db double for the six grouped stats queries, keyed by the select projection. */
+function fakeStatsDb(data: {
+  totals: Record<string, unknown>;
+  byMonth: unknown[];
+  byType: unknown[];
+  byRegion: unknown[];
+  heatmap: unknown[];
+  casualties: unknown[];
+  regions: unknown[];
+}) {
+  return {
+    select(shape: Record<string, unknown>) {
+      const keys = Object.keys(shape);
+      let rows: unknown[];
+      if (keys.includes('geojson')) rows = data.regions;
+      else if (keys.includes('incidents')) rows = [data.totals];
+      else if (keys.includes('month')) rows = data.byMonth;
+      else if (keys.includes('dow')) rows = data.heatmap;
+      else if (keys.includes('regionName')) rows = data.byRegion;
+      else if (keys.includes('evacuated')) rows = data.casualties;
+      else if (keys.includes('typeCode')) rows = data.byType;
+      else rows = [];
+      const builder: Record<string, unknown> = {
+        from: () => builder,
+        leftJoin: () => builder,
+        where: () => builder,
+        groupBy: () => builder,
+        orderBy: () => builder,
+        limit: () => builder,
+        then: (resolve: (value: unknown) => void) => resolve(rows),
+      };
+      return builder;
+    },
+  };
+}
+
+const EMPTY_STATS = {
+  totals: { incidents: 0, dead: 0, injured: 0, evacuated: 0, damage: '0.00' },
+  byMonth: [],
+  byType: [],
+  byRegion: [],
+  heatmap: [],
+  casualties: [],
+  regions: [],
+};
+
+describe('AnalyticsService.stats', () => {
+  it('echoes the filters and returns each grouped dataset', async () => {
+    const db = fakeStatsDb({
+      totals: { incidents: 10, dead: 2, injured: 5, evacuated: 1, damage: '1000.00' },
+      byMonth: [{ month: '2026-06', count: 4, dead: 1, injured: 2, damage: '500.00' }],
+      byType: [{ typeCode: 'flood', typeName: 'Наводнение', count: 6 }],
+      byRegion: [{ regionId: 'r1', regionName: 'Душанбе', count: 8 }],
+      heatmap: [{ dow: 2, hour: 15, count: 3 }],
+      casualties: [
+        {
+          typeCode: 'flood',
+          typeName: 'Наводнение',
+          dead: 2,
+          injured: 5,
+          evacuated: 1,
+          damage: '1000.00',
+        },
+      ],
+      regions: [],
+    });
+    const service = new AnalyticsService(db as never);
+
+    const result = await service.stats({
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-08-01T00:00:00.000Z',
+      regionId: 'r1',
+      typeCode: 'flood',
+    });
+
+    expect(result.filters).toEqual({
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-08-01T00:00:00.000Z',
+      regionId: 'r1',
+      typeCode: 'flood',
+    });
+    expect(result.totals.incidents).toBe(10);
+    expect(result.byMonth[0]?.month).toBe('2026-06');
+    expect(result.byType[0]?.typeName).toBe('Наводнение');
+    expect(result.byRegion[0]?.regionName).toBe('Душанбе');
+    expect(result.heatmap[0]).toEqual({ dow: 2, hour: 15, count: 3 });
+    expect(result.casualtiesByType[0]?.evacuated).toBe(1);
+  });
+
+  it('nulls the optional filters when they are absent', async () => {
+    const service = new AnalyticsService(fakeStatsDb(EMPTY_STATS) as never);
+    const result = await service.stats({
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-08-01T00:00:00.000Z',
+    });
+    expect(result.filters.regionId).toBeNull();
+    expect(result.filters.typeCode).toBeNull();
+  });
+
+  it('regionsGeoJson parses geometry into a FeatureCollection', async () => {
+    const db = fakeStatsDb({
+      ...EMPTY_STATS,
+      regions: [
+        {
+          id: 'r1',
+          code: 'TJ-DU',
+          name: 'Душанбе',
+          geojson: '{"type":"MultiPolygon","coordinates":[]}',
+        },
+      ],
+    });
+    const service = new AnalyticsService(db as never);
+
+    const geo = await service.regionsGeoJson();
+
+    expect(geo.type).toBe('FeatureCollection');
+    expect(geo.features[0]).toMatchObject({
+      type: 'Feature',
+      id: 'r1',
+      properties: { code: 'TJ-DU', name: 'Душанбе' },
+    });
+    expect((geo.features[0]?.geometry as { type: string }).type).toBe('MultiPolygon');
+  });
+});
