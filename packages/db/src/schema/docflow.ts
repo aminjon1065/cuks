@@ -4,6 +4,7 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   text,
   timestamp,
   uniqueIndex,
@@ -16,6 +17,12 @@ import {
   DOCUMENT_FILE_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
+  ROUTE_ASSIGNEE_TYPES,
+  ROUTE_STATUSES,
+  ROUTE_STEP_DECISIONS,
+  ROUTE_STEP_KINDS,
+  ROUTE_STEP_MODES,
+  ROUTE_STEP_STATUSES,
 } from '@cuks/shared';
 import { appSchema, createdAt, deletedAt, primaryId, updatedAt } from './_shared';
 import { fsNodes } from './fs';
@@ -233,4 +240,88 @@ export const documentFiles = appSchema.table(
       .on(t.documentId)
       .where(sql`${t.kind} = 'main' and ${t.isCurrent}`),
   ],
+);
+
+/**
+ * app.routes — an approval/signing route over a document (docs/modules/11 §3/§4).
+ * At most one active route per document; a rejected route is cancelled and kept as
+ * history, and re-launching starts a new `cycle`. Task 3.3.
+ */
+export const routes = appSchema.table(
+  'routes',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    cycle: integer('cycle').notNull().default(1),
+    status: text('status', { enum: ROUTE_STATUSES }).notNull().default('active'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    index('routes_document_idx').on(t.documentId),
+    // One active route per document (the engine relies on this).
+    uniqueIndex('routes_one_active_uq')
+      .on(t.documentId)
+      .where(sql`${t.status} = 'active'`),
+  ],
+);
+
+/**
+ * app.route_steps — the steps of a route (docs/modules/11 §3). Steps sharing a
+ * `step_order` are a parallel group; groups activate in order. `assignee_id` is
+ * polymorphic (user/position/org_unit), so it has no FK (like resource_acl). The
+ * previous `acted_by` records the actual actor (substitutions, task 3.11).
+ */
+export const routeSteps = appSchema.table(
+  'route_steps',
+  {
+    id: primaryId(),
+    routeId: uuid('route_id')
+      .notNull()
+      .references(() => routes.id, { onDelete: 'cascade' }),
+    stepOrder: integer('step_order').notNull(),
+    kind: text('kind', { enum: ROUTE_STEP_KINDS }).notNull(),
+    mode: text('mode', { enum: ROUTE_STEP_MODES }).notNull().default('sequential'),
+    assigneeType: text('assignee_type', { enum: ROUTE_ASSIGNEE_TYPES }).notNull(),
+    assigneeId: uuid('assignee_id').notNull(),
+    dueHours: integer('due_hours'),
+    status: text('status', { enum: ROUTE_STEP_STATUSES }).notNull().default('pending'),
+    decision: text('decision', { enum: ROUTE_STEP_DECISIONS }),
+    comment: text('comment'),
+    actedBy: uuid('acted_by').references(() => users.id, { onDelete: 'set null' }),
+    actedAt: timestamp('acted_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('route_steps_route_idx').on(t.routeId, t.stepOrder),
+    // The "my queue" lookup: active steps by assignee identity.
+    index('route_steps_assignee_idx').on(t.status, t.assigneeType, t.assigneeId),
+  ],
+);
+
+/**
+ * app.route_templates — reusable route definitions (docs/modules/11 §3), e.g.
+ * «Приказ: юрист → зам → председатель». `steps` is a jsonb array of
+ * {order, kind, assigneeType, assigneeId, dueHours}. Chancellery-managed; soft-deleted.
+ */
+export const routeTemplates = appSchema.table(
+  'route_templates',
+  {
+    id: primaryId(),
+    name: text('name').notNull(),
+    orgUnitId: uuid('org_unit_id').references(() => orgUnits.id, { onDelete: 'set null' }),
+    steps: jsonb('steps')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [index('route_templates_active_idx').on(t.isActive)],
 );
