@@ -23,6 +23,7 @@ import { AcknowledgementsService } from './acknowledgements.service';
 import { DocumentLinksService } from './document-links.service';
 import { ControlService } from './control.service';
 import { ReportsService } from './reports.service';
+import { ReadLogService } from './read-log.service';
 import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service';
 
 /**
@@ -59,6 +60,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentLinksService,
     ControlService,
     ReportsService,
+    ReadLogService,
     DocflowDeadlineOutboxService,
   ],
   exports: [DocflowNumberingService, JournalsService],

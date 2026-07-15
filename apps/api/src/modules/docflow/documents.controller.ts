@@ -7,17 +7,21 @@ import {
   createDocumentSchema,
   listDocumentsQuerySchema,
   registerDocumentSchema,
+  setDocumentAccessSchema,
   updateDocumentSchema,
   type AddDocumentFileInput,
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
+  type DocumentAccessDto,
   type DocumentDetailDto,
   type DocumentHistoryEntryDto,
   type DocumentListItemDto,
   type DocumentQueueCountsDto,
   type ListDocumentsQuery,
   type PaginatedResult,
+  type ReadLogEntryDto,
   type RegisterDocumentInput,
+  type SetDocumentAccessInput,
   type UpdateDocumentInput,
 } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -84,6 +88,39 @@ export class DocumentsController {
     @CurrentUser() user: AuthUser,
   ): Promise<DocumentHistoryEntryDto[]> {
     return this.documents.history(id, user);
+  }
+
+  @Get(':id/access')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Get the confidentiality grif + access list (ДСП allow-list)' })
+  getAccess(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentAccessDto> {
+    return this.documents.getAccess(id, user);
+  }
+
+  @Patch(':id/access')
+  @RequirePermission('docflow.use')
+  @ApiOperation({
+    summary: 'Set the confidentiality grif + access list (author / confidential.view)',
+  })
+  setAccess(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(setDocumentAccessSchema)) body: SetDocumentAccessInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentAccessDto> {
+    return this.documents.setAccess(id, body, user);
+  }
+
+  @Get(':id/read-log')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'The ДСП access trail (author / confidential.view)' })
+  readLog(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ReadLogEntryDto[]> {
+    return this.documents.readLogFor(id, user);
   }
 
   @Patch(':id')

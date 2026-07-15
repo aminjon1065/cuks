@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
   auditLog,
   correspondents,
@@ -18,6 +18,7 @@ import {
   type AddDocumentFileInput,
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
+  type DocumentAccessDto,
   type DocumentDetailDto,
   type DocumentFileDto,
   type DocumentHistoryEntryDto,
@@ -26,7 +27,9 @@ import {
   type DocumentStatus,
   type ListDocumentsQuery,
   type PaginatedResult,
+  type ReadLogEntryDto,
   type RegisterDocumentInput,
+  type SetDocumentAccessInput,
   type UpdateDocumentInput,
 } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
@@ -34,7 +37,12 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { DocflowNumberingService } from './docflow-numbering.service';
-import { canViewDocumentBase, hasRegistryAccess } from './document-visibility';
+import {
+  canViewDocumentBase,
+  hasConfidentialAccess,
+  hasRegistryAccess,
+} from './document-visibility';
+import { ReadLogService } from './read-log.service';
 import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
 import { AcknowledgementsService } from './acknowledgements.service';
@@ -82,6 +90,7 @@ export class DocumentsService {
     private readonly routes: RoutesService,
     private readonly resolutions: ResolutionsService,
     private readonly acknowledgements: AcknowledgementsService,
+    private readonly readLog: ReadLogService,
   ) {}
 
   async create(input: CreateDocumentInput, actor: AuthUser): Promise<DocumentDetailDto> {
@@ -240,6 +249,11 @@ export class DocumentsService {
       .limit(1);
     if (!row) throw AppException.notFound('docflow.document.not_found', 'Document not found');
     if (!canViewDocumentBase(row, user)) {
+      // ДСП: participation extends the допуск, but the confidential.view право is still required
+      // (docs/09 §3). Without it there is no participant fallback — indistinguishable from missing.
+      if (row.confidentiality === 'dsp' && !hasConfidentialAccess(user)) {
+        throw AppException.notFound('docflow.document.not_found', 'Document not found');
+      }
       const assignments = await this.routes.actorAssignments(user.id);
       const participant =
         (await this.routes.isRouteParticipant(id, assignments)) ||
@@ -254,6 +268,10 @@ export class DocumentsService {
 
   async detail(id: string, user: AuthUser): Promise<DocumentDetailDto> {
     const row = await this.assertVisible(id, user);
+    // ДСП access trail (docs/09 §3): log every open by someone other than the author.
+    if (row.confidentiality === 'dsp' && row.authorId !== user.id) {
+      this.readLog.record('document', id);
+    }
     const [journalRow, orgUnitRow, authorRow, correspondentRow, files] = await Promise.all([
       row.journalId
         ? this.db
@@ -590,6 +608,83 @@ export class DocumentsService {
     return row;
   }
 
+  /** Whether the caller may change the grif / access list or read the ДСП trail (docs/09 §3):
+   *  the author, or a holder of `docflow.confidential.view`. */
+  private canManageAccess(
+    row: Pick<typeof documents.$inferSelect, 'authorId'>,
+    user: AuthUser,
+  ): boolean {
+    return (
+      user.isSuperadmin ||
+      row.authorId === user.id ||
+      user.permissions.includes('docflow.confidential.view')
+    );
+  }
+
+  /** Load a document for access management, or 404 if the caller may not manage it (no leak —
+   *  managers are the author + confidential.view holders, decoupled from ДСП view access). */
+  private async loadForAccess(id: string, user: AuthUser): Promise<typeof documents.$inferSelect> {
+    const [row] = await this.db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
+      .limit(1);
+    if (!row || !this.canManageAccess(row, user)) {
+      throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    }
+    return row;
+  }
+
+  /** The document's confidentiality + resolved access-list members (the «Доступ» section). */
+  async getAccess(id: string, user: AuthUser): Promise<DocumentAccessDto> {
+    const row = await this.loadForAccess(id, user);
+    return this.accessDto(row, user);
+  }
+
+  /** Set the grif + allow-list (docs/09 §3) — author or a confidential.view holder; audited. */
+  async setAccess(
+    id: string,
+    input: SetDocumentAccessInput,
+    user: AuthUser,
+  ): Promise<DocumentAccessDto> {
+    const row = await this.loadForAccess(id, user);
+    const accessList = [...new Set(input.accessList)];
+    await this.db
+      .update(documents)
+      .set({ confidentiality: input.confidentiality, accessList, updatedAt: new Date() })
+      .where(eq(documents.id, id));
+    this.audit.log({
+      action: 'docflow.document.access_changed',
+      entityType: 'document',
+      entityId: id,
+      meta: { confidentiality: input.confidentiality, members: accessList.length },
+    });
+    return this.accessDto({ ...row, confidentiality: input.confidentiality, accessList }, user);
+  }
+
+  /** The ДСП access trail for a document — author or a confidential.view holder only. */
+  async readLogFor(id: string, user: AuthUser): Promise<ReadLogEntryDto[]> {
+    await this.loadForAccess(id, user);
+    return this.readLog.listForDocument(id);
+  }
+
+  private async accessDto(
+    row: Pick<typeof documents.$inferSelect, 'authorId' | 'confidentiality' | 'accessList'>,
+    user: AuthUser,
+  ): Promise<DocumentAccessDto> {
+    const members = row.accessList.length
+      ? await this.db
+          .select({ userId: users.id, name: users.shortName })
+          .from(users)
+          .where(inArray(users.id, row.accessList))
+      : [];
+    return {
+      confidentiality: row.confidentiality,
+      members: members.map((m) => ({ userId: m.userId, name: m.name ?? null })),
+      canManage: this.canManageAccess(row, user),
+    };
+  }
+
   private whereFor(query: ListDocumentsQuery, user: AuthUser, queueDocIds?: string[]): SQL[] {
     const where: SQL[] = [isNull(documents.deletedAt)];
     if (query.status) where.push(eq(documents.status, query.status));
@@ -605,10 +700,20 @@ export class DocumentsService {
       if (cond) where.push(cond);
     }
 
-    const mine = or(
-      eq(documents.authorId, user.id),
-      sql`${user.id}::uuid = any(${documents.accessList})`,
-    );
+    const onAccessList = sql`${user.id}::uuid = any(${documents.accessList})`;
+    const mine = or(eq(documents.authorId, user.id), onAccessList);
+
+    // ДСП guard (docs/09-security.md §3): a ДСП document surfaces in ANY list/search only to its
+    // author, or — when the caller holds docflow.confidential.view — to access-list members. This
+    // keeps ДСП out of search for the non-допущенные regardless of the queue below.
+    if (!user.isSuperadmin) {
+      const notDsp = ne(documents.confidentiality, 'dsp');
+      const dspVisible = hasConfidentialAccess(user)
+        ? or(notDsp, eq(documents.authorId, user.id), onAccessList)
+        : or(notDsp, eq(documents.authorId, user.id));
+      if (dspVisible) where.push(dspVisible);
+    }
+
     switch (query.queue) {
       case 'drafts':
         where.push(eq(documents.authorId, user.id));
