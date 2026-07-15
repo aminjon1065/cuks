@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "init-ca": "tsx scripts/init-ca.ts",
     "clean": "rimraf dist *.tsbuildinfo"
   },
   "dependencies": {
@@ -58,6 +59,7 @@
     "pino-pretty": "^13.0.0",
     "rimraf": "^6.0.1",
     "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "unplugin-swc": "^1.5.1",
     "vitest": "^3.2.4"

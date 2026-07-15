@@ -77,7 +77,12 @@ export const envSchema = z
     GIS_PG_PUBLIC_PORT: z.coerce.number().int().positive().default(5432),
     GIS_PG_PUBLIC_DATABASE: z.string().default('cuks'),
     MARTIN_URL: optionalString(),
-    CA_KEY_PATH: optionalString(),
+    // Internal signing CA (docs/09-security.md §4, task 3.5). The root ECDSA P-384 key
+    // lives (encrypted) in the `ca_data` volume; the passphrase decrypts it. When unset,
+    // the CA is initialised lazily into CA_DATA_DIR using a dev passphrase derived from
+    // SESSION_SECRET — a dedicated CA_PASSPHRASE is required in production.
+    CA_DATA_DIR: z.string().default('.ca'),
+    CA_PASSPHRASE: optionalString(),
   })
   .superRefine((env, ctx) => {
     // In production require a dedicated field-encryption key, decoupled from
@@ -87,6 +92,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['ENCRYPTION_KEY'],
         message: 'ENCRYPTION_KEY (min 32 chars) is required in production',
+      });
+    }
+    // The signing CA key must be protected by a real passphrase in production, not the
+    // SESSION_SECRET-derived dev fallback (docs/09-security.md §4).
+    if (env.NODE_ENV === 'production' && (env.CA_PASSPHRASE ?? '').length < 16) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CA_PASSPHRASE'],
+        message: 'CA_PASSPHRASE (min 16 chars) is required in production',
       });
     }
     // The lockout is a security control — it can be relaxed for local dev but never

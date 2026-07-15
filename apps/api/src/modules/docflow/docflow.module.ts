@@ -3,6 +3,7 @@ import { DocflowController } from './docflow.controller';
 import { DocumentsController } from './documents.controller';
 import { RoutesController } from './routes.controller';
 import { ResolutionsController } from './resolutions.controller';
+import { SignaturesController } from './signatures.controller';
 import { CorrespondentsService } from './correspondents.service';
 import { DocflowDictionariesService } from './docflow-dictionaries.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
@@ -11,15 +12,23 @@ import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
 import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
+import { CaService } from './ca.service';
+import { SignaturesService } from './signatures.service';
 
 /**
  * Docflow module (docs/modules/11). Task 3.1 lands the reference-data layer
  * (journals + gap-free numbering, correspondents, nomenclature); task 3.2 adds the
- * document card, its files and the status machine, wiring the numbering into
- * registration. Routes/resolutions/signatures follow in tasks 3.3–3.5.
+ * document card, its files and the status machine; 3.3 routes; 3.4 resolutions; 3.5 the
+ * internal ЭЦП (CA, device certificates, signing and verification).
  */
 @Module({
-  controllers: [DocflowController, DocumentsController, RoutesController, ResolutionsController],
+  controllers: [
+    DocflowController,
+    DocumentsController,
+    RoutesController,
+    ResolutionsController,
+    SignaturesController,
+  ],
   providers: [
     JournalsService,
     CorrespondentsService,
@@ -29,6 +38,8 @@ import { ResolutionsService } from './resolutions.service';
     DocumentsService,
     RoutesService,
     ResolutionsService,
+    CaService,
+    SignaturesService,
   ],
   exports: [DocflowNumberingService, JournalsService],
 })

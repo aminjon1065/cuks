@@ -137,6 +137,16 @@ export class StorageService {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
+  /** Fetch an object's full bytes into memory. Used to hash/stamp a document's file
+   *  server-side for signing (docs/09 §4) — callers must bound the size (document
+   *  bodies are small). Do not use for arbitrary large objects. */
+  async getObjectBytes(key: string): Promise<Buffer> {
+    const res = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (!res.Body) throw new Error('S3 returned no body');
+    const bytes = await res.Body.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+
   /** Used by the preview endpoint (1.3) — the worker may not have generated a
    *  given size yet, or the file may not be an image at all. */
   async objectExists(key: string): Promise<boolean> {

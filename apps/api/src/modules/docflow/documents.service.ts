@@ -7,6 +7,7 @@ import {
   fsNodes,
   journals,
   orgUnits,
+  signatures,
   users,
   type Database,
 } from '@cuks/db';
@@ -119,9 +120,11 @@ export class DocumentsService {
     const queueDocIds =
       query.queue === 'to_approve'
         ? await this.routes.approvalQueueDocumentIds(user.id)
-        : query.queue === 'my_tasks'
-          ? await this.resolutions.myTasksDocumentIds(user.id)
-          : undefined;
+        : query.queue === 'to_sign'
+          ? await this.routes.signQueueDocumentIds(user.id)
+          : query.queue === 'my_tasks'
+            ? await this.resolutions.myTasksDocumentIds(user.id)
+            : undefined;
     const where = and(...this.whereFor(query, user, queueDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
@@ -418,6 +421,20 @@ export class DocumentsService {
         .for('update');
       let version = 1;
       if (input.kind === 'main') {
+        // A signed main body is frozen: a new version would strand its signatures on the
+        // superseded version. Block it (the signatures are a legal record) — docs/modules/11
+        // §3, docs/09-security.md §4.
+        const [signed] = await tx
+          .select({ id: signatures.id })
+          .from(signatures)
+          .where(eq(signatures.documentId, id))
+          .limit(1);
+        if (signed) {
+          throw AppException.conflict(
+            'docflow.document.signed_frozen',
+            'The document is signed; its main file can no longer be replaced',
+          );
+        }
         // A new main body supersedes the previous current version.
         const [prev] = await tx
           .select({ version: documentFiles.version })
@@ -532,9 +549,10 @@ export class DocumentsService {
         where.push(eq(documents.authorId, user.id));
         break;
       case 'to_approve':
+      case 'to_sign':
       case 'my_tasks':
-        // Documents the caller has an active approve step (to_approve) or an active
-        // resolution to execute (my_tasks). An empty id set yields `false` (no rows).
+        // Documents the caller has an active approve/sign step (to_approve/to_sign) or an
+        // active resolution to execute (my_tasks). An empty id set yields `false` (no rows).
         where.push(inArray(documents.id, queueDocIds ?? []));
         break;
       case 'registry':

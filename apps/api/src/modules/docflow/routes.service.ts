@@ -126,6 +126,100 @@ export class RoutesService {
     return rows.map((r) => r.documentId);
   }
 
+  /** Document ids the caller has an active `sign` step on — the «На подпись» queue. */
+  async signQueueDocumentIds(userId: string): Promise<string[]> {
+    const assignments = await this.actorAssignments(userId);
+    const match = this.assignmentPredicate(assignments);
+    if (!match) return [];
+    const rows = await this.db
+      .selectDistinct({ documentId: routes.documentId })
+      .from(routeSteps)
+      .innerJoin(routes, eq(routes.id, routeSteps.routeId))
+      .where(
+        and(
+          eq(routes.status, 'active'),
+          eq(routeSteps.status, 'active'),
+          eq(routeSteps.kind, 'sign'),
+          match,
+        ),
+      );
+    return rows.map((r) => r.documentId);
+  }
+
+  /**
+   * Within a transaction: find and lock the document's active route, returning the
+   * active `sign` step the actor may act on (or null). Used by the sign action, which
+   * records the signature and advances the step in the same transaction.
+   */
+  async lockActiveSignStep(
+    tx: Database,
+    documentId: string,
+    actor: AuthUser,
+  ): Promise<{ route: typeof routes.$inferSelect; step: typeof routeSteps.$inferSelect } | null> {
+    const assignments = await this.actorAssignments(actor.id);
+    const [route] = await tx
+      .select()
+      .from(routes)
+      .where(and(eq(routes.documentId, documentId), eq(routes.status, 'active')))
+      .limit(1)
+      .for('update');
+    if (!route) return null;
+    const steps = await tx
+      .select()
+      .from(routeSteps)
+      .where(
+        and(
+          eq(routeSteps.routeId, route.id),
+          eq(routeSteps.kind, 'sign'),
+          eq(routeSteps.status, 'active'),
+        ),
+      );
+    const step = steps.find((s) => this.canAct(s, assignments, actor.isSuperadmin));
+    return step ? { route, step } : null;
+  }
+
+  /**
+   * Mark a step done with the given decision and advance the route: activate the next
+   * group, or — if this was the last group — complete the route and move the document to
+   * `pending_registration`. Shared by the approve action and the sign action. The step
+   * is treated as done for the activation plan (docs/modules/11 §4).
+   */
+  async applyStepCompletion(
+    tx: Database,
+    route: { id: string; documentId: string },
+    stepId: string,
+    decision: 'approved' | 'signed',
+    comment: string | null,
+    actorId: string,
+    now: Date,
+  ): Promise<void> {
+    await tx
+      .update(routeSteps)
+      .set({ status: 'done', decision, comment, actedBy: actorId, actedAt: now })
+      .where(eq(routeSteps.id, stepId));
+    const all = await tx
+      .select({ id: routeSteps.id, stepOrder: routeSteps.stepOrder, status: routeSteps.status })
+      .from(routeSteps)
+      .where(eq(routeSteps.routeId, route.id));
+    const plan = planApproval(all as RouteStepState[], stepId);
+    if (plan.activateStepIds.length) {
+      await tx
+        .update(routeSteps)
+        .set({ status: 'active' })
+        .where(inArray(routeSteps.id, plan.activateStepIds));
+    }
+    if (plan.routeComplete) {
+      await tx
+        .update(routes)
+        .set({ status: 'completed', completedAt: now })
+        .where(eq(routes.id, route.id));
+      await tx
+        .update(documents)
+        .set({ status: 'pending_registration' })
+        .where(eq(documents.id, route.documentId));
+    }
+  }
+
   /** Whether the caller is (or was) an assignee on any of the document's route steps. */
   async isRouteParticipant(documentId: string, assignments: ActorAssignments): Promise<boolean> {
     const match = this.assignmentPredicate(assignments);
@@ -265,32 +359,7 @@ export class RoutesService {
           .where(eq(documents.id, route.documentId));
         return route.documentId;
       }
-      await tx
-        .update(routeSteps)
-        .set({ status: 'done', decision: 'approved', comment, actedBy: actor.id, actedAt: now })
-        .where(eq(routeSteps.id, stepId));
-      const all = await tx
-        .select({ id: routeSteps.id, stepOrder: routeSteps.stepOrder, status: routeSteps.status })
-        .from(routeSteps)
-        .where(eq(routeSteps.routeId, route.id));
-      const plan = planApproval(all as RouteStepState[], stepId);
-      if (plan.activateStepIds.length) {
-        await tx
-          .update(routeSteps)
-          .set({ status: 'active' })
-          .where(inArray(routeSteps.id, plan.activateStepIds));
-      }
-      if (plan.routeComplete) {
-        await tx
-          .update(routes)
-          .set({ status: 'completed', completedAt: now })
-          .where(eq(routes.id, route.id));
-        // The approved document now awaits chancellery registration.
-        await tx
-          .update(documents)
-          .set({ status: 'pending_registration' })
-          .where(eq(documents.id, route.documentId));
-      }
+      await this.applyStepCompletion(tx, route, stepId, 'approved', comment, actor.id, now);
       return route.documentId;
     });
     await this.audit.logAndWait({

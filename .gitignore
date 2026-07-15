@@ -21,6 +21,10 @@ apps/web/e2e/.auth/
 .env.*
 !.env.example
 
+# Internal signing CA material (docs/09-security.md §4) — never commit keys
+.ca/
+apps/api/.ca/
+
 # Editor / OS
 .DS_Store
 .idea/
