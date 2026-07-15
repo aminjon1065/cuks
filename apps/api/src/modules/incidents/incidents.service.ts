@@ -55,6 +55,7 @@ import {
   incidentNotificationOutboxValues,
   IncidentNotificationOutboxService,
 } from './incident-notification-outbox.service';
+import { ScopeService } from '../admin/scope.service';
 
 const INCIDENT_FILTER_MODULE = 'incidents';
 const INCIDENT_EXPORT_LIMIT = 10_000;
@@ -191,10 +192,16 @@ export class IncidentsService {
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
     private readonly incidentNotificationOutbox: IncidentNotificationOutboxService,
+    private readonly scope: ScopeService,
   ) {}
 
-  async list(query: ListIncidentsQuery): Promise<PaginatedResult<IncidentListItemDto>> {
+  async list(
+    query: ListIncidentsQuery,
+    user: AuthUser,
+  ): Promise<PaginatedResult<IncidentListItemDto>> {
     const filters = this.whereFor(query);
+    const scope = await this.scopePredicate(user);
+    if (scope) filters.push(scope);
     const where = and(...filters);
     const [totalRows, rows] = await Promise.all([
       this.db.select({ total: count() }).from(incidents).where(where),
@@ -208,10 +215,18 @@ export class IncidentsService {
     };
   }
 
-  async detail(id: string): Promise<IncidentDetailDto> {
+  /** The incident card, scoped to the caller's territory (out-of-scope reads 404). */
+  async detail(id: string, user: AuthUser): Promise<IncidentDetailDto> {
+    return this.loadDetail(id, await this.scopePredicate(user));
+  }
+
+  /** Load a card, optionally restricted to a territory scope. Internal callers (a
+   *  mutation returning the fresh card) pass no scope — the caller just acted on it. */
+  private async loadDetail(id: string, scope?: SQL): Promise<IncidentDetailDto> {
     const [row] = await this.baseSelect()
-      .where(and(eq(incidents.id, id), isNull(incidents.deletedAt)))
+      .where(and(eq(incidents.id, id), isNull(incidents.deletedAt), ...(scope ? [scope] : [])))
       .limit(1);
+    // Out-of-scope incidents are indistinguishable from missing ones (no existence leak).
     if (!row) throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
 
     const [listItem] = await this.toListItems([row]);
@@ -383,7 +398,7 @@ export class IncidentsService {
     });
     this.publishUpdate(createdIncident.id, 'created');
     await this.incidentNotificationOutbox.dispatchPending(createdIncident.outboxId);
-    return this.detail(createdIncident.id);
+    return this.loadDetail(createdIncident.id);
   }
 
   async addReport(
@@ -391,6 +406,7 @@ export class IncidentsService {
     input: CreateIncidentReportInput,
     actor: AuthUser,
   ): Promise<IncidentDetailDto> {
+    await this.assertInScope(id, actor);
     const mutation = await this.db.transaction(async (tx) => {
       const [incident] = await tx
         .select()
@@ -467,7 +483,7 @@ export class IncidentsService {
     });
     this.publishUpdate(id, 'reported');
     await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
-    return this.detail(id);
+    return this.loadDetail(id);
   }
 
   async addResource(
@@ -475,6 +491,7 @@ export class IncidentsService {
     input: CreateIncidentResourceInput,
     actor: AuthUser,
   ): Promise<IncidentDetailDto> {
+    await this.assertInScope(id, actor);
     const mutation = await this.db.transaction(async (tx) => {
       const [incident] = await tx
         .select()
@@ -525,7 +542,7 @@ export class IncidentsService {
     });
     this.publishUpdate(id, 'resource_added');
     await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
-    return this.detail(id);
+    return this.loadDetail(id);
   }
 
   async changeStatus(
@@ -533,6 +550,7 @@ export class IncidentsService {
     input: ChangeIncidentStatusInput,
     actor: AuthUser,
   ): Promise<IncidentDetailDto> {
+    await this.assertInScope(id, actor);
     const transitionId = uuidv7();
     const mutation = await this.db.transaction(async (tx) => {
       const [incident] = await tx
@@ -584,7 +602,7 @@ export class IncidentsService {
     });
     this.publishUpdate(id, 'status_changed');
     await this.incidentNotificationOutbox.dispatchPending(mutation.outboxId);
-    return this.detail(id);
+    return this.loadDetail(id);
   }
 
   async listSavedFilters(userId: string): Promise<SavedIncidentFilterDto[]> {
@@ -646,14 +664,12 @@ export class IncidentsService {
       throw AppException.notFound('incidents.saved_filter.not_found', 'Saved filter not found');
   }
 
-  async exportXlsx(filters: IncidentRegistryFilters): Promise<Buffer> {
+  async exportXlsx(filters: IncidentRegistryFilters, user: AuthUser): Promise<Buffer> {
     const query = { ...filters, sort: '-occurredAt' as const };
-    const rows = await this.findRegistryRows(
-      query,
-      and(...this.whereFor(query)),
-      INCIDENT_EXPORT_LIMIT,
-      0,
-    );
+    const clauses = this.whereFor(query);
+    const scope = await this.scopePredicate(user);
+    if (scope) clauses.push(scope);
+    const rows = await this.findRegistryRows(query, and(...clauses), INCIDENT_EXPORT_LIMIT, 0);
     const items = await this.toListItems(rows);
     const exportRows: IncidentExportRow[] = [
       [
@@ -682,6 +698,35 @@ export class IncidentsService {
       ]),
     ];
     return buildIncidentXlsx(exportRows);
+  }
+
+  /**
+   * Territory data-scope for the registry (docs/modules/10 §1, §11; task 2.13). A
+   * regional user sees only incidents in their region(s); the central apparatus and
+   * superadmin see everything (`undefined` = no restriction). Matches on any of the
+   * three territory columns so district-scoped users work once districts exist.
+   */
+  private async scopePredicate(user: AuthUser): Promise<SQL | undefined> {
+    const scope = await this.scope.getAccessibleRegions(user, 'gis.view');
+    if (scope.global) return undefined;
+    return or(
+      inArray(incidents.regionId, scope.adminUnitIds),
+      inArray(incidents.districtId, scope.adminUnitIds),
+      inArray(incidents.jamoatId, scope.adminUnitIds),
+    );
+  }
+
+  /** Reject a mutation on an incident outside the caller's territory (as a 404, so
+   *  existence never leaks). No-op for global-scope users. */
+  private async assertInScope(id: string, user: AuthUser): Promise<void> {
+    const scope = await this.scopePredicate(user);
+    if (!scope) return;
+    const [row] = await this.db
+      .select({ id: incidents.id })
+      .from(incidents)
+      .where(and(eq(incidents.id, id), isNull(incidents.deletedAt), scope))
+      .limit(1);
+    if (!row) throw AppException.notFound('incidents.incident.not_found', 'Incident not found');
   }
 
   private whereFor(filters: IncidentRegistryFilters): SQL[] {

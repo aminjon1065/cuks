@@ -40,8 +40,9 @@ export class IncidentsController {
   @ApiOperation({ summary: 'List emergency incidents' })
   list(
     @Query(new ZodValidationPipe(listIncidentsQuerySchema)) query: ListIncidentsQuery,
+    @CurrentUser() user: AuthUser,
   ): Promise<PaginatedResult<IncidentListItemDto>> {
-    return this.incidents.list(query);
+    return this.incidents.list(query, user);
   }
 
   @Get('saved-filters')
@@ -79,11 +80,12 @@ export class IncidentsController {
   @ApiOkResponse({ description: 'XLSX workbook attachment' })
   async exportXlsx(
     @Body(new ZodValidationPipe(incidentRegistryFilterSchema)) body: IncidentRegistryFilters,
+    @CurrentUser() user: AuthUser,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<Buffer> {
     reply.header('content-disposition', 'attachment; filename="incidents.xlsx"');
     reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    return this.incidents.exportXlsx(body);
+    return this.incidents.exportXlsx(body, user);
   }
 
   @Post()
@@ -99,8 +101,11 @@ export class IncidentsController {
   @Get(':id')
   @RequirePermission('gis.view')
   @ApiOperation({ summary: 'Get an incident card with reports and resources' })
-  detail(@Param('id', new ZodValidationPipe(idSchema)) id: string): Promise<IncidentDetailDto> {
-    return this.incidents.detail(id);
+  detail(
+    @Param('id', new ZodValidationPipe(idSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<IncidentDetailDto> {
+    return this.incidents.detail(id, user);
   }
 
   @Post(':id/reports')
