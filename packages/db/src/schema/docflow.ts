@@ -473,3 +473,33 @@ export const signatures = appSchema.table(
     index('signatures_user_idx').on(t.userId),
   ],
 );
+
+/**
+ * app.acquaintances — a document's acknowledgement sheet (docs/modules/11 §3/§6, task
+ * 3.6). An `acknowledge` route step assigned to a subdivision expands into one row per
+ * member; each employee acknowledges (a lightweight recorded read, `acknowledged_at`).
+ * `route_step_id` ties the row to the step that generated it, so the step completes once
+ * every row is acknowledged and «На ознакомление» can list pending rows.
+ */
+export const acquaintances = appSchema.table(
+  'acquaintances',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    routeStepId: uuid('route_step_id').references(() => routeSteps.id, { onDelete: 'set null' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // One acknowledgement line per user per generating step (idempotent expansion).
+    uniqueIndex('acquaintances_step_user_uq').on(t.routeStepId, t.userId),
+    index('acquaintances_document_idx').on(t.documentId),
+    // The «На ознакомление» queue: the user's pending lines.
+    index('acquaintances_user_pending_idx').on(t.userId, t.acknowledgedAt),
+  ],
+);

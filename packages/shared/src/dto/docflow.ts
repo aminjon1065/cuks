@@ -273,6 +273,7 @@ export const DOCUMENT_QUEUES = [
   'registry',
   'to_approve',
   'to_sign',
+  'to_acknowledge',
   'my_tasks',
 ] as const;
 export type DocumentQueue = (typeof DOCUMENT_QUEUES)[number];
@@ -508,4 +509,26 @@ export interface VerifyResultDto {
   documentId: string;
   documentSubject: string;
   documentRegNumber: string | null;
+}
+
+// --- Acknowledgements / ознакомление (docs/modules/11 §3/§6, task 3.6) ------
+
+/** One line of a document's acknowledgement sheet: an employee who must read the order,
+ *  and when they did (null = still pending). */
+export interface AcquaintanceDto {
+  id: string;
+  userId: string;
+  userName: string | null;
+  position: string | null;
+  acknowledgedAt: string | null;
+}
+
+/** The acknowledgement sheet of a document (docs/modules/11 §3), plus whether the caller
+ *  has a pending line they can act on. */
+export interface AcknowledgementSheetDto {
+  rows: AcquaintanceDto[];
+  total: number;
+  acknowledged: number;
+  /** True when the caller has an unacknowledged line on an active acknowledge step. */
+  canAcknowledge: boolean;
 }
