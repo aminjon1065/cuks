@@ -17,6 +17,7 @@ import {
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
   DOCUMENT_FILE_KINDS,
+  DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
   RESOLUTION_STATUSES,
@@ -501,5 +502,32 @@ export const acquaintances = appSchema.table(
     index('acquaintances_document_idx').on(t.documentId),
     // The «На ознакомление» queue: the user's pending lines.
     index('acquaintances_user_pending_idx').on(t.userId, t.acknowledgedAt),
+  ],
+);
+
+/**
+ * app.document_links — relations between documents (docs/modules/11 §3, task 3.7): a
+ * generic association or a reply (`src` answers `dst`). Shown bidirectionally on both
+ * cards (the query unions src=id and dst=id). One row per directed pair; the service
+ * rejects self-links and existing links in either direction.
+ */
+export const documentLinks = appSchema.table(
+  'document_links',
+  {
+    id: primaryId(),
+    srcDocumentId: uuid('src_document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    dstDocumentId: uuid('dst_document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: DOCUMENT_LINK_KINDS }).notNull().default('related'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('document_links_pair_uq').on(t.srcDocumentId, t.dstDocumentId),
+    index('document_links_src_idx').on(t.srcDocumentId),
+    index('document_links_dst_idx').on(t.dstDocumentId),
   ],
 );

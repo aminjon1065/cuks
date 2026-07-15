@@ -4,10 +4,12 @@ import {
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
   DOCUMENT_FILE_KINDS,
+  DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
   ROUTE_ASSIGNEE_TYPES,
   ROUTE_STEP_KINDS,
+  type DocumentLinkKind,
   type DocClass,
   type DocumentConfidentiality,
   type DocumentDelivery,
@@ -286,6 +288,8 @@ export const listDocumentsQuerySchema = z.object({
   docClass: z.enum(DOC_CLASSES).optional(),
   journalId: z.string().uuid().optional(),
   search: z.string().max(200).optional(),
+  /** Registration year (by reg_date) — the journals register view (docs/modules/11 §7). */
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
 });
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 
@@ -334,6 +338,17 @@ export interface DocumentListItemDto {
   dueDate: string | null;
   regDate: string | null;
   createdAt: string;
+  /** For an action queue (to_approve/to_sign/to_acknowledge), the route step the caller
+   *  may act on directly from the row; null otherwise. */
+  actionStepId: string | null;
+}
+
+/** Pending-work counts for the cabinet queue badges (docs/modules/11 §7). */
+export interface DocumentQueueCountsDto {
+  to_approve: number;
+  to_sign: number;
+  to_acknowledge: number;
+  my_tasks: number;
 }
 
 export interface DocumentDetailDto extends DocumentListItemDto {
@@ -533,4 +548,32 @@ export interface AcknowledgementSheetDto {
   canAcknowledge: boolean;
   /** The active acknowledge step the caller acknowledges against (null when none). */
   stepId: string | null;
+}
+
+// --- Document links / связи + history (docs/modules/11 §3/§7, task 3.7) ------
+
+/** Link the current document to another (docs/modules/11 §3). */
+export const createDocumentLinkSchema = z.object({
+  targetId: z.string().uuid(),
+  kind: z.enum(DOCUMENT_LINK_KINDS).default('related'),
+});
+export type CreateDocumentLinkInput = z.infer<typeof createDocumentLinkSchema>;
+
+/** A related document as shown on the «Связи» tab (bidirectional). */
+export interface DocumentLinkDto {
+  id: string;
+  kind: DocumentLinkKind;
+  documentId: string;
+  regNumber: string | null;
+  subject: string;
+  status: DocumentStatus;
+  createdAt: string;
+}
+
+/** One entry of a document's «История» tab — an audit event on the document. */
+export interface DocumentHistoryEntryDto {
+  id: string;
+  action: string;
+  actorName: string | null;
+  createdAt: string;
 }

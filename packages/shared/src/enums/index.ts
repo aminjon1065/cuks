@@ -282,3 +282,10 @@ export type SignatureAlgorithm = (typeof SIGNATURE_ALGORITHMS)[number];
  *  table. `kind` leaves room for future certificate classes. */
 export const CERTIFICATE_KINDS = ['device'] as const;
 export type CertificateKind = (typeof CERTIFICATE_KINDS)[number];
+
+// --- Document links / связи (docs/modules/11 §3, task 3.7) ---
+
+/** How two documents relate (docs/modules/11 §3): a generic association, or a reply
+ *  (`reply` = the source document answers the target). Shown bidirectionally on both cards. */
+export const DOCUMENT_LINK_KINDS = ['related', 'reply'] as const;
+export type DocumentLinkKind = (typeof DOCUMENT_LINK_KINDS)[number];

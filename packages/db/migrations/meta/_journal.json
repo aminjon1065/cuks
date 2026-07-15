@@ -232,6 +232,13 @@
       "when": 1784116172616,
       "tag": "0032_rich_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784118649390,
+      "tag": "0033_aberrant_prodigy",
+      "breakpoints": true
     }
   ]
 }
