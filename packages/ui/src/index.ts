@@ -29,6 +29,7 @@ export * from './components/attachment-list';
 // Composite components
 export * from './components/status-badge';
 export * from './components/severity-badge';
+export * from './components/stat-card';
 export * from './components/page-header';
 export * from './components/empty-state';
 export * from './components/confirm-dialog';
