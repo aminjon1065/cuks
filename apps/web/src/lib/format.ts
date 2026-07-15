@@ -19,6 +19,20 @@ export function formatDateTime(iso: string): string {
   return DT.format(new Date(iso));
 }
 
+const RTF = new Intl.RelativeTimeFormat('ru-RU', { numeric: 'auto' });
+
+/** Relative time from now — "5 минут назад" (docs/06 §5, for feeds). Past a week
+ *  it falls back to the absolute date. `now` is injectable for tests. */
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const diffSec = Math.round((new Date(iso).getTime() - now.getTime()) / 1000);
+  const abs = Math.abs(diffSec);
+  if (abs < 60) return RTF.format(diffSec, 'second');
+  if (abs < 3600) return RTF.format(Math.round(diffSec / 60), 'minute');
+  if (abs < 86_400) return RTF.format(Math.round(diffSec / 3600), 'hour');
+  if (abs < 7 * 86_400) return RTF.format(Math.round(diffSec / 86_400), 'day');
+  return formatDateTime(iso);
+}
+
 /** Human-readable byte size (ru-RU grouping) — "12,5 МБ". */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
