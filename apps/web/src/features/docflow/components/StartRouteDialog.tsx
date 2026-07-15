@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -8,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
   Label,
-  UserPicker,
   toast,
 } from '@cuks/ui';
 import type { StartRouteInput } from '@cuks/shared';
@@ -28,8 +28,9 @@ export interface StartRouteDialogProps {
 
 /**
  * Build an ad-hoc sequential approval route: each added approver is one `approve`
- * step, ordered as added (docs/modules/11 §4). Route templates (task 3.3 settings)
- * are the alternative path, not required here.
+ * step, ordered as added (docs/modules/11 §4). The approver search hits the server
+ * (the directory list is capped), so any user is reachable. Route templates (task
+ * 3.3 settings) are the alternative path, not required here.
  */
 export function StartRouteDialog({
   documentId,
@@ -37,22 +38,15 @@ export function StartRouteDialog({
   onOpenChange,
 }: StartRouteDialogProps): React.JSX.Element {
   const { t } = useTranslation('docflow');
-  const [picked, setPicked] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [approvers, setApprovers] = useState<Approver[]>([]);
-  const directory = useDirectoryUsers('');
+  const directory = useDirectoryUsers(search);
   const start = useStartRoute(documentId);
 
-  const options = useMemo(
-    () =>
-      (directory.data ?? []).map((u) => ({ id: u.id, label: u.shortName, sublabel: u.username })),
-    [directory.data],
-  );
-
-  const add = () => {
-    const user = directory.data?.find((u) => u.id === picked);
-    if (!user || approvers.some((a) => a.id === user.id)) return;
-    setApprovers((prev) => [...prev, { id: user.id, name: user.shortName }]);
-    setPicked(null);
+  const add = (approver: Approver) => {
+    if (approvers.some((a) => a.id === approver.id)) return;
+    setApprovers((prev) => [...prev, approver]);
+    setSearch('');
   };
 
   const submit = () => {
@@ -82,21 +76,39 @@ export function StartRouteDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <Label>{t('route.start.addApprover')}</Label>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <UserPicker
-                  options={options}
-                  value={picked}
-                  onChange={setPicked}
-                  placeholder={t('route.start.pickApprover')}
-                  searchPlaceholder={t('route.start.searchPlaceholder')}
-                />
+            <Label htmlFor="route-approver-search">{t('route.start.addApprover')}</Label>
+            <Input
+              id="route-approver-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('route.start.searchPlaceholder')}
+            />
+            {search.trim() ? (
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-sm border border-border">
+                {directory.isLoading ? (
+                  <div className="flex justify-center py-3">
+                    <Loader2 className="size-4 animate-spin text-text-muted" />
+                  </div>
+                ) : (directory.data ?? []).length === 0 ? (
+                  <div className="py-3 text-center text-xs text-text-muted">—</div>
+                ) : (
+                  (directory.data ?? []).map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      disabled={approvers.some((a) => a.id === u.id)}
+                      onClick={() => add({ id: u.id, name: u.shortName })}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] hover:bg-surface-2 disabled:opacity-40"
+                    >
+                      <span className="truncate">
+                        {u.shortName}{' '}
+                        <span className="font-mono text-xs text-text-muted">@{u.username}</span>
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
-              <Button type="button" variant="outline" size="sm" disabled={!picked} onClick={add}>
-                <Plus className="size-4" /> {t('route.start.add')}
-              </Button>
-            </div>
+            ) : null}
           </div>
 
           {approvers.length === 0 ? (
