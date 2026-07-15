@@ -28,6 +28,11 @@ export const orgUnits = appSchema.table(
     sort: integer('sort').notNull().default(0),
     // No FK: would create an org_units <-> positions cycle; integrity in app.
     headPositionId: uuid('head_position_id'),
+    // Territory this unit is responsible for (gis.admin_units) — a region for a
+    // regional управление, null for the central apparatus which sees everything
+    // (docs/modules/10 §1; task 2.13). Drives incident data-scoping. FK added in the
+    // migration to avoid an app↔gis schema import cycle here.
+    adminUnitId: uuid('admin_unit_id'),
     // Org file-storage quota in bytes (docs/modules/12 §4); null = unlimited (no
     // spec'd default for org space, unlike the 10 GiB personal default).
     quotaBytes: bigint('quota_bytes', { mode: 'number' }),

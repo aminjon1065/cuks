@@ -183,6 +183,13 @@
       "when": 1784070408957,
       "tag": "0025_premium_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784087594767,
+      "tag": "0026_blushing_speed_demon",
+      "breakpoints": true
     }
   ]
 }

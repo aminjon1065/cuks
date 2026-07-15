@@ -514,6 +514,33 @@ interface GeoFeature {
  * is the production path in infra/scripts/seed-geo.sh (ogr2ogr). Geometry is
  * coerced to MultiPolygon in 4326. Idempotent by `code`.
  */
+/** Regional управления responsible for a region (task 2.13 data-scoping). The
+ *  central apparatus (001–005) stays null = sees everything. */
+const ORG_TERRITORY: Record<string, string> = {
+  '0190a000-0000-7000-8000-000000000006': 'TJ-SU', // Согдийская область
+  '0190a000-0000-7000-8000-000000000007': 'TJ-SU', // Отдел по г. Худжанд (в Согде)
+  '0190a000-0000-7000-8000-000000000008': 'TJ-KT', // Хатлонская область
+  '0190a000-0000-7000-8000-000000000009': 'TJ-GB', // ГБАО
+  '0190a000-0000-7000-8000-00000000000a': 'TJ-RA', // РРП
+};
+
+/** Bind regional org units to their `gis.admin_units` region, so incident scoping
+ *  can confine a regional user to their territory (docs/modules/10 §1). */
+async function bindOrgTerritory(db: Database): Promise<void> {
+  const regions = await db
+    .select({ id: adminUnits.id, code: adminUnits.code })
+    .from(adminUnits)
+    .where(eq(adminUnits.level, 'region'));
+  const byCode = new Map(regions.map((r) => [r.code, r.id]));
+  for (const [orgUnitId, code] of Object.entries(ORG_TERRITORY)) {
+    const adminUnitId = byCode.get(code);
+    if (adminUnitId) {
+      await db.update(orgUnits).set({ adminUnitId }).where(eq(orgUnits.id, orgUnitId));
+    }
+  }
+  console.log('Org-unit territory bound: regional управления → admin_units.');
+}
+
 async function seedGeo(db: Database): Promise<void> {
   const path = join(__dirname, 'data', 'tj-admin1.geojson');
   const fc = JSON.parse(readFileSync(path, 'utf8')) as { features: GeoFeature[] };
@@ -1010,6 +1037,7 @@ async function main(): Promise<void> {
     await assignSuperadmin(db, adminId);
     await seedDictionaries(db);
     await seedGeo(db);
+    await bindOrgTerritory(db);
     await seedDemoNotifications(db, adminId);
     console.log(
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
