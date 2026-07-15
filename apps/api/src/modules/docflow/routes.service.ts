@@ -428,14 +428,21 @@ export class RoutesService {
           'You may not act on this step',
         );
       }
-      // A signing step is completed only by producing a cryptographic signature
-      // (SignaturesService.sign) — never by a plain approval, which would advance the
-      // route with no signature and bypass the 2FA/password/certificate controls
-      // (docs/09-security.md §4). Declining to sign still goes through reject.
+      // Steps with a dedicated completion path must not be completed by a plain approval,
+      // which would bypass their gate: a `sign` step needs a cryptographic signature
+      // (SignaturesService.sign, 2FA/password/certificate — docs/09-security.md §4), and an
+      // `acknowledge` step needs every assigned member to read it (AcknowledgementsService,
+      // task 3.6). Declining still goes through reject (also the recovery path).
       if (action === 'approve' && step.kind === 'sign') {
         throw AppException.conflict(
           'docflow.route_step.sign_required',
           'A signing step must be completed by signing',
+        );
+      }
+      if (action === 'approve' && step.kind === 'acknowledge') {
+        throw AppException.conflict(
+          'docflow.route_step.acknowledge_required',
+          'An acknowledgement step is completed once every member reads it',
         );
       }
       const now = new Date();

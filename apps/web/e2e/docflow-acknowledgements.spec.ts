@@ -97,6 +97,14 @@ test('acknowledgements: an acknowledge step fans out to a subdivision and comple
   );
   expect(queue.items.some((d) => d.id === doc.id)).toBeTruthy();
 
+  // An acknowledge step cannot be short-circuited via the approve action — it must be
+  // read by everyone (no bypass of the acknowledgement gate).
+  const bypass = await admin.post(`/api/v1/docflow/route-steps/${sheet0.stepId}/actions/approve`, {
+    headers,
+    data: {},
+  });
+  expect(bypass.status(), 'approving an acknowledge step is refused').toBe(409);
+
   // The admin acknowledges — one down, the step stays active.
   const afterAdmin = await json<SheetDto>(
     await admin.post(`/api/v1/docflow/route-steps/${sheet0.stepId}/actions/acknowledge`, {
