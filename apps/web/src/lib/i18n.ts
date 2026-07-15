@@ -42,6 +42,7 @@ void i18n.use(initReactI18next).init({
     'map',
     'incidents',
     'gisAccess',
+    'statistics',
   ],
   interpolation: { escapeValue: false },
   returnNull: false,

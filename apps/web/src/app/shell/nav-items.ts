@@ -1,6 +1,6 @@
 import {
   KeyRound,
-  Bell,
+  BarChart3,
   CalendarClock,
   FileText,
   FolderClosed,
@@ -29,7 +29,7 @@ export const MAIN_NAV: NavItem[] = [
   { key: 'dashboard', path: '/app', icon: LayoutDashboard },
   { key: 'map', path: '/app/map', icon: Map },
   { key: 'incidents', path: '/app/incidents', icon: ShieldAlert },
-  { key: 'analytics', path: '/app/analytics', icon: Bell },
+  { key: 'analytics', path: '/app/analytics', icon: BarChart3 },
   { key: 'docs', path: '/app/docs', icon: FileText },
   { key: 'tasks', path: '/app/tasks', icon: ListTodo },
   { key: 'chat', path: '/app/chat', icon: MessageSquare },

@@ -53,7 +53,7 @@ export function Topbar({
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 print:hidden">
       <h1 className="text-sm font-semibold text-text">{title}</h1>
 
       <button

@@ -32,10 +32,15 @@ const IncidentDetailPage = lazy(() =>
     default: m.IncidentDetailPage,
   })),
 );
+// The statistics dashboard pulls in ECharts (~1 MB); lazy-load so that weight ships
+// only when the analytics page is opened.
+const StatisticsPage = lazy(() =>
+  import('@/features/statistics/pages/StatisticsPage').then((m) => ({ default: m.StatisticsPage })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['analytics', 'docs', 'tasks', 'chat', 'meet'];
+const PLACEHOLDER_PATHS = ['docs', 'tasks', 'chat', 'meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -106,6 +111,14 @@ export const router = createBrowserRouter([
       },
       { path: 'map/gis-access', element: <GisAccessPage /> },
       { path: 'admin/gis-access', element: <GisDbAccountsPage /> },
+      {
+        path: 'analytics',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <StatisticsPage />
+          </Suspense>
+        ),
+      },
       ...PLACEHOLDER_PATHS.map((path) => ({ path, element: <ComingSoonPage /> })),
     ],
   },

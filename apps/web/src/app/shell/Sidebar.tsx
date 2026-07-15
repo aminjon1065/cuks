@@ -65,7 +65,7 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
   return (
     <aside
       className={cn(
-        'flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-150',
+        'flex h-screen flex-col border-r border-border bg-surface transition-[width] duration-150 print:hidden',
         collapsed ? 'w-16' : 'w-60',
       )}
     >

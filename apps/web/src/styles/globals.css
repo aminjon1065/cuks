@@ -3,3 +3,20 @@
 
 /* Dark mode via a `.dark` class on <html> (design tokens switch in @cuks/ui). */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Print (statistics dashboard «Печать», docs/modules/10 §8): drop the app-shell
+   height/overflow clipping so page content flows across printed pages. The shell
+   chrome (sidebar/topbar) hides via `print:hidden` on those elements. */
+@media print {
+  html,
+  body,
+  [data-testid='app-shell'],
+  [data-testid='app-shell'] > div,
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
