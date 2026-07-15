@@ -13,15 +13,15 @@ function expectRejected(fn: () => unknown, code: string): void {
 
 describe('planDocumentStatusChange', () => {
   it('allows a permitted transition and passes through a trimmed reason', () => {
-    expect(planDocumentStatusChange('draft', { status: 'on_route' })).toEqual({
-      status: 'on_route',
+    expect(planDocumentStatusChange('registered', { status: 'in_progress' })).toEqual({
+      status: 'in_progress',
       reason: null,
     });
-    expect(planDocumentStatusChange('registered', { status: 'in_progress' }).status).toBe(
-      'in_progress',
+    expect(planDocumentStatusChange('in_progress', { status: 'completed' }).status).toBe(
+      'completed',
     );
     expect(
-      planDocumentStatusChange('on_route', {
+      planDocumentStatusChange('pending_registration', {
         status: 'rejected',
         reason: '  Неверные реквизиты  ',
       }),
@@ -60,15 +60,15 @@ describe('planDocumentStatusChange', () => {
 
   it('requires a reason to reject or recall', () => {
     expectRejected(
-      () => planDocumentStatusChange('on_route', { status: 'rejected' }),
+      () => planDocumentStatusChange('pending_registration', { status: 'rejected' }),
       'docflow.document.reason_required',
     );
     expectRejected(
-      () => planDocumentStatusChange('on_route', { status: 'rejected', reason: '  ' }),
+      () => planDocumentStatusChange('pending_registration', { status: 'rejected', reason: '  ' }),
       'docflow.document.reason_required',
     );
     expectRejected(
-      () => planDocumentStatusChange('draft', { status: 'recalled' }),
+      () => planDocumentStatusChange('rejected', { status: 'recalled' }),
       'docflow.document.reason_required',
     );
   });

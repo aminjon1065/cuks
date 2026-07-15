@@ -30,9 +30,8 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { DocflowNumberingService } from './docflow-numbering.service';
-
-/** Permissions that let a user see the whole (non-ДСП) registry, not just their own. */
-const REGISTRY_PERMISSIONS = ['docflow.register', 'docflow.control'];
+import { canViewDocumentBase, hasRegistryAccess } from './document-visibility';
+import { RoutesService } from './routes.service';
 
 export interface DocumentStatusChangePlan {
   status: DocumentStatus;
@@ -74,6 +73,7 @@ export class DocumentsService {
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
     private readonly numbering: DocflowNumberingService,
+    private readonly routes: RoutesService,
   ) {}
 
   async create(input: CreateDocumentInput, actor: AuthUser): Promise<DocumentDetailDto> {
@@ -112,7 +112,12 @@ export class DocumentsService {
     query: ListDocumentsQuery,
     user: AuthUser,
   ): Promise<PaginatedResult<DocumentListItemDto>> {
-    const where = and(...this.whereFor(query, user));
+    // The «На согласование» queue is defined by active route steps, resolved first.
+    const approvalDocIds =
+      query.queue === 'to_approve'
+        ? await this.routes.approvalQueueDocumentIds(user.id)
+        : undefined;
+    const where = and(...this.whereFor(query, user, approvalDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
       this.db
@@ -167,8 +172,13 @@ export class DocumentsService {
       .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
       .limit(1);
     // Out-of-scope / ДСП-without-access is indistinguishable from missing (no leak).
-    if (!row || !this.canView(row, user)) {
-      throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    // A route participant (an approver on one of the document's steps) may also view it.
+    if (!row) throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    if (!canViewDocumentBase(row, user)) {
+      const assignments = await this.routes.actorAssignments(user.id);
+      if (!(await this.routes.isRouteParticipant(id, assignments))) {
+        throw AppException.notFound('docflow.document.not_found', 'Document not found');
+      }
     }
     const [journalRow, orgUnitRow, authorRow, correspondentRow, files] = await Promise.all([
       row.journalId
@@ -227,12 +237,12 @@ export class DocumentsService {
       files,
       canEdit: row.authorId === user.id && (row.status === 'draft' || row.status === 'rejected'),
       canRegister:
-        this.hasRegistryAccess(user) &&
+        hasRegistryAccess(user) &&
         (row.status === 'draft' || row.status === 'pending_registration'),
       // The author or the chancellery/control may drive the lifecycle, and only when
       // a manual transition exists (mirrors changeStatus's authority + the policy graph).
       canChangeStatus:
-        (row.authorId === user.id || this.hasRegistryAccess(user)) &&
+        (row.authorId === user.id || hasRegistryAccess(user)) &&
         DOCUMENT_STATUS_TRANSITIONS[row.status].length > 0,
     };
   }
@@ -283,7 +293,7 @@ export class DocumentsService {
     input: RegisterDocumentInput,
     actor: AuthUser,
   ): Promise<DocumentDetailDto> {
-    if (!this.hasRegistryAccess(actor)) {
+    if (!hasRegistryAccess(actor)) {
       throw AppException.forbidden(
         'docflow.document.register_forbidden',
         'Registration requires chancellery rights',
@@ -296,7 +306,7 @@ export class DocumentsService {
         .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
         .limit(1)
         .for('update');
-      if (!doc || !this.canView(doc, actor)) {
+      if (!doc || !canViewDocumentBase(doc, actor)) {
         // ДСП isolation applies to the write side too: a chancellery not on the
         // allow-list must not register a document it cannot even see.
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
@@ -348,12 +358,12 @@ export class DocumentsService {
         .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
         .limit(1)
         .for('update');
-      if (!doc || !this.canView(doc, actor)) {
+      if (!doc || !canViewDocumentBase(doc, actor)) {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
       // The author or the chancellery/control drives the lifecycle manually; route- and
       // resolution-driven transitions arrive with tasks 3.3/3.4.
-      if (doc.authorId !== actor.id && !this.hasRegistryAccess(actor)) {
+      if (doc.authorId !== actor.id && !hasRegistryAccess(actor)) {
         throw AppException.forbidden(
           'docflow.document.status_forbidden',
           'You may not change this document status',
@@ -472,7 +482,7 @@ export class DocumentsService {
       .from(documents)
       .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
       .limit(1);
-    if (!row || !this.canView(row, actor)) {
+    if (!row || !canViewDocumentBase(row, actor)) {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
     if (row.authorId !== actor.id) {
@@ -490,23 +500,7 @@ export class DocumentsService {
     return row;
   }
 
-  private hasRegistryAccess(user: AuthUser): boolean {
-    return user.isSuperadmin || user.permissions.some((p) => REGISTRY_PERMISSIONS.includes(p));
-  }
-
-  /** Visibility (docs/modules/11 §2): participants (author + access-list) always;
-   *  the non-ДСП registry additionally to the chancellery/control; ДСП stays
-   *  allow-list-only even for other chancelleries. Route/resolution participants and
-   *  owner-unit leadership widen this in tasks 3.3/3.4/3.8. */
-  private canView(doc: typeof documents.$inferSelect, user: AuthUser): boolean {
-    if (user.isSuperadmin) return true;
-    if (doc.authorId === user.id) return true;
-    if (doc.accessList.includes(user.id)) return true;
-    if (doc.confidentiality === 'dsp') return false;
-    return this.hasRegistryAccess(user);
-  }
-
-  private whereFor(query: ListDocumentsQuery, user: AuthUser): SQL[] {
+  private whereFor(query: ListDocumentsQuery, user: AuthUser, approvalDocIds?: string[]): SQL[] {
     const where: SQL[] = [isNull(documents.deletedAt)];
     if (query.status) where.push(eq(documents.status, query.status));
     if (query.docClass) where.push(eq(documents.docClass, query.docClass));
@@ -529,9 +523,14 @@ export class DocumentsService {
       case 'authored':
         where.push(eq(documents.authorId, user.id));
         break;
+      case 'to_approve':
+        // Documents the caller has an active approve step on (resolved by RoutesService).
+        // An empty id set yields `false` (no rows) — an approver still sees the docs.
+        where.push(inArray(documents.id, approvalDocIds ?? []));
+        break;
       case 'registry':
         // The chancellery/control registry: all non-ДСП docs + one's own ДСП-access.
-        if (this.hasRegistryAccess(user)) {
+        if (hasRegistryAccess(user)) {
           if (!user.isSuperadmin) {
             const registryVisible = or(eq(documents.confidentiality, 'normal'), mine);
             if (registryVisible) where.push(registryVisible);
