@@ -623,3 +623,63 @@ export interface DocumentHistoryEntryDto {
   actorName: string | null;
   createdAt: string;
 }
+
+// --- Executive-discipline report / Отчёт исполнительской дисциплины (docs/modules/11 §5, task 3.9) ---
+
+/**
+ * Period for the discipline report. `from`/`to` are ISO datetimes; the report counts
+ * resolutions whose `due_date` falls in the (inclusive) window. `orgUnitId` narrows to that
+ * subdivision and its subtree.
+ */
+export const disciplineReportQuerySchema = z
+  .object({
+    from: z.string().datetime({ offset: true }),
+    to: z.string().datetime({ offset: true }),
+    orgUnitId: z.string().uuid().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from >= value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['from'],
+        message: 'from must be before to',
+      });
+    }
+  });
+export type DisciplineReportQuery = z.infer<typeof disciplineReportQuerySchema>;
+
+/** The four discipline buckets plus the derived percentage; shared by rows, subtotals, total. */
+export interface DisciplineTotals {
+  /** All non-cancelled instructions due in the period. */
+  total: number;
+  /** Done on or before the deadline. */
+  onTime: number;
+  /** Done after the deadline. */
+  late: number;
+  /** Still open (not done). */
+  notDone: number;
+  /** onTime / total, rounded to a whole percent; null when total is 0. */
+  disciplinePct: number | null;
+}
+
+/** One executor's discipline line within a subdivision. */
+export interface DisciplineRowDto extends DisciplineTotals {
+  executorId: string;
+  executorName: string;
+}
+
+/** A subdivision with its executors and its subtotal. */
+export interface DisciplineGroupDto extends DisciplineTotals {
+  /** null groups executors with no primary position (see orgUnitName). */
+  orgUnitId: string | null;
+  orgUnitName: string;
+  rows: DisciplineRowDto[];
+}
+
+/** The full report: subdivisions (each with executors) and a grand total. */
+export interface DisciplineReportDto {
+  from: string;
+  to: string;
+  groups: DisciplineGroupDto[];
+  totals: DisciplineTotals;
+}
