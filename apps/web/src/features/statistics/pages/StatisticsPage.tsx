@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Lock, Printer } from 'lucide-react';
-import { Button, EmptyState, PageHeader, Skeleton } from '@cuks/ui';
+import { Link } from 'react-router-dom';
+import { BarChart3, FileBarChart, Lock, Printer } from 'lucide-react';
+import { Button, buttonVariants, cn, EmptyState, PageHeader, Skeleton } from '@cuks/ui';
 import { useCan } from '@/lib/ability';
 import { useIncidentMapFilterOptions } from '@/features/map/api/queries';
 import { StatsFilterBar, type StatsFilterState } from '../components/StatsFilterBar';
@@ -21,6 +22,7 @@ const StatisticsCharts = lazy(() => import('../components/StatisticsCharts'));
 export function StatisticsPage(): React.JSX.Element {
   const { t } = useTranslation('statistics');
   const canView = useCan('analytics.view');
+  const canBuild = useCan('analytics.build');
   const [filter, setFilter] = useState<StatsFilterState>({
     period: DEFAULT_STATS_PERIOD,
     regionId: '',
@@ -56,14 +58,19 @@ export function StatisticsPage(): React.JSX.Element {
         title={t('title')}
         description={t('subtitle')}
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="print:hidden"
-            onClick={() => window.print()}
-          >
-            <Printer /> {t('print')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {canBuild ? (
+              <Link
+                to="/app/analytics/reports"
+                className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+              >
+                <FileBarChart /> {t('reportsLink')}
+              </Link>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer /> {t('print')}
+            </Button>
+          </div>
         }
       />
       <StatsFilterBar value={filter} onChange={setFilter} options={filterOptions.data} />

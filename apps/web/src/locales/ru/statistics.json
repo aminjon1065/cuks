@@ -8,6 +8,7 @@
   "emptyTitle": "Нет данных за период",
   "emptyDescription": "Измените фильтры, чтобы увидеть статистику.",
   "print": "Печать",
+  "reportsLink": "Конструктор отчётов",
   "exportPng": "Скачать PNG",
   "filter": {
     "period": "Период",

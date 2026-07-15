@@ -37,6 +37,9 @@ const IncidentDetailPage = lazy(() =>
 const StatisticsPage = lazy(() =>
   import('@/features/statistics/pages/StatisticsPage').then((m) => ({ default: m.StatisticsPage })),
 );
+const ReportsPage = lazy(() =>
+  import('@/features/reports/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
@@ -116,6 +119,14 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<div className="h-full w-full bg-background" />}>
             <StatisticsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'analytics/reports',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <ReportsPage />
           </Suspense>
         ),
       },
