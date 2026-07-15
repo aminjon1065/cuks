@@ -1,14 +1,22 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  ChangeDocumentStatusInput,
   CorrespondentCategoryDto,
   CorrespondentDto,
   CreateCorrespondentInput,
+  CreateDocumentInput,
   CreateJournalInput,
   CreateNomenclatureInput,
+  DocumentDetailDto,
+  DocumentListItemDto,
   DocumentTypeDto,
   JournalDto,
+  ListDocumentsQuery,
   NomenclatureDto,
+  PaginatedResult,
+  RegisterDocumentInput,
   UpdateCorrespondentInput,
+  UpdateDocumentInput,
   UpdateJournalInput,
   UpdateNomenclatureInput,
 } from '@cuks/shared';
@@ -134,5 +142,79 @@ export function useCorrespondentCategories(): UseQueryResult<CorrespondentCatego
     queryKey: [...docflowKey, 'correspondent-categories'],
     queryFn: () => api.get<CorrespondentCategoryDto[]>('/v1/docflow/correspondent-categories'),
     staleTime: 30 * 60 * 1000,
+  });
+}
+
+// ---- Documents -------------------------------------------------------------
+
+export const documentsKey = [...docflowKey, 'documents'] as const;
+
+function documentsPath(query: ListDocumentsQuery): string {
+  const params = new URLSearchParams();
+  params.set('page', String(query.page));
+  params.set('limit', String(query.limit));
+  params.set('queue', query.queue);
+  if (query.status) params.set('status', query.status);
+  if (query.docClass) params.set('docClass', query.docClass);
+  if (query.journalId) params.set('journalId', query.journalId);
+  if (query.search) params.set('search', query.search);
+  return `/v1/docflow/documents?${params}`;
+}
+
+export function useDocuments(
+  query: ListDocumentsQuery,
+): UseQueryResult<PaginatedResult<DocumentListItemDto>> {
+  return useQuery({
+    queryKey: [...documentsKey, 'list', query],
+    queryFn: () => api.get<PaginatedResult<DocumentListItemDto>>(documentsPath(query)),
+  });
+}
+
+export function useDocument(id: string | null): UseQueryResult<DocumentDetailDto> {
+  return useQuery({
+    queryKey: [...documentsKey, id],
+    queryFn: () => api.get<DocumentDetailDto>(`/v1/docflow/documents/${id}`),
+    enabled: !!id,
+  });
+}
+
+function invalidateDocuments(qc: ReturnType<typeof useQueryClient>, id?: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+  if (id) void qc.invalidateQueries({ queryKey: [...documentsKey, id] });
+}
+
+export function useCreateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDocumentInput) =>
+      api.post<DocumentDetailDto>('/v1/docflow/documents', input),
+    onSuccess: () => invalidateDocuments(qc),
+  });
+}
+
+export function useUpdateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateDocumentInput }) =>
+      api.patch<DocumentDetailDto>(`/v1/docflow/documents/${id}`, input),
+    onSuccess: (_data, { id }) => invalidateDocuments(qc, id),
+  });
+}
+
+export function useRegisterDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RegisterDocumentInput }) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${id}/actions/register`, input),
+    onSuccess: (_data, { id }) => invalidateDocuments(qc, id),
+  });
+}
+
+export function useChangeDocumentStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ChangeDocumentStatusInput }) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${id}/actions/status`, input),
+    onSuccess: (_data, { id }) => invalidateDocuments(qc, id),
   });
 }

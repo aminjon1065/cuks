@@ -18,6 +18,8 @@ import { AuditPage } from '@/features/admin/pages/AuditPage';
 import { GisAccessPage } from '@/features/gis-access/pages/GisAccessPage';
 import { GisDbAccountsPage } from '@/features/gis-access/pages/GisDbAccountsPage';
 import { DocflowSettingsPage } from '@/features/docflow/pages/DocflowSettingsPage';
+import { DocumentsPage } from '@/features/docflow/pages/DocumentsPage';
+import { DocumentCardPage } from '@/features/docflow/pages/DocumentCardPage';
 import { FilesPage } from '@/features/files/pages/FilesPage';
 
 // The map pulls in MapLibre + basemap themes (~800 kB); lazy-load it so that
@@ -44,7 +46,7 @@ const ReportsPage = lazy(() =>
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['docs', 'tasks', 'chat', 'meet'];
+const PLACEHOLDER_PATHS = ['tasks', 'chat', 'meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -115,7 +117,9 @@ export const router = createBrowserRouter([
       },
       { path: 'map/gis-access', element: <GisAccessPage /> },
       { path: 'admin/gis-access', element: <GisDbAccountsPage /> },
+      { path: 'docs', element: <DocumentsPage /> },
       { path: 'docs/settings', element: <DocflowSettingsPage /> },
+      { path: 'docs/:id', element: <DocumentCardPage /> },
       {
         path: 'analytics',
         element: (
