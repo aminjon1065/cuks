@@ -1,0 +1,1 @@
+CREATE INDEX "incident_reports_reported_idx" ON "app"."incident_reports" USING btree ("reported_at");

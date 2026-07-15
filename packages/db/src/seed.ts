@@ -627,6 +627,14 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
     const typeCode = DEMO_INCIDENT_TYPES[i % DEMO_INCIDENT_TYPES.length]!;
     const reportedAt = new Date(occurredAt.getTime() + 15 * 60_000);
     const closedAt = status === 'closed' ? reportedAt : null;
+    // Deterministic casualty/damage figures scaled by severity, so the operational
+    // summary KPIs read realistic (non-zero) numbers out of the box. Money is a
+    // `numeric` string (CLAUDE.md §2 — never a float).
+    const dead = severity >= 4 ? severity - 3 + (i % 2) : 0;
+    const injured = severity * 2 + (i % 4);
+    const evacuated = severity >= 3 ? severity * 15 + (i % 5) * 8 : 0;
+    const affected = severity * 30 + (i % 7) * 12;
+    const damageEst = (severity * 50_000 + (i % 9) * 12_500).toFixed(2);
 
     await db
       .insert(incidents)
@@ -642,6 +650,11 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
         addressText: `Демо-точка ${region.code}`,
         description: 'Демонстрационное происшествие для карты оперативной обстановки',
         source: 'monitoring',
+        dead,
+        injured,
+        evacuated,
+        affected,
+        damageEst,
         createdBy: adminId,
         closedAt,
         closedBy: status === 'closed' ? adminId : null,
@@ -656,6 +669,11 @@ async function seedDemoIncidents(db: Database, adminId: string): Promise<void> {
           reportedAt,
           regionId: region.id,
           geom: sql`ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)`,
+          dead,
+          injured,
+          evacuated,
+          affected,
+          damageEst,
           closedAt,
           closedBy: status === 'closed' ? adminId : null,
           updatedAt: new Date(),

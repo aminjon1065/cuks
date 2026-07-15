@@ -120,7 +120,13 @@ export const incidentReports = appSchema.table(
     authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
-  (t) => [index('incident_reports_incident_idx').on(t.incidentId, t.reportedAt)],
+  (t) => [
+    index('incident_reports_incident_idx').on(t.incidentId, t.reportedAt),
+    // The operational-summary feed lists the newest reports across all incidents
+    // (docs/modules/10 §8); a plain btree scanned backwards serves `order by
+    // reported_at desc limit N`.
+    index('incident_reports_reported_idx').on(t.reportedAt),
+  ],
 );
 
 /** app.incident_resources — forces & assets deployed to an incident
