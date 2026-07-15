@@ -31,10 +31,12 @@ import {
   type GisImportDto,
   type GisLayerDto,
   type IncidentMapFilterOptionsResponse,
+  type IncidentScopeResponse,
   type PatchGisFeatureInput,
   type PatchGisLayerInput,
   type TileTokenResponse,
 } from '@cuks/shared';
+import { ScopeService } from '../admin/scope.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -59,6 +61,16 @@ function tokenFromForwardedUri(uri: string | undefined): string | undefined {
   return new URLSearchParams(uri.slice(q + 1)).get('token') ?? undefined;
 }
 
+/** For a scoped token: incident tiles (`incidents_mvt`) must carry a `region`
+ *  filter within the user's scope; other sources (boundaries, facilities) pass
+ *  through. Returns true when the request is allowed (task 2.13). */
+function incidentTileInScope(uri: string | undefined, regionIds: string[]): boolean {
+  if (!uri || !uri.includes('/incidents_mvt/')) return true;
+  const q = uri.indexOf('?');
+  const region = q < 0 ? null : new URLSearchParams(uri.slice(q + 1)).get('region');
+  return region !== null && regionIds.includes(region);
+}
+
 /**
  * GIS tile access (docs/modules/10 §9), the layer registry and drawn-feature
  * editing (§3/§4). The map fetches a short-lived signed token, appends it to
@@ -79,6 +91,7 @@ export class GisController {
     private readonly features: GisFeaturesService,
     private readonly imports: GisImportsService,
     private readonly exports: GisExportsService,
+    private readonly scope: ScopeService,
   ) {}
 
   /** Active leaf incident types + administrative regions for the map filters. */
@@ -90,18 +103,30 @@ export class GisController {
     return this.mapOptions.getOptions();
   }
 
-  /** Issue a tile token for the current map session (requires `gis.view`). */
+  /** The caller's incident territory scope, so the map can default/lock its region
+   *  filter to the tiles they may fetch (task 2.13). */
+  @Get('incident-scope')
+  @RequirePermission('gis.view')
+  async incidentScope(@CurrentUser() user: AuthUser): Promise<IncidentScopeResponse> {
+    const scope = await this.scope.getAccessibleRegions(user, 'gis.view');
+    return { global: scope.global, regionIds: scope.adminUnitIds };
+  }
+
+  /** Issue a tile token for the current map session, carrying the user's territory
+   *  scope so incident tiles stay confined to their region (task 2.13). */
   @Get('tile-token')
   @RequirePermission('gis.view')
-  issueTileToken(): TileTokenResponse {
-    const { token, expiresAt } = this.tiles.issue();
+  async issueTileToken(@CurrentUser() user: AuthUser): Promise<TileTokenResponse> {
+    const scope = await this.scope.getAccessibleRegions(user, 'gis.view');
+    const { token, expiresAt } = this.tiles.issue(scope.global ? 'all' : scope.adminUnitIds);
     return { token, expiresAt: expiresAt.toISOString() };
   }
 
   /**
    * forward_auth target — no session (the token is the sole capability): Caddy
    * calls this before proxying `/tiles/*`. 2xx = allow, 401 = deny. The token
-   * comes from the request's own `?token=` or the forwarded original URI.
+   * comes from the request's own `?token=` or the forwarded original URI. A scoped
+   * token additionally confines the incident tiles to the user's region(s).
    */
   @Get('tile-auth')
   @Public()
@@ -110,8 +135,12 @@ export class GisController {
     @Headers('x-forwarded-uri') forwardedUri: string | undefined,
   ): { ok: true } {
     const token = queryToken ?? tokenFromForwardedUri(forwardedUri);
-    if (!this.tiles.verify(token)) {
+    const scope = this.tiles.verify(token);
+    if (scope === null) {
       throw AppException.unauthorized('gis.tile.invalid_token', 'Invalid or expired tile token');
+    }
+    if (scope !== 'all' && !incidentTileInScope(forwardedUri, scope)) {
+      throw AppException.forbidden('gis.tile.out_of_scope', 'Tile region is outside your scope');
     }
     return { ok: true };
   }

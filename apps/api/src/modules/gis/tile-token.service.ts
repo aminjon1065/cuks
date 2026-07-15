@@ -23,30 +23,58 @@ export class TileTokenService {
     this.key = scryptSync(secret, 'cuks.tile-token.v1', KEY_BYTES);
   }
 
-  /** Mint a token `<exp>.<sig>` valid for TILE_TOKEN_TTL_SECONDS. */
-  issue(now: number = Date.now()): { token: string; expiresAt: Date } {
+  /**
+   * Mint a token `<exp>.<scope>.<sig>` valid for TILE_TOKEN_TTL_SECONDS. `scope`
+   * encodes the region ids this user's incident tiles are confined to — the literal
+   * `all` for a global/central user (task 2.13). The signature covers `exp.scope`,
+   * so the scope cannot be tampered with.
+   */
+  issue(
+    regionScope: 'all' | readonly string[] = 'all',
+    now: number = Date.now(),
+  ): { token: string; expiresAt: Date } {
     const exp = Math.floor(now / 1000) + TILE_TOKEN_TTL_SECONDS;
-    return { token: `${exp}.${this.sign(String(exp))}`, expiresAt: new Date(exp * 1000) };
+    const scope = encodeScope(regionScope);
+    return {
+      token: `${exp}.${scope}.${this.sign(`${exp}.${scope}`)}`,
+      expiresAt: new Date(exp * 1000),
+    };
   }
 
-  /** True if the token's signature is valid (timing-safe) and it has not expired. */
-  verify(token: string | undefined | null, now: number = Date.now()): boolean {
-    if (!token) return false;
-    const dot = token.indexOf('.');
-    if (dot <= 0) return false;
-    const expStr = token.slice(0, dot);
-    const sig = token.slice(dot + 1);
-    if (!/^\d+$/.test(expStr) || sig.length === 0) return false;
+  /**
+   * Validate a token and return its region scope, or `null` if invalid/expired.
+   * `'all'` = unrestricted; an array = the only regions whose incident tiles the
+   * bearer may fetch.
+   */
+  verify(token: string | undefined | null, now: number = Date.now()): 'all' | string[] | null {
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [expStr, scope, sig] = parts as [string, string, string];
+    if (!/^\d+$/.test(expStr) || scope.length === 0 || sig.length === 0) return null;
 
-    const expected = Buffer.from(this.sign(expStr));
+    const expected = Buffer.from(this.sign(`${expStr}.${scope}`));
     const provided = Buffer.from(sig);
-    if (provided.length !== expected.length) return false;
-    if (!timingSafeEqual(provided, expected)) return false;
+    if (provided.length !== expected.length) return null;
+    if (!timingSafeEqual(provided, expected)) return null;
+    if (Number(expStr) * 1000 <= now) return null;
 
-    return Number(expStr) * 1000 > now;
+    return scope === 'all' ? 'all' : decodeScope(scope);
   }
 
   private sign(data: string): string {
     return createHmac('sha256', this.key).update(data).digest('base64url');
   }
+}
+
+/** `all` (unrestricted) or the sorted region ids, base64url-joined by comma. */
+function encodeScope(scope: 'all' | readonly string[]): string {
+  if (scope === 'all') return 'all';
+  const ids = [...new Set(scope)].sort().join(',');
+  return `r${Buffer.from(ids, 'utf8').toString('base64url')}`;
+}
+
+function decodeScope(encoded: string): string[] {
+  const raw = Buffer.from(encoded.slice(1), 'base64url').toString('utf8');
+  return raw.length === 0 ? [] : raw.split(',');
 }
