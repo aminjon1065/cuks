@@ -326,6 +326,25 @@ export type LinkEntityType = (typeof LINK_ENTITY_TYPES)[number];
 export const TASK_LINK_TARGETS = ['incident', 'document'] as const;
 export type TaskLinkTarget = (typeof TASK_LINK_TARGETS)[number];
 
+// --- Chat (docs/modules/13, task 5.1) ---
+
+/** Conversation kind (docs/modules/13 §2): public/private channels, an auto org-unit channel, a
+ *  ЧС channel, a direct message, or a named-less group DM. */
+export const CHANNEL_KINDS = ['public', 'private', 'org', 'incident', 'dm', 'group'] as const;
+export type ChannelKind = (typeof CHANNEL_KINDS)[number];
+
+/** Per-channel role (docs/modules/13 §1): owner > admin > member. */
+export const CHANNEL_MEMBER_ROLES = ['owner', 'admin', 'member'] as const;
+export type ChannelMemberRole = (typeof CHANNEL_MEMBER_ROLES)[number];
+
+/** A member's notification level for a channel (docs/modules/13 §3). */
+export const CHAT_NOTIFY_LEVELS = ['all', 'mentions', 'mute'] as const;
+export type ChatNotifyLevel = (typeof CHAT_NOTIFY_LEVELS)[number];
+
+/** Message kind (docs/modules/13 §3): a normal text/file message, a system notice, or a call card. */
+export const CHAT_MESSAGE_KINDS = ['text', 'file', 'system', 'call'] as const;
+export type ChatMessageKind = (typeof CHAT_MESSAGE_KINDS)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
