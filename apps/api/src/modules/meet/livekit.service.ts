@@ -41,6 +41,8 @@ export class LivekitService {
   private readonly apiKey: string | undefined;
   private readonly apiSecret: string | undefined;
   private readonly url: string | undefined;
+  /** Internal SFU URL for server-side RPCs (defaults to {@link url}). See constructor. */
+  private readonly serverUrl: string | undefined;
   private receiver: WebhookReceiver | undefined;
   private roomClientInstance: RoomServiceClient | undefined;
   private egressClientInstance: EgressClient | undefined;
@@ -49,6 +51,10 @@ export class LivekitService {
     this.apiKey = config.get('LIVEKIT_API_KEY');
     this.apiSecret = config.get('LIVEKIT_API_SECRET');
     this.url = config.get('LIVEKIT_URL');
+    // Server-side RPCs (host moderation, egress start/stop) run over LiveKit's HTTP API. In prod the
+    // api reaches the SFU directly (http://livekit:7880) rather than hair-pinning through the public
+    // wss URL / Caddy; falls back to the browser-facing URL when unset (dev, same host).
+    this.serverUrl = config.get('LIVEKIT_INTERNAL_URL') ?? this.url;
   }
 
   /** True only when the SFU URL and API key/secret are all configured. */
@@ -100,7 +106,7 @@ export class LivekitService {
       throw new Error('LiveKit is not configured');
     }
     this.roomClientInstance ??= new RoomServiceClient(
-      httpUrl(this.url),
+      httpUrl(this.serverUrl ?? this.url),
       this.apiKey,
       this.apiSecret,
     );
@@ -163,7 +169,11 @@ export class LivekitService {
     if (!this.enabled || !this.apiKey || !this.apiSecret || !this.url) {
       throw new Error('LiveKit is not configured');
     }
-    this.egressClientInstance ??= new EgressClient(httpUrl(this.url), this.apiKey, this.apiSecret);
+    this.egressClientInstance ??= new EgressClient(
+      httpUrl(this.serverUrl ?? this.url),
+      this.apiKey,
+      this.apiSecret,
+    );
     return this.egressClientInstance;
   }
 

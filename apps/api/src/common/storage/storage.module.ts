@@ -2,7 +2,20 @@ import { Global, Logger, Module, type OnModuleInit } from '@nestjs/common';
 import { S3Client } from '@aws-sdk/client-s3';
 import { ConfigService } from '../../config/config.service';
 import { StorageService } from './storage.service';
-import { S3 } from './storage.tokens';
+import { S3, S3_PUBLIC } from './storage.tokens';
+
+const s3ClientFor = (config: ConfigService, endpoint: string): S3Client =>
+  new S3Client({
+    endpoint,
+    region: config.get('S3_REGION'),
+    // MinIO is not a real AWS region — path-style addressing (vs. virtual-hosted
+    // bucket subdomains) is required for it to resolve buckets correctly.
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.get('S3_ACCESS_KEY'),
+      secretAccessKey: config.get('S3_SECRET_KEY'),
+    },
+  });
 
 @Global()
 @Module({
@@ -10,17 +23,15 @@ import { S3 } from './storage.tokens';
     {
       provide: S3,
       useFactory: (config: ConfigService): S3Client =>
-        new S3Client({
-          endpoint: config.get('S3_ENDPOINT'),
-          region: config.get('S3_REGION'),
-          // MinIO is not a real AWS region — path-style addressing (vs. virtual-hosted
-          // bucket subdomains) is required for it to resolve buckets correctly.
-          forcePathStyle: true,
-          credentials: {
-            accessKeyId: config.get('S3_ACCESS_KEY'),
-            secretAccessKey: config.get('S3_SECRET_KEY'),
-          },
-        }),
+        s3ClientFor(config, config.get('S3_ENDPOINT')),
+      inject: [ConfigService],
+    },
+    {
+      // Presigning-only client (see S3_PUBLIC). Falls back to the internal endpoint when
+      // S3_PUBLIC_ENDPOINT is unset, so dev and same-origin prod behave exactly as before.
+      provide: S3_PUBLIC,
+      useFactory: (config: ConfigService): S3Client =>
+        s3ClientFor(config, config.get('S3_PUBLIC_ENDPOINT') ?? config.get('S3_ENDPOINT')),
       inject: [ConfigService],
     },
     StorageService,

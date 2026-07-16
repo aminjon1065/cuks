@@ -15,21 +15,21 @@ function notFoundError(): Error & { $metadata: { httpStatusCode: number } } {
 describe('StorageService.ensureBucket', () => {
   it('does nothing when the bucket already exists', async () => {
     const send = vi.fn().mockResolvedValue({});
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await service.ensureBucket();
     expect(send).toHaveBeenCalledTimes(1); // HeadBucket only
   });
 
   it('creates the bucket when HeadBucket 404s', async () => {
     const send = vi.fn().mockRejectedValueOnce(notFoundError()).mockResolvedValueOnce({});
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await service.ensureBucket();
     expect(send).toHaveBeenCalledTimes(2); // HeadBucket, then CreateBucket
   });
 
   it('rethrows non-404 errors instead of masking them', async () => {
     const send = vi.fn().mockRejectedValue(new Error('access denied'));
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(service.ensureBucket()).rejects.toThrow('access denied');
   });
 });
@@ -37,7 +37,7 @@ describe('StorageService.ensureBucket', () => {
 describe('StorageService.initiateUpload', () => {
   it('rejects a declared size over the 2 GiB cap without calling S3', async () => {
     const send = vi.fn();
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(
       service.initiateUpload('k', 'video/mp4', MAX_FILE_SIZE_BYTES + 1),
     ).rejects.toMatchObject({ code: 'files.upload.too_large' });
@@ -46,7 +46,7 @@ describe('StorageService.initiateUpload', () => {
 
   it('returns the upload id from S3 for an in-limit file', async () => {
     const send = vi.fn().mockResolvedValue({ UploadId: 'upload-1' });
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(service.initiateUpload('k', 'video/mp4', 1024)).resolves.toEqual({
       uploadId: 'upload-1',
     });
@@ -59,7 +59,7 @@ describe('StorageService.completeUpload', () => {
       .fn()
       .mockResolvedValueOnce({}) // CompleteMultipartUpload
       .mockResolvedValueOnce({ ETag: '"abc"', ContentLength: 42 }); // HeadObject
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     const result = await service.completeUpload('k', 'u1', [
       { partNumber: 2, eTag: '"b"' },
       { partNumber: 1, eTag: '"a"' },
@@ -75,7 +75,7 @@ describe('StorageService.completeUpload', () => {
 describe('StorageService.abortUpload', () => {
   it('sends an AbortMultipartUpload command', async () => {
     const send = vi.fn().mockResolvedValue({});
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await service.abortUpload('k', 'u1');
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -84,7 +84,7 @@ describe('StorageService.abortUpload', () => {
 describe('StorageService.deleteObject', () => {
   it('sends a DeleteObject command', async () => {
     const send = vi.fn().mockResolvedValue({});
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await service.deleteObject('k');
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -93,19 +93,19 @@ describe('StorageService.deleteObject', () => {
 describe('StorageService.objectExists', () => {
   it('returns true when HeadObject succeeds', async () => {
     const send = vi.fn().mockResolvedValue({});
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(service.objectExists('k')).resolves.toBe(true);
   });
 
   it('returns false on a 404, without throwing', async () => {
     const send = vi.fn().mockRejectedValue(notFoundError());
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(service.objectExists('k')).resolves.toBe(false);
   });
 
   it('rethrows non-404 errors', async () => {
     const send = vi.fn().mockRejectedValue(new Error('access denied'));
-    const service = new StorageService({ send } as never, fakeConfig);
+    const service = new StorageService({ send } as never, { send } as never, fakeConfig);
     await expect(service.objectExists('k')).rejects.toThrow('access denied');
   });
 });
@@ -113,7 +113,11 @@ describe('StorageService.objectExists', () => {
 describe('StorageService.getDownloadUrl', () => {
   it('sets a forced attachment Content-Disposition, encoding non-ASCII filenames', async () => {
     const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
-    const service = new StorageService({ send: vi.fn() } as never, fakeConfig);
+    const service = new StorageService(
+      { send: vi.fn() } as never,
+      { send: vi.fn() } as never,
+      fakeConfig,
+    );
     const url = await service.getDownloadUrl('k', 'Отчёт.pdf');
     expect(url).toBe('https://minio.local/presigned');
     const command = vi.mocked(getSignedUrl).mock.calls[0]![1] as {

@@ -46,6 +46,10 @@ export const envSchema = z
 
     // Object storage (MinIO / S3).
     S3_ENDPOINT: z.string().url(),
+    // Browser-facing endpoint for presigned URLs (file/recording download, upload, stream). In prod the
+    // api reaches MinIO internally via S3_ENDPOINT but must presign against a host the browser can
+    // resolve (e.g. https://s3.<domain>). Defaults to S3_ENDPOINT when unset (dev / same-origin).
+    S3_PUBLIC_ENDPOINT: optionalString(),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
     S3_REGION: z.string().default('us-east-1'),
@@ -54,6 +58,9 @@ export const envSchema = z
     // Later phases — optional for now.
     SMTP_URL: optionalString(),
     LIVEKIT_URL: optionalString(),
+    // Internal SFU URL for the api's server-side RPCs (host moderation, egress). In prod set to
+    // http://livekit:7880 so those calls skip the public wss URL / Caddy; defaults to LIVEKIT_URL.
+    LIVEKIT_INTERNAL_URL: optionalString(),
     LIVEKIT_API_KEY: optionalString(),
     LIVEKIT_API_SECRET: optionalString(),
     // GeoServer WMS/WFS publication (docs/modules/10 §7, task 2.9). All optional:

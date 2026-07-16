@@ -20,7 +20,7 @@ import {
 } from '@cuks/shared';
 import { AppException } from '../exceptions/app.exception';
 import { ConfigService } from '../../config/config.service';
-import { S3 } from './storage.tokens';
+import { S3, S3_PUBLIC } from './storage.tokens';
 
 export interface UploadPart {
   partNumber: number;
@@ -48,6 +48,9 @@ export class StorageService {
 
   constructor(
     @Inject(S3) private readonly s3: S3Client,
+    // Presigning-only client on the browser-facing endpoint (docs/08 §Object storage). Every real S3
+    // operation uses `s3`; only the presigned upload/download/stream URLs handed to the browser use this.
+    @Inject(S3_PUBLIC) private readonly s3Public: S3Client,
     config: ConfigService,
   ) {
     this.bucket = config.get('S3_BUCKET');
@@ -96,7 +99,7 @@ export class StorageService {
       UploadId: uploadId,
       PartNumber: partNumber,
     });
-    return getSignedUrl(this.s3, command, { expiresIn: UPLOAD_PART_URL_EXPIRY_SECONDS });
+    return getSignedUrl(this.s3Public, command, { expiresIn: UPLOAD_PART_URL_EXPIRY_SECONDS });
   }
 
   /** Merges the uploaded parts server-side and returns the final object's ETag/size. */
@@ -186,7 +189,7 @@ export class StorageService {
       Key: key,
       ContentType: contentType,
     });
-    return getSignedUrl(this.s3, command, { expiresIn });
+    return getSignedUrl(this.s3Public, command, { expiresIn });
   }
 
   /**
@@ -196,7 +199,7 @@ export class StorageService {
    */
   async getStreamUrl(key: string, expiresIn = DOWNLOAD_URL_EXPIRY_SECONDS): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
-    return getSignedUrl(this.s3, command, { expiresIn });
+    return getSignedUrl(this.s3Public, command, { expiresIn });
   }
 
   /**
@@ -215,7 +218,7 @@ export class StorageService {
       Key: key,
       ResponseContentDisposition: `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     });
-    return getSignedUrl(this.s3, command, { expiresIn });
+    return getSignedUrl(this.s3Public, command, { expiresIn });
   }
 }
 
