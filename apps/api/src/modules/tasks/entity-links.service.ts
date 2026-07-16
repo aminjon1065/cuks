@@ -54,8 +54,7 @@ export class EntityLinksService {
   ): Promise<EntityLinkDto[]> {
     const card = await this.acl.loadCardWithRole(taskId, actor, 'editor');
     await this.requireTarget(input.targetType, input.targetId);
-    await this.insertLink(taskId, input, actor.id);
-    this.emit(card.projectId, taskId, actor.id);
+    if (await this.insertLink(taskId, input, actor.id)) this.emit(card.projectId, taskId, actor.id);
     return this.resolve(taskId);
   }
 
@@ -152,12 +151,14 @@ export class EntityLinksService {
     }));
   }
 
+  /** Insert a link (idempotent). Returns false when the link already existed — the caller then skips
+   *  the history/audit entry and the realtime refresh so a re-link doesn't pollute the trail. */
   private async insertLink(
     taskId: string,
     input: CreateEntityLinkInput,
     actorId: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const inserted = await this.db
       .insert(entityLinks)
       .values({
         sourceType: 'task',
@@ -173,7 +174,9 @@ export class EntityLinksService {
           entityLinks.targetType,
           entityLinks.targetId,
         ],
-      });
+      })
+      .returning({ id: entityLinks.id });
+    if (inserted.length === 0) return false;
     await this.db.insert(taskActivity).values({
       taskId,
       actorId,
@@ -187,6 +190,7 @@ export class EntityLinksService {
       entityId: taskId,
       meta: { targetType: input.targetType, targetId: input.targetId },
     });
+    return true;
   }
 
   /** Verify the link target exists (and is not deleted) so links can't point at nothing. */

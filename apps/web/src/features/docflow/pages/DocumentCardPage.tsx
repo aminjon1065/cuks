@@ -148,10 +148,12 @@ export function DocumentCardPage(): React.JSX.Element {
           ) : null}
           {tab === 'tasks' ? (
             <section className="rounded-md border border-border bg-surface p-4">
+              {/* Preset the non-confidential reg-number, never the (possibly ДСП) subject — a linked
+                  card's title is visible to project members who may lack document access. */}
               <LinkedTasksSection
                 targetType="document"
                 targetId={data.id}
-                presetTitle={data.subject}
+                presetTitle={data.regNumber ?? undefined}
               />
             </section>
           ) : null}

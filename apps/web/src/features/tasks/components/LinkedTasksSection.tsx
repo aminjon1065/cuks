@@ -21,7 +21,7 @@ export function LinkedTasksSection({
 }: {
   targetType: TaskLinkTarget;
   targetId: string;
-  presetTitle?: string;
+  presetTitle?: string | undefined;
 }): React.JSX.Element {
   const { t } = useTranslation('tasks');
   const canUse = useCan('tasks.use');

@@ -66,6 +66,9 @@ export function CreateTaskDialog({
   }, [editable, projectId]);
   useEffect(() => setTitle(presetTitle ?? ''), [presetTitle]);
 
+  // Clear the column when the project changes so a stale column from the previous board is never
+  // submitted while the new board is still loading (submit is gated on columnId).
+  useEffect(() => setColumnId(''), [projectId]);
   const board = useBoard(projectId || undefined);
   useEffect(() => {
     const columns = board.data?.columns ?? [];
