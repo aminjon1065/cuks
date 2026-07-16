@@ -197,6 +197,33 @@ export const taskChecklistItems = appSchema.table(
   (t) => [index('task_checklist_task_idx').on(t.taskId)],
 );
 
+/** Project card templates (docs/modules/15 §4, task 4.5): a named preset of title / description /
+ *  priority / checklist a card can be instantiated from (e.g. «Отработка донесения о ЧС»). */
+export const taskTemplates = appSchema.table(
+  'task_templates',
+  {
+    id: primaryId(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => taskProjects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    title: text('title').notNull(),
+    description: jsonb('description'),
+    descriptionText: text('description_text'),
+    priority: text('priority', { enum: TASK_PRIORITIES }).notNull().default('p3'),
+    // Ordered checklist item texts to seed on the new card.
+    checklist: text('checklist')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [index('task_templates_project_idx').on(t.projectId)],
+);
+
 /** A card's activity trail (docs/modules/15 §2/§9) — the «История» tab. Free-form `action`
  *  (`tasks.card.created|moved|completed|assigned` …) with structured `meta`. */
 export const taskActivity = appSchema.table(

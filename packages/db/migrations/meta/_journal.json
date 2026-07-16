@@ -281,6 +281,13 @@
       "when": 1784172534024,
       "tag": "0039_careless_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784179625846,
+      "tag": "0040_elite_slayback",
+      "breakpoints": true
     }
   ]
 }
