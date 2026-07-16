@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   PROJECT_ROLES,
+  TASK_DEADLINE_TIERS,
   TASK_LABEL_COLORS,
   TASK_PRIORITIES,
   type ProjectRole,
@@ -218,6 +219,47 @@ export interface ActivityDto {
   meta: Record<string, unknown> | null;
   createdAt: string;
 }
+
+// --- «Мои задачи» (docs/modules/15 §5, task 4.4) ---
+
+/** Filter the personal queue to tasks assigned to me (default) or ones I only watch. */
+export const myTasksQuerySchema = z.object({
+  watching: z
+    .preprocess((v) => (typeof v === 'string' ? v === 'true' : v), z.boolean())
+    .optional()
+    .default(false),
+});
+export type MyTasksQuery = z.infer<typeof myTasksQuerySchema>;
+
+/** One row of the personal queue across all projects — enough to render and deep-link a card. */
+export interface MyTaskDto {
+  id: string;
+  projectId: string;
+  projectKey: string;
+  projectName: string;
+  seq: number;
+  title: string;
+  priority: TaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+}
+
+// --- Deadline notifications (docs/modules/15 §7) ---
+
+/** notification_outbox topic for task deadline reminders (task 4.4). The worker inserts rows under
+ *  this topic during its daily sweep; a tasks API dispatcher fans them out. */
+export const TASKS_DEADLINE_TOPIC = 'tasks.deadline';
+
+export const tasksDeadlinePayloadSchema = z.object({
+  taskId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  projectKey: z.string(),
+  seq: z.number().int(),
+  title: z.string(),
+  tier: z.enum(TASK_DEADLINE_TIERS),
+  recipientUserIds: z.array(z.string().uuid()).min(1),
+});
+export type TasksDeadlinePayload = z.infer<typeof tasksDeadlinePayloadSchema>;
 
 /** The whole board in one request (docs/modules/15 §8): project, columns, labels, cards, members. */
 export interface BoardDto {

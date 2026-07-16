@@ -363,3 +363,42 @@ export function classifyDeadline(dueIso: string, now: Date): DeadlineClassificat
     escalation: days <= -6,
   };
 }
+
+// --- Task deadlines / «Мои задачи» buckets (docs/modules/15 §5/§7, task 4.4) ---
+
+export const TASK_DEADLINE_TIERS = ['due_soon', 'due_today', 'overdue'] as const;
+export type TaskDeadlineTier = (typeof TASK_DEADLINE_TIERS)[number];
+
+export interface TaskDeadlineClassification {
+  /** A pre-due reminder: one day out or on the due day, else null. */
+  reminder: 'due_soon' | 'due_today' | null;
+  /** Past due (fires an overdue reminder daily). */
+  overdue: boolean;
+}
+
+/**
+ * Classify a task due date for the daily sweep (docs/modules/15 §7). A reminder goes out one day
+ * before and on the due day; once past due an overdue reminder fires each day. Pure + Dushanbe-day
+ * correct so the worker and its tests agree.
+ */
+export function classifyTaskDeadline(dueIso: string, now: Date): TaskDeadlineClassification {
+  const days = deadlineDaysLeft(dueIso, now);
+  return {
+    reminder: days === 1 ? 'due_soon' : days === 0 ? 'due_today' : null,
+    overdue: days < 0,
+  };
+}
+
+/** «Мои задачи» grouping buckets (docs/modules/15 §5), earliest first. */
+export const TASK_DUE_BUCKETS = ['overdue', 'today', 'week', 'later', 'none'] as const;
+export type TaskDueBucket = (typeof TASK_DUE_BUCKETS)[number];
+
+/** Which «Мои задачи» group a due date falls in (Dushanbe days). */
+export function taskDueBucket(dueIso: string | null, now: Date): TaskDueBucket {
+  if (!dueIso) return 'none';
+  const days = deadlineDaysLeft(dueIso, now);
+  if (days < 0) return 'overdue';
+  if (days === 0) return 'today';
+  if (days <= 7) return 'week';
+  return 'later';
+}
