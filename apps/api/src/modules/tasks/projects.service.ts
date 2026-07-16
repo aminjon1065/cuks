@@ -1,9 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { aliasedTable, and, desc, eq, isNull } from 'drizzle-orm';
-import { taskColumns, taskProjectMembers, taskProjects, users, type Database } from '@cuks/db';
+import {
+  taskColumns,
+  taskLabels,
+  taskProjectMembers,
+  taskProjects,
+  users,
+  type Database,
+} from '@cuks/db';
 import {
   keysBetween,
+  type CreateLabelInput,
   type CreateProjectInput,
+  type LabelDto,
   type ProjectDto,
   type ProjectMemberDto,
   type ProjectRole,
@@ -186,6 +195,27 @@ export class ProjectsService {
       .delete(taskProjectMembers)
       .where(and(eq(taskProjectMembers.projectId, id), eq(taskProjectMembers.userId, userId)));
     return this.members(id, actor);
+  }
+
+  // --- Labels (docs/modules/15 §2/§4) ---
+
+  async listLabels(projectId: string, actor: AuthUser): Promise<LabelDto[]> {
+    await this.acl.loadViewable(projectId, actor);
+    const rows = await this.db.select().from(taskLabels).where(eq(taskLabels.projectId, projectId));
+    return rows.map((l) => ({ id: l.id, name: l.name, color: l.color }));
+  }
+
+  async createLabel(
+    projectId: string,
+    input: CreateLabelInput,
+    actor: AuthUser,
+  ): Promise<LabelDto> {
+    await this.acl.loadWithRole(projectId, actor, 'editor');
+    const [row] = await this.db
+      .insert(taskLabels)
+      .values({ projectId, name: input.name, color: input.color })
+      .returning();
+    return { id: row!.id, name: row!.name, color: row!.color };
   }
 
   /** Resolve project member ids to names (for the board's assignee pickers). */

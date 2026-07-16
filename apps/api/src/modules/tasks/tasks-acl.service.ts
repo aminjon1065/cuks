@@ -5,6 +5,7 @@ import {
   positions,
   taskProjectMembers,
   taskProjects,
+  tasks,
   userPositions,
   type Database,
 } from '@cuks/db';
@@ -14,6 +15,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 
 type ProjectRow = typeof taskProjects.$inferSelect;
+type TaskRow = typeof tasks.$inferSelect;
 
 /** owner > editor > viewer — a higher rank includes the lower ones' abilities. */
 const RANK: Record<ProjectRole, number> = { viewer: 1, editor: 2, owner: 3 };
@@ -68,6 +70,18 @@ export class TasksAclService {
       throw AppException.forbidden('tasks.project.forbidden', 'Insufficient project role');
     }
     return project;
+  }
+
+  /** Load a live card whose project the caller holds at least `min` role on, or 404/403. */
+  async loadCardWithRole(taskId: string, actor: AuthUser, min: ProjectRole): Promise<TaskRow> {
+    const [card] = await this.db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt)))
+      .limit(1);
+    if (!card) throw AppException.notFound('tasks.card.not_found', 'Card not found');
+    await this.loadWithRole(card.projectId, actor, min);
+    return card;
   }
 
   private async load(projectId: string): Promise<ProjectRow | undefined> {

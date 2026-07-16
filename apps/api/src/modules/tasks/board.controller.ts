@@ -3,13 +3,16 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createColumnSchema,
+  createLabelSchema,
   createTaskSchema,
   moveColumnSchema,
   updateColumnSchema,
   type BoardDto,
   type ColumnDto,
   type CreateColumnInput,
+  type CreateLabelInput,
   type CreateTaskInput,
+  type LabelDto,
   type MoveColumnInput,
   type TaskCardDto,
   type UpdateColumnInput,
@@ -19,6 +22,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { ColumnsService } from './columns.service';
+import { ProjectsService } from './projects.service';
 import { TasksService } from './tasks.service';
 
 const uuidSchema = z.string().uuid();
@@ -30,6 +34,7 @@ export class BoardController {
   constructor(
     private readonly tasks: TasksService,
     private readonly columns: ColumnsService,
+    private readonly projects: ProjectsService,
   ) {}
 
   @Get('board')
@@ -97,5 +102,26 @@ export class BoardController {
     @CurrentUser() user: AuthUser,
   ): Promise<void> {
     return this.columns.remove(projectId, columnId, user);
+  }
+
+  @Get('labels')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Project labels (viewer)' })
+  listLabels(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<LabelDto[]> {
+    return this.projects.listLabels(projectId, user);
+  }
+
+  @Post('labels')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Create a project label (editor)' })
+  createLabel(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @Body(new ZodValidationPipe(createLabelSchema)) body: CreateLabelInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<LabelDto> {
+    return this.projects.createLabel(projectId, body, user);
   }
 }
