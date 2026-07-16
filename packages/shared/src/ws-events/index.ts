@@ -29,6 +29,11 @@ export interface WsEventPayloads {
     actorId: string;
   };
   'tasks.board.changed': { projectId: string; actorId: string };
+  /** A chat message was posted to a channel (docs/modules/13 §5); `channel:{id}` subscribers append
+   *  or refetch. `actorId` lets the sender skip echoing its own optimistic message. */
+  'chat.message.created': { channelId: string; messageId: string; actorId: string };
+  /** A channel's metadata or membership changed; subscribers refetch the channel / list. */
+  'chat.channel.updated': { channelId: string; actorId: string };
 }
 
 export type WsEventName = keyof WsEventPayloads;
