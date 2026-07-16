@@ -152,6 +152,7 @@ function RouteBlock({
             {step.actedByName ? (
               <span className="text-xs text-text-muted">
                 {step.actedByName}
+                {step.actedForName ? ` ${t('route.onBehalfOf', { name: step.actedForName })}` : ''}
                 {step.actedAt ? ` · ${formatDateTime(step.actedAt)}` : ''}
               </span>
             ) : null}
@@ -159,7 +160,12 @@ function RouteBlock({
               <span className="w-full text-xs italic text-text-muted">«{step.comment}»</span>
             ) : null}
             {step.canAct ? (
-              <span className="flex gap-1.5">
+              <span className="flex items-center gap-1.5">
+                {step.actOnBehalfOfName ? (
+                  <span className="text-xs font-medium text-warning">
+                    {t('route.onBehalfOf', { name: step.actOnBehalfOfName })}
+                  </span>
+                ) : null}
                 <Button
                   size="sm"
                   variant="outline"

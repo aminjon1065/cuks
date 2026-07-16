@@ -81,6 +81,11 @@ export function SignatureSection({ doc }: { doc: DocumentDetailDto }): React.JSX
                 <ShieldAlert className="size-4 shrink-0 text-danger" />
               )}
               <span className="text-[13px] font-medium text-text">{s.userName ?? '—'}</span>
+              {s.onBehalfOfName ? (
+                <span className="text-xs text-text-muted">
+                  {t('signatures.onBehalfOf', { name: s.onBehalfOfName })}
+                </span>
+              ) : null}
               <StatusBadge
                 tone={s.valid ? 'success' : 'danger'}
                 label={s.valid ? t('signatures.valid') : t('signatures.invalid')}

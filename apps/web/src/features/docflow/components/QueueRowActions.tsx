@@ -78,7 +78,12 @@ export function QueueRowActions({
 
   if (queue === 'to_approve') {
     return (
-      <div className="flex gap-1.5" onClick={stop}>
+      <div className="flex items-center gap-1.5" onClick={stop}>
+        {doc.actionOnBehalfOfName ? (
+          <span className="mr-0.5 text-xs font-medium text-warning">
+            {t('route.onBehalfOf', { name: doc.actionOnBehalfOfName })}
+          </span>
+        ) : null}
         <Button
           size="sm"
           disabled={act.isPending}

@@ -11,6 +11,7 @@ import {
   MessageSquare,
   ShieldAlert,
   Users2,
+  UserCog,
   UsersRound,
   Building2,
   ScrollText,
@@ -71,6 +72,12 @@ export const ADMIN_NAV: NavItem[] = [
     path: '/app/docs/reports',
     icon: BarChart3,
     permission: 'docflow.reports.view',
+  },
+  {
+    key: 'docflowSubstitutions',
+    path: '/app/docs/substitutions',
+    icon: UserCog,
+    permission: 'docflow.use',
   },
   {
     key: 'docflowSettings',

@@ -9,11 +9,13 @@ import type {
   CorrespondentCategoryDto,
   CreateDocumentLinkInput,
   CreateResolutionInput,
+  CreateSubstitutionInput,
   DisciplineReportDto,
   DisciplineReportQuery,
   DocumentAccessDto,
   ReadLogEntryDto,
   SetDocumentAccessInput,
+  SubstitutionDto,
   RemoveResolutionControlInput,
   DirectoryUserDto,
   DocumentHistoryEntryDto,
@@ -508,6 +510,34 @@ export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserD
     queryKey: ['directory', 'users', search.trim()],
     queryFn: () => api.get<DirectoryUserDto[]>(`/v1/directory/users${qs}`),
     staleTime: 60 * 1000,
+  });
+}
+
+// ---- Substitutions / замещения (docs/05 §6, task 3.11) --------------------
+
+export const substitutionsKey = [...docflowKey, 'substitutions'] as const;
+
+export function useSubstitutions(): UseQueryResult<SubstitutionDto[]> {
+  return useQuery({
+    queryKey: substitutionsKey,
+    queryFn: () => api.get<SubstitutionDto[]>('/v1/docflow/substitutions'),
+  });
+}
+
+export function useCreateSubstitution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSubstitutionInput) =>
+      api.post<SubstitutionDto>('/v1/docflow/substitutions', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: substitutionsKey }),
+  });
+}
+
+export function useRemoveSubstitution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/v1/docflow/substitutions/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: substitutionsKey }),
   });
 }
 
