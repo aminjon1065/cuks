@@ -52,6 +52,8 @@ function AccessBody({
   const directory = useDirectoryUsers(search);
 
   const isDsp = data.confidentiality === 'dsp';
+  // A normal document a viewer cannot manage has nothing to show or do — keep the overview clean.
+  if (!isDsp && !data.canManage) return <></>;
   const results = (directory.data ?? []).filter((u) => !members.some((m) => m.userId === u.id));
 
   const submit = (): void => {

@@ -38,6 +38,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { DocflowNumberingService } from './docflow-numbering.service';
 import {
+  canManageDocumentAccess,
   canViewDocumentBase,
   hasConfidentialAccess,
   hasRegistryAccess,
@@ -217,7 +218,7 @@ export class DocumentsService {
   /** A document's audit history — the «История» tab (docs/modules/11 §7). Visibility-gated
    *  (only a document the caller can see); pinned to `entityType='document'`. */
   async history(id: string, user: AuthUser): Promise<DocumentHistoryEntryDto[]> {
-    await this.detail(id, user); // reuse the card's visibility gate (throws 404 otherwise)
+    await this.assertVisible(id, user); // visibility gate only — never a logged «open»
     const rows = await this.db
       .select({
         id: auditLog.id,
@@ -239,8 +240,11 @@ export class DocumentsService {
   }
 
   /** Load a document the caller may view, or throw 404 (out-of-scope / ДСП-without-access
-   *  is indistinguishable from missing — no existence leak). Author + access_list see it
-   *  via the base rule; route/resolution/acknowledge participants also may. */
+   *  is indistinguishable from missing — no existence leak). Author + access_list see it via
+   *  the base rule; for NON-ДСП documents route/resolution/acknowledge participants also may.
+   *  ДСП is strict — допуск-список ∩ право only (docs/09 §3): participation never substitutes,
+   *  so it stays consistent with the queues (whereFor hides a ДСП task from a non-listed
+   *  executor) and the notification redaction (no click-through to the subject). */
   async assertVisible(id: string, user: AuthUser): Promise<typeof documents.$inferSelect> {
     const [row] = await this.db
       .select()
@@ -249,9 +253,7 @@ export class DocumentsService {
       .limit(1);
     if (!row) throw AppException.notFound('docflow.document.not_found', 'Document not found');
     if (!canViewDocumentBase(row, user)) {
-      // ДСП: participation extends the допуск, but the confidential.view право is still required
-      // (docs/09 §3). Without it there is no participant fallback — indistinguishable from missing.
-      if (row.confidentiality === 'dsp' && !hasConfidentialAccess(user)) {
+      if (row.confidentiality === 'dsp') {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
       const assignments = await this.routes.actorAssignments(user.id);
@@ -608,46 +610,35 @@ export class DocumentsService {
     return row;
   }
 
-  /** Whether the caller may change the grif / access list or read the ДСП trail (docs/09 §3):
-   *  the author, or a holder of `docflow.confidential.view`. */
-  private canManageAccess(
-    row: Pick<typeof documents.$inferSelect, 'authorId'>,
-    user: AuthUser,
-  ): boolean {
-    return (
-      user.isSuperadmin ||
-      row.authorId === user.id ||
-      user.permissions.includes('docflow.confidential.view')
-    );
-  }
-
-  /** Load a document for access management, or 404 if the caller may not manage it (no leak —
-   *  managers are the author + confidential.view holders, decoupled from ДСП view access). */
-  private async loadForAccess(id: string, user: AuthUser): Promise<typeof documents.$inferSelect> {
+  /** Load a document the caller may MANAGE, or 404 (no existence leak). */
+  private async loadManageable(id: string, user: AuthUser): Promise<typeof documents.$inferSelect> {
     const [row] = await this.db
       .select()
       .from(documents)
       .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
       .limit(1);
-    if (!row || !this.canManageAccess(row, user)) {
+    if (!row || !canManageDocumentAccess(row, user)) {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
     return row;
   }
 
-  /** The document's confidentiality + resolved access-list members (the «Доступ» section). */
+  /** The document's confidentiality + resolved access-list members (the «Доступ» section). Gated
+   *  on view-eligibility (assertVisible) — a viewer sees the grif read-only, a non-viewer gets
+   *  404 (never a spurious error); `canManage` tells the caller whether they may edit. */
   async getAccess(id: string, user: AuthUser): Promise<DocumentAccessDto> {
-    const row = await this.loadForAccess(id, user);
+    const row = await this.assertVisible(id, user);
     return this.accessDto(row, user);
   }
 
-  /** Set the grif + allow-list (docs/09 §3) — author or a confidential.view holder; audited. */
+  /** Set the grif + allow-list (docs/09 §3) — a manager (author / view-eligible confidential.view
+   *  holder); audited. */
   async setAccess(
     id: string,
     input: SetDocumentAccessInput,
     user: AuthUser,
   ): Promise<DocumentAccessDto> {
-    const row = await this.loadForAccess(id, user);
+    const row = await this.loadManageable(id, user);
     const accessList = [...new Set(input.accessList)];
     await this.db
       .update(documents)
@@ -662,9 +653,9 @@ export class DocumentsService {
     return this.accessDto({ ...row, confidentiality: input.confidentiality, accessList }, user);
   }
 
-  /** The ДСП access trail for a document — author or a confidential.view holder only. */
+  /** The ДСП access trail for a document — a manager only (who accessed the restricted document). */
   async readLogFor(id: string, user: AuthUser): Promise<ReadLogEntryDto[]> {
-    await this.loadForAccess(id, user);
+    await this.loadManageable(id, user);
     return this.readLog.listForDocument(id);
   }
 
@@ -681,7 +672,7 @@ export class DocumentsService {
     return {
       confidentiality: row.confidentiality,
       members: members.map((m) => ({ userId: m.userId, name: m.name ?? null })),
-      canManage: this.canManageAccess(row, user),
+      canManage: canManageDocumentAccess(row, user),
     };
   }
 

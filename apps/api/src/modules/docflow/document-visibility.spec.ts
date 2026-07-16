@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { canViewDocumentBase, hasConfidentialAccess } from './document-visibility';
+import {
+  canManageDocumentAccess,
+  canViewDocumentBase,
+  hasConfidentialAccess,
+} from './document-visibility';
 import type { AuthUser } from '../../common/auth/auth-user';
 
 type VisDoc = Parameters<typeof canViewDocumentBase>[0];
@@ -47,6 +51,41 @@ describe('canViewDocumentBase — ДСП rule (docs/09 §3)', () => {
     expect(canViewDocumentBase(doc({ accessList: ['u1'] }), user({}))).toBe(true);
     expect(canViewDocumentBase(doc({}), user({ permissions: ['docflow.register'] }))).toBe(true);
     expect(canViewDocumentBase(doc({}), user({}))).toBe(false); // unrelated user
+  });
+});
+
+describe('canManageDocumentAccess — grif / access-list management (docs/09 §3)', () => {
+  it('lets the author and superadmin manage', () => {
+    const d = doc({ confidentiality: 'dsp' });
+    expect(canManageDocumentAccess({ ...d, authorId: 'u1' }, user({}))).toBe(true);
+    expect(canManageDocumentAccess(d, user({ isSuperadmin: true }))).toBe(true);
+  });
+
+  it('does NOT let a confidential.view holder manage a ДСП document they are not on the list of', () => {
+    // The core fix: право alone must not grant access-list management (else it self-grants view).
+    const d = doc({ confidentiality: 'dsp', accessList: ['other'] });
+    expect(canManageDocumentAccess(d, user({ permissions: ['docflow.confidential.view'] }))).toBe(
+      false,
+    );
+  });
+
+  it('lets a listed confidential.view holder manage a ДСП document', () => {
+    const d = doc({ confidentiality: 'dsp', accessList: ['u1'] });
+    expect(canManageDocumentAccess(d, user({ permissions: ['docflow.confidential.view'] }))).toBe(
+      true,
+    );
+  });
+
+  it('lets the chancellery (registry + confidential.view) classify a normal document it can see', () => {
+    const d = doc({ confidentiality: 'normal' });
+    expect(
+      canManageDocumentAccess(
+        d,
+        user({ permissions: ['docflow.register', 'docflow.confidential.view'] }),
+      ),
+    ).toBe(true);
+    // registry access WITHOUT the confidential право cannot classify
+    expect(canManageDocumentAccess(d, user({ permissions: ['docflow.register'] }))).toBe(false);
   });
 });
 

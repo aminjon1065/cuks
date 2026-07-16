@@ -41,3 +41,19 @@ export function canViewDocumentBase(
   if (doc.accessList.includes(user.id)) return true;
   return hasRegistryAccess(user);
 }
+
+/**
+ * Whether the user may change a document's grif / access list or read its ДСП trail
+ * (docs/09-security.md §3): the author or superadmin, or a `docflow.confidential.view` holder
+ * who can ALREADY view the document. The view requirement is what stops confidential.view alone
+ * from reaching a ДСП document it is not on the допуск-список of (access_list ∩ право), while
+ * still letting the chancellery classify a normal document it can see.
+ */
+export function canManageDocumentAccess(
+  doc: Pick<typeof documents.$inferSelect, 'authorId' | 'accessList' | 'confidentiality'>,
+  user: Pick<AuthUser, 'id' | 'permissions' | 'isSuperadmin'>,
+): boolean {
+  if (user.isSuperadmin) return true;
+  if (doc.authorId === user.id) return true;
+  return canViewDocumentBase(doc, user) && user.permissions.includes('docflow.confidential.view');
+}
