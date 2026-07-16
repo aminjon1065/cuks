@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import argon2 from 'argon2';
 import { count, eq, sql } from 'drizzle-orm';
-import { ARGON2_OPTIONS, ROLE_TEMPLATES, type OrgUnitType } from '@cuks/shared';
+import { ARGON2_OPTIONS, ROLE_TEMPLATES, keysBetween, type OrgUnitType } from '@cuks/shared';
 import { createDb, type Database } from './client';
 import {
   adminUnits,
@@ -20,6 +20,9 @@ import {
   positions,
   rolePermissions,
   roles,
+  taskColumns,
+  taskProjectMembers,
+  taskProjects,
   userPositions,
   userRoles,
   users,
@@ -1162,6 +1165,61 @@ async function seedDemoUsers(db: Database): Promise<void> {
   );
 }
 
+const OPS_PROJECT_ID = '0190a5c0-0000-7000-8000-000000000001';
+const OPS_COLUMN_IDS = [
+  '0190a5c0-0000-7000-8000-000000000002',
+  '0190a5c0-0000-7000-8000-000000000003',
+  '0190a5c0-0000-7000-8000-000000000004',
+] as const;
+const OPS_COLUMNS = ['К выполнению', 'В работе', 'Готово'] as const;
+/** Duty officers who get editor on the shared board (attached only when the demo roster exists). */
+const OPS_EDITOR_USERNAMES = ['latifi.z', 'nozimov.h', 'karimova.o'] as const;
+
+/**
+ * Default shared «Оперативные поручения» board (docs/modules/15 §6, task 4.5) — the project ЧС
+ * «Создать задачу» links to. Idempotent via fixed ids; duty-officer editors attach when present.
+ */
+async function seedDefaultTaskProject(db: Database, adminId: string): Promise<void> {
+  await db
+    .insert(taskProjects)
+    .values({
+      id: OPS_PROJECT_ID,
+      name: 'Оперативные поручения',
+      key: 'ОПЕР',
+      description: 'Поручения по оперативной обстановке и происшествиям',
+      createdBy: adminId,
+    })
+    .onConflictDoNothing();
+
+  const orderKeys = keysBetween(null, null, OPS_COLUMNS.length);
+  for (let i = 0; i < OPS_COLUMNS.length; i++) {
+    await db
+      .insert(taskColumns)
+      .values({
+        id: OPS_COLUMN_IDS[i]!,
+        projectId: OPS_PROJECT_ID,
+        name: OPS_COLUMNS[i]!,
+        orderKey: orderKeys[i]!,
+        isDoneColumn: i === OPS_COLUMNS.length - 1,
+      })
+      .onConflictDoNothing();
+  }
+
+  await db
+    .insert(taskProjectMembers)
+    .values({ projectId: OPS_PROJECT_ID, userId: adminId, role: 'owner' })
+    .onConflictDoNothing();
+  for (const username of OPS_EDITOR_USERNAMES) {
+    const [u] = await db.select({ id: users.id }).from(users).where(eq(users.username, username));
+    if (!u) continue;
+    await db
+      .insert(taskProjectMembers)
+      .values({ projectId: OPS_PROJECT_ID, userId: u.id, role: 'editor' })
+      .onConflictDoNothing();
+  }
+  console.log('Default task project «Оперативные поручения» seeded (idempotent).');
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   const isDemo = process.argv.includes('--demo');
@@ -1181,6 +1239,7 @@ async function main(): Promise<void> {
     await seedGeo(db);
     await bindOrgTerritory(db);
     await seedDemoNotifications(db, adminId);
+    await seedDefaultTaskProject(db, adminId);
     console.log(
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
         `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries, ` +
@@ -1189,6 +1248,8 @@ async function main(): Promise<void> {
     if (isDemo) {
       await seedDemoUsers(db);
       await seedDemoIncidents(db, adminId);
+      // Re-run now that the demo roster exists, so duty officers attach as editors.
+      await seedDefaultTaskProject(db, adminId);
     }
   } finally {
     await pool.end();
