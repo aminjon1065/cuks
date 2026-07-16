@@ -214,6 +214,7 @@ export class SignaturesService {
         null,
         actor.id,
         now,
+        located.onBehalfOf,
       );
       onBehalfOf = located.onBehalfOf;
     });
@@ -327,7 +328,9 @@ export class SignaturesService {
       checks,
       signerName: cert.subjectFullName,
       signerPosition: cert.subjectPosition,
-      onBehalfOfName,
+      // «за кого» is soft docflow metadata — redact it, like the subject, for a document the
+      // caller cannot see (a ДСП order would otherwise leak the principal's name).
+      onBehalfOfName: canSeeDoc ? onBehalfOfName : null,
       certificateSerial: cert.serial,
       context: sig.context,
       signedAt: sig.signedAt.toISOString(),
@@ -423,8 +426,14 @@ export class SignaturesService {
     actor: AuthUser,
   ): Promise<boolean> {
     if (canViewDocumentBase(doc, actor)) return true;
-    const assignments = await this.routes.actorAssignments(actor.id);
-    if (await this.routes.isRouteParticipant(documentId, assignments)) return true;
+    // A route/substitution participant may see it — but ДСП never yields to participation
+    // (docs/09 §3), matching assertVisible. The acting-aware check also lets a deputy sign «за».
+    if (
+      doc.confidentiality !== 'dsp' &&
+      (await this.routes.isRouteParticipantActing(documentId, actor.id))
+    ) {
+      return true;
+    }
     const [own] = await this.db
       .select({ id: signatures.id })
       .from(signatures)

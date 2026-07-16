@@ -1,0 +1,2 @@
+ALTER TABLE "app"."route_steps" ADD COLUMN "acted_for" uuid;--> statement-breakpoint
+ALTER TABLE "app"."route_steps" ADD CONSTRAINT "route_steps_acted_for_users_id_fk" FOREIGN KEY ("acted_for") REFERENCES "app"."users"("id") ON DELETE set null ON UPDATE no action;

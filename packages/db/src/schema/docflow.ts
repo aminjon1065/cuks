@@ -299,6 +299,10 @@ export const routeSteps = appSchema.table(
     decision: text('decision', { enum: ROUTE_STEP_DECISIONS }),
     comment: text('comment'),
     actedBy: uuid('acted_by').references(() => users.id, { onDelete: 'set null' }),
+    // The principal a deputy acted «за» (task 3.11); null for a self/superadmin action. Stored
+    // (not derived from acted_by ≠ assignee) so a position/org-unit step attributes precisely and
+    // a superadmin override is not mislabeled.
+    actedFor: uuid('acted_for').references(() => users.id, { onDelete: 'set null' }),
     actedAt: timestamp('acted_at', { withTimezone: true }),
     createdAt: createdAt(),
   },

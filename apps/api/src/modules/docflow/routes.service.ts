@@ -295,10 +295,11 @@ export class RoutesService {
     comment: string | null,
     actorId: string,
     now: Date,
+    actedFor: string | null = null,
   ): Promise<void> {
     await tx
       .update(routeSteps)
-      .set({ status: 'done', decision, comment, actedBy: actorId, actedAt: now })
+      .set({ status: 'done', decision, comment, actedBy: actorId, actedFor, actedAt: now })
       .where(eq(routeSteps.id, stepId));
     const all = await tx
       .select({ id: routeSteps.id, stepOrder: routeSteps.stepOrder, status: routeSteps.status })
@@ -550,6 +551,20 @@ export class RoutesService {
           'You may not act on this step',
         );
       }
+      // ДСП is strict — acting via a step/substitution never substitutes for the допуск (docs/09
+      // §3): the actor must be able to base-view the restricted document to act on it.
+      const [doc] = await tx
+        .select({
+          confidentiality: documents.confidentiality,
+          accessList: documents.accessList,
+          authorId: documents.authorId,
+        })
+        .from(documents)
+        .where(eq(documents.id, route.documentId))
+        .limit(1);
+      if (doc?.confidentiality === 'dsp' && !canViewDocumentBase(doc, actor)) {
+        throw AppException.notFound('docflow.document.not_found', 'Document not found');
+      }
       onBehalfOf = resolved.onBehalfOf;
       // Steps with a dedicated completion path must not be completed by a plain approval,
       // which would bypass their gate: a `sign` step needs a cryptographic signature
@@ -577,6 +592,7 @@ export class RoutesService {
             decision: 'rejected',
             comment,
             actedBy: actor.id,
+            actedFor: onBehalfOf,
             actedAt: now,
           })
           .where(eq(routeSteps.id, stepId));
@@ -591,7 +607,16 @@ export class RoutesService {
           .where(eq(documents.id, route.documentId));
         return route.documentId;
       }
-      await this.applyStepCompletion(tx, route, stepId, 'approved', comment, actor.id, now);
+      await this.applyStepCompletion(
+        tx,
+        route,
+        stepId,
+        'approved',
+        comment,
+        actor.id,
+        now,
+        onBehalfOf,
+      );
       return route.documentId;
     });
     await this.audit.logAndWait({
@@ -627,8 +652,10 @@ export class RoutesService {
     const ctx = await this.actingContext(actor.id, new Date());
     const visible =
       !!doc &&
+      // ДСП is strict — participation/substitution never substitutes for the допуск (docs/09 §3).
       (canViewDocumentBase(doc, actor) ||
-        (await this.isRouteParticipant(documentId, this.flattenActing(ctx))));
+        (doc.confidentiality !== 'dsp' &&
+          (await this.isRouteParticipant(documentId, this.flattenActing(ctx)))));
     if (!visible) throw AppException.notFound('docflow.document.not_found', 'Document not found');
     const principalNames = await this.userNames(ctx.principals.map((p) => p.principalId));
 
@@ -650,6 +677,9 @@ export class RoutesService {
       .orderBy(asc(routeSteps.stepOrder), asc(routeSteps.createdAt));
 
     const names = await this.resolveNames(stepRows, routeRows);
+    const actedForNames = await this.userNames(
+      stepRows.map((s) => s.actedFor).filter((v): v is string => !!v),
+    );
     return routeRows.map((route) => ({
       id: route.id,
       cycle: route.cycle,
@@ -670,11 +700,9 @@ export class RoutesService {
           decision: s.decision,
           comment: s.comment,
           actedByName: s.actedBy ? (names.users.get(s.actedBy) ?? null) : null,
-          // «за кого» for a completed step: a deputy acted (acted_by ≠ the user-assignee principal).
-          actedForName:
-            s.actedBy && s.assigneeType === 'user' && s.actedBy !== s.assigneeId
-              ? names.assignee('user', s.assigneeId)
-              : null,
+          // «за кого» for a completed step — the stored principal a deputy acted for (precise for
+          // any assignee type; a self/superadmin action stores null).
+          actedForName: s.actedFor ? (actedForNames.get(s.actedFor) ?? null) : null,
           actedAt: s.actedAt?.toISOString() ?? null,
           dueHours: s.dueHours,
           ...this.actAbility(s, ctx, actor.isSuperadmin, principalNames),
