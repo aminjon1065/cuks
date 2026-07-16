@@ -91,6 +91,7 @@ export class MeetingsService {
   async list(range: MeetingsRange, user: AuthUser): Promise<MeetingDto[]> {
     const { start, end } = dushanbeDayWindow(new Date());
     const alive = isNull(meetings.deletedAt);
+    const myOrgUnits = await this.userOrgUnitIds(user.id);
 
     const where =
       range === 'today'
@@ -109,13 +110,13 @@ export class MeetingsService {
     const order = range === 'past' ? desc(meetings.startsAt) : asc(meetings.startsAt);
 
     const rows = await this.db.select().from(meetings).where(where).orderBy(order);
-    const visible = rows.filter((r) => this.canSee(r, user.id));
+    const visible = rows.filter((r) => canSee(r, user.id, myOrgUnits));
     return Promise.all(visible.map((r) => this.toDto(r, user)));
   }
 
   async get(id: string, user: AuthUser): Promise<MeetingDto> {
     const row = await this.requireRow(id);
-    if (!this.canSee(row, user.id)) {
+    if (!canSee(row, user.id, await this.userOrgUnitIds(user.id))) {
       throw AppException.forbidden('meet.meeting.forbidden', 'Not invited to this meeting');
     }
     return this.toDto(row, user);
@@ -184,10 +185,17 @@ export class MeetingsService {
 
   // --- helpers ---
 
-  private canSee(row: MeetingRow, userId: string): boolean {
-    if (row.organizerId === userId) return true;
-    const p = participantsOf(row);
-    return p.users.includes(userId); // org-unit membership is resolved lazily elsewhere
+  /** The org units the user belongs to (via their positions) — for org-unit meeting invites. */
+  private async userOrgUnitIds(userId: string): Promise<Set<string>> {
+    const rows = await this.db
+      .selectDistinct({ orgUnitId: positions.orgUnitId })
+      .from(userPositions)
+      .innerJoin(
+        positions,
+        and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+      )
+      .where(eq(userPositions.userId, userId));
+    return new Set(rows.map((r) => r.orgUnitId));
   }
 
   private async requireRow(id: string): Promise<MeetingRow> {
@@ -304,6 +312,14 @@ export class MeetingsService {
       canManage: row.organizerId === user.id,
     };
   }
+}
+
+/** May the user see this meeting — organizer, an explicit invitee, or a member of an invited org unit. */
+function canSee(row: MeetingRow, userId: string, userOrgUnits: Set<string>): boolean {
+  if (row.organizerId === userId) return true;
+  const p = participantsOf(row);
+  if (p.users.includes(userId)) return true;
+  return p.orgUnits.some((ou) => userOrgUnits.has(ou));
 }
 
 /** meetings.participants is untyped jsonb — normalise it to the {users, orgUnits} shape. */
