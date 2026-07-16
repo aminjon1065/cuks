@@ -30,15 +30,19 @@ export interface ChannelListItemDto {
   lastMessageAt: string | null;
   /** The caller's role, or null if they only see it via the public catalog. */
   myRole: ChannelMemberRole | null;
+  /** The caller's personal bookmark — pinned conversations sort first (docs/modules/13 §7). */
+  isPinned: boolean;
   memberCount: number;
   unreadCount: number;
   /** For DM/group rendering: the members other than the caller. */
   otherMembers: { userId: string; name: string | null }[];
 }
 
-/** A channel opened in the reading pane — the list item plus its members. */
+/** A channel opened in the reading pane — the list item plus its members and the caller's settings. */
 export interface ChannelDto extends ChannelListItemDto {
   members: ChatMemberDto[];
+  /** The caller's own notification level for this channel (for the info panel controls). */
+  myNotifyLevel: ChatNotifyLevel;
 }
 
 /** Create a standalone public or private channel (not org/dm/incident — those are provisioned). */

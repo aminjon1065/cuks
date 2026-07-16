@@ -65,6 +65,7 @@ export class ChannelsService {
       this.toListItem(
         r.channel,
         r.role,
+        r.isPinned,
         memberCounts.get(r.channel.id) ?? 0,
         unread.get(r.channel.id) ?? 0,
         others.get(r.channel.id) ?? [],
@@ -91,26 +92,28 @@ export class ChannelsService {
       )
       .orderBy(desc(chatChannels.lastMessageAt));
     const counts = await this.memberCounts(rows.map((r) => r.id));
-    return rows.map((r) => this.toListItem(r, null, counts.get(r.id) ?? 0, 0, []));
+    return rows.map((r) => this.toListItem(r, null, false, counts.get(r.id) ?? 0, 0, []));
   }
 
   async get(channelId: string, actor: AuthUser): Promise<ChannelDto> {
     const channel = await this.acl.requireMember(channelId, actor);
-    const [members, memberCounts, unread, others] = await Promise.all([
+    const [members, memberCounts, unread, others, mine] = await Promise.all([
       this.channelMembers(channelId),
       this.memberCounts([channelId]),
       this.unreadCounts(actor.id, [channelId]),
       this.otherMembers(actor.id, [channelId]),
+      this.myMembership(channelId, actor.id),
     ]);
     const role = members.find((m) => m.userId === actor.id)?.role ?? null;
     const base = this.toListItem(
       channel,
       role,
+      mine?.isPinned ?? false,
       memberCounts.get(channelId) ?? members.length,
       unread.get(channelId) ?? 0,
       others.get(channelId) ?? [],
     );
-    return { ...base, members };
+    return { ...base, members, myNotifyLevel: mine?.notifyLevel ?? 'all' };
   }
 
   async createChannel(input: CreateChannelInput, actor: AuthUser): Promise<ChannelDto> {
@@ -283,6 +286,7 @@ export class ChannelsService {
   private toListItem(
     channel: ChannelRow,
     role: ChatMemberDto['role'] | null,
+    isPinned: boolean,
     memberCount: number,
     unreadCount: number,
     otherMembers: { userId: string; name: string | null }[],
@@ -296,10 +300,24 @@ export class ChannelsService {
       isArchived: channel.isArchived,
       lastMessageAt: channel.lastMessageAt?.toISOString() ?? null,
       myRole: role,
+      isPinned,
       memberCount,
       unreadCount,
       otherMembers,
     };
+  }
+
+  /** The caller's own membership settings (pin/notify) for a channel, or null if not a member. */
+  private async myMembership(
+    channelId: string,
+    userId: string,
+  ): Promise<{ isPinned: boolean; notifyLevel: ChatMemberDto['notifyLevel'] } | null> {
+    const [row] = await this.db
+      .select({ isPinned: chatMembers.isPinned, notifyLevel: chatMembers.notifyLevel })
+      .from(chatMembers)
+      .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)))
+      .limit(1);
+    return row ?? null;
   }
 
   private async channelMembers(channelId: string): Promise<ChatMemberDto[]> {
