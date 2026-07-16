@@ -11,6 +11,9 @@ import type {
   CreateResolutionInput,
   DisciplineReportDto,
   DisciplineReportQuery,
+  DocumentAccessDto,
+  ReadLogEntryDto,
+  SetDocumentAccessInput,
   RemoveResolutionControlInput,
   DirectoryUserDto,
   DocumentHistoryEntryDto,
@@ -218,6 +221,40 @@ export function useDocumentHistory(id: string | null): UseQueryResult<DocumentHi
     queryKey: [...documentsKey, id, 'history'],
     queryFn: () => api.get<DocumentHistoryEntryDto[]>(`/v1/docflow/documents/${id}/history`),
     enabled: !!id,
+  });
+}
+
+// ---- ДСП access / read log (docs/09-security.md §3, task 3.10) ------------
+
+export function useDocumentAccess(id: string): UseQueryResult<DocumentAccessDto> {
+  return useQuery({
+    queryKey: [...documentsKey, id, 'access'],
+    queryFn: () => api.get<DocumentAccessDto>(`/v1/docflow/documents/${id}/access`),
+  });
+}
+
+/** Set the grif + allow-list; refreshes the access block, the card and its lists (the ДСП
+ *  guard changes who sees the document). */
+export function useSetDocumentAccess(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SetDocumentAccessInput) =>
+      api.patch<DocumentAccessDto>(`/v1/docflow/documents/${id}/access`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...documentsKey, id] });
+      void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+    },
+  });
+}
+
+export function useDocumentReadLog(
+  id: string,
+  enabled: boolean,
+): UseQueryResult<ReadLogEntryDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, id, 'read-log'],
+    queryFn: () => api.get<ReadLogEntryDto[]>(`/v1/docflow/documents/${id}/read-log`),
+    enabled,
   });
 }
 

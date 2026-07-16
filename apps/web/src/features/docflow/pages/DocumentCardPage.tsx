@@ -36,6 +36,7 @@ import { RouteSection } from '../components/RouteSection';
 import { ResolutionSection } from '../components/ResolutionSection';
 import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
+import { AccessSection } from '../components/AccessSection';
 import { LinksSection } from '../components/LinksSection';
 import { HistorySection } from '../components/HistorySection';
 
@@ -134,6 +135,7 @@ export function DocumentCardPage(): React.JSX.Element {
               <Files data={data} />
               <SignatureSection doc={data} />
               <AcknowledgementSection doc={data} />
+              <AccessSection doc={data} />
             </>
           ) : null}
           {tab === 'route' ? <RouteSection doc={data} /> : null}
