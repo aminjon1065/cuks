@@ -46,9 +46,7 @@ export function MeetRoomPage(): React.JSX.Element {
 
   const meetRoom: MeetRoomDto = room.data;
   if (!choices) {
-    return (
-      <PreJoinScreen room={meetRoom} onJoin={setChoices} onCancel={() => navigate('/app/meet')} />
-    );
+    return <PreJoinScreen onJoin={setChoices} onCancel={() => navigate('/app/meet')} />;
   }
   return <CallRoom room={meetRoom} choices={choices} onLeave={() => navigate('/app/meet')} />;
 }

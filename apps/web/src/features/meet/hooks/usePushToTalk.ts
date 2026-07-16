@@ -20,6 +20,14 @@ export function usePushToTalk(): boolean {
   const talkingRef = useRef(false);
 
   useEffect(() => {
+    // Force-mute if we're currently push-talking. Used by keyup AND by any focus-loss path, so the
+    // mic can never stay hot after a keyup the window never receives (Alt-Tab, an OS dialog, etc.).
+    const release = (): void => {
+      if (!talkingRef.current) return;
+      talkingRef.current = false;
+      setTalking(false);
+      void localParticipant.setMicrophoneEnabled(false);
+    };
     const down = (e: KeyboardEvent): void => {
       if (e.code !== 'Space' || e.repeat || isEditableTarget(document.activeElement)) return;
       if (isMicrophoneEnabled || talkingRef.current) return;
@@ -31,15 +39,27 @@ export function usePushToTalk(): boolean {
     const up = (e: KeyboardEvent): void => {
       if (e.code !== 'Space' || !talkingRef.current) return;
       e.preventDefault();
-      talkingRef.current = false;
-      setTalking(false);
-      void localParticipant.setMicrophoneEnabled(false);
+      release();
+    };
+    const onHidden = (): void => {
+      if (document.visibilityState === 'hidden') release();
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
+    window.addEventListener('blur', release);
+    window.addEventListener('pagehide', release);
+    document.addEventListener('visibilitychange', onHidden);
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', release);
+      window.removeEventListener('pagehide', release);
+      document.removeEventListener('visibilitychange', onHidden);
+      // Never leave the mic broadcasting when the hook unmounts mid-hold.
+      if (talkingRef.current) {
+        talkingRef.current = false;
+        void localParticipant.setMicrophoneEnabled(false);
+      }
     };
   }, [localParticipant, isMicrophoneEnabled]);
 

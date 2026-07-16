@@ -6,16 +6,10 @@ import {
   GridLayout,
   ParticipantTile,
   isTrackReference,
-  usePagination,
   usePinnedTracks,
   useTracks,
 } from '@livekit/components-react';
 import { RoomEvent, Track } from 'livekit-client';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@cuks/ui';
-
-/** Up to a 5×5 grid per page (docs/modules/14 §3), then paginate. */
-const TILES_PER_PAGE = 25;
 
 /**
  * The video stage (docs/modules/14 §3): a grid of camera tiles, or a speaker/focus layout when a
@@ -39,8 +33,6 @@ export function ConferenceStage(): React.JSX.Element {
   const pinned = usePinnedTracks();
   const focus = pinned[0] ?? screenShare;
 
-  const pagination = usePagination(TILES_PER_PAGE, cameraTracks);
-
   if (focus) {
     return (
       <FocusLayoutContainer className="h-full">
@@ -60,27 +52,11 @@ export function ConferenceStage(): React.JSX.Element {
     );
   }
 
+  // GridLayout fits up to a 5×5 grid and paginates internally (with its own controls) beyond that —
+  // pass the full track list so pagination happens exactly once (docs/modules/14 §3).
   return (
-    <div className="flex h-full flex-col">
-      <GridLayout tracks={pagination.tracks} className="flex-1">
-        <ParticipantTile />
-      </GridLayout>
-      {pagination.totalPageCount > 1 ? (
-        <div className="flex items-center justify-center gap-3 py-2 text-[13px] text-text-muted">
-          <Button size="icon" variant="ghost" onClick={pagination.prevPage} aria-label="prev">
-            <ChevronLeft className="size-4" />
-          </Button>
-          <span>
-            {t('room.pageOf', {
-              page: pagination.currentPage,
-              total: pagination.totalPageCount,
-            })}
-          </span>
-          <Button size="icon" variant="ghost" onClick={pagination.nextPage} aria-label="next">
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    <GridLayout tracks={cameraTracks} className="h-full">
+      <ParticipantTile />
+    </GridLayout>
   );
 }

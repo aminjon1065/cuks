@@ -73,8 +73,9 @@ export function CallRoom({ room, choices, onLeave }: Props): React.JSX.Element {
       serverUrl={creds.url}
       token={creds.token}
       connect
-      video={choices.videoEnabled}
-      audio={choices.audioEnabled}
+      // Honour the exact camera/mic picked on the pre-join screen (not just on/off).
+      video={choices.videoEnabled ? { deviceId: choices.videoDeviceId } : false}
+      audio={choices.audioEnabled ? { deviceId: choices.audioDeviceId } : false}
       options={{ adaptiveStream: true, dynacast: true }}
       onDisconnected={onLeave}
       data-lk-theme="default"

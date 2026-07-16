@@ -1,12 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { PreJoin, type LocalUserChoices } from '@livekit/components-react';
 import '@livekit/components-styles';
-import type { MeetRoomDto } from '@cuks/shared';
 import { Button } from '@cuks/ui';
 import { useMe } from '@/features/auth/api/queries';
 
 interface Props {
-  room: MeetRoomDto;
   onJoin: (choices: LocalUserChoices) => void;
   onCancel: () => void;
 }
@@ -17,7 +15,7 @@ interface Props {
  * chrome. The display name shown to others is set server-side from the session — the prefab's
  * username field is only a local default.
  */
-export function PreJoinScreen({ room, onJoin, onCancel }: Props): React.JSX.Element {
+export function PreJoinScreen({ onJoin, onCancel }: Props): React.JSX.Element {
   const { t } = useTranslation('meet');
   const me = useMe();
 
@@ -38,7 +36,6 @@ export function PreJoinScreen({ room, onJoin, onCancel }: Props): React.JSX.Elem
           joinLabel={t('prejoin.join')}
           micLabel={t('room.mic')}
           camLabel={t('room.camera')}
-          userLabel={room.slug}
         />
       </div>
 

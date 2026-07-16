@@ -175,6 +175,10 @@ export function CallControlBar(props: Props): React.JSX.Element {
             <p className="text-[12px] font-medium text-text-muted">{t('room.camera')}</p>
             <MediaDeviceMenu kind="videoinput" />
           </div>
+          <div className="space-y-1">
+            <p className="text-[12px] font-medium text-text-muted">{t('room.speaker')}</p>
+            <MediaDeviceMenu kind="audiooutput" />
+          </div>
         </PopoverContent>
       </Popover>
 
