@@ -142,8 +142,22 @@ export const router = createBrowserRouter([
       { path: 'tasks/projects', element: <TasksProjectsPage /> },
       { path: 'tasks/projects/:projectKey', element: <BoardPage /> },
       { path: 'tasks/projects/:projectKey/:seq', element: <BoardPage /> },
-      { path: 'chat', element: <ChatPage /> },
-      { path: 'chat/:channelId', element: <ChatPage /> },
+      {
+        path: 'chat',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <ChatPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'chat/:channelId',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <ChatPage />
+          </Suspense>
+        ),
+      },
       {
         path: 'analytics',
         element: (

@@ -49,7 +49,10 @@ export function ChatPage(): React.JSX.Element | null {
       <main className={cn('min-h-0 min-w-0 flex-1', channelId ? 'flex' : 'hidden md:flex')}>
         {channelId ? (
           <div className="flex min-h-0 w-full flex-col">
+            {/* Key by channelId: switching channels must remount the feed so the virtualized list's
+                scroll state (and any half-typed composer draft) resets to the new channel. */}
             <ChannelFeed
+              key={channelId}
               channelId={channelId}
               me={meArg}
               infoOpen={infoOpen}
