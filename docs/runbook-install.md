@@ -47,13 +47,17 @@ chmod 600 .env
 
 ```bash
 openssl rand -base64 48   # для SESSION_SECRET, ENCRYPTION_KEY, LIVEKIT_API_SECRET (каждому — своё)
-openssl rand -base64 24   # для POSTGRES_PASSWORD, S3_ACCESS_KEY/SECRET, паролей GeoServer/gis_reader
+openssl rand -hex 24      # для POSTGRES_PASSWORD и прочих паролей (S3, GeoServer, gis_reader)
 ```
+
+**Важно:** для `POSTGRES_PASSWORD` берите `openssl rand -hex …` (или иной URL-safe набор), **не** `base64`.
+Этот пароль встраивается в `DATABASE_URL` и в строку подключения Martin — символ `/` из base64 ломает разбор
+URL, и api/worker/Martin не подключатся к БД. Hex-значения (`0-9a-f`) безопасны и в URL, и в psql, и в env.
 
 Обязательно проверьте согласованность (файлы `.env` не подставляют переменные друг в друга):
 
 - `CUKS_DOMAIN`, `APP_ORIGIN` (`https://<домен>`) и `S3_PUBLIC_ENDPOINT` (`https://s3.<домен>`) — один домен.
-- `POSTGRES_PASSWORD` совпадает с паролем внутри `DATABASE_URL`.
+- `POSTGRES_PASSWORD` совпадает с паролем внутри `DATABASE_URL` и не содержит URL-спецсимволов (`/ @ : ?`).
 - `LIVEKIT_API_KEY=cuks` (имя ключа не менять — на него завязаны `livekit.prod.yaml` и egress).
 
 Все команды `docker compose` ниже запускаются **из корня репозитория** с явным `--env-file .env`, потому что

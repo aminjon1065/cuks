@@ -1,10 +1,14 @@
 # CUKS production stack — single host (docs/08-deployment.md, task 7.1). Only Caddy (80/443) and the
-# LiveKit media/TURN ports face the outside; everything else is internal to the compose network. Build:
-#   docker compose -f infra/docker/compose.prod.yaml build
-# Migrate then start (docs/08 §Обновление):
-#   docker compose -f infra/docker/compose.prod.yaml run --rm api pnpm db:migrate
-#   docker compose -f infra/docker/compose.prod.yaml up -d
-# Secrets come from a root-level .env (chmod 600) — see .env.prod.example / docs/runbook-install.md.
+# LiveKit media/TURN ports face the outside; everything else is internal to the compose network.
+#
+# Run every command FROM THE REPO ROOT with `--env-file .env`. The `--env-file` is required: without it,
+# Compose looks for `.env` next to this file (infra/docker/.env), not the repo-root .env where the secrets
+# live, and the ${VAR:?...} guards abort. Secrets come from a root-level .env (chmod 600) — see
+# .env.prod.example / docs/runbook-install.md. Convenient alias:
+#   alias dc='docker compose --env-file .env -f infra/docker/compose.prod.yaml'
+# Build:                dc build
+# Migrate then start:   dc run --rm api pnpm db:migrate   (docs/08 §Обновление)
+#                       dc up -d
 name: cuks
 
 x-logging: &logging
