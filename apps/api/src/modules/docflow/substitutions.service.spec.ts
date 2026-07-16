@@ -19,7 +19,7 @@ function makeDb(rows: unknown[]) {
   };
 }
 
-const audit = { log: vi.fn() } as never;
+const audit = { log: vi.fn() };
 const user = (over: Partial<AuthUser>): AuthUser =>
   ({ id: 'me', permissions: [], isSuperadmin: false, ...over }) as AuthUser;
 
@@ -47,7 +47,7 @@ describe('SubstitutionsService — active window', () => {
 
   it('marks an open-ended active substitution as effective now', async () => {
     withNow();
-    const svc = new SubstitutionsService(makeDb([row({})]) as never, audit);
+    const svc = new SubstitutionsService(makeDb([row({})]) as never, audit as never);
     const [dto] = await svc.list(user({}));
     expect(dto!.active).toBe(true);
   });
@@ -60,7 +60,7 @@ describe('SubstitutionsService — active window', () => {
         row({ id: 'past', endsAt: new Date('2026-07-10T00:00:00Z') }),
         row({ id: 'off', isActive: false }),
       ]) as never,
-      audit,
+      audit as never,
     );
     const dtos = await svc.list(user({}));
     expect(dtos.every((d) => d.active === false)).toBe(true);
@@ -69,14 +69,17 @@ describe('SubstitutionsService — active window', () => {
 
 describe('SubstitutionsService — authorization', () => {
   it('forbids a non-admin from delegating another person’s duties', async () => {
-    const svc = new SubstitutionsService(makeDb([]) as never, audit);
+    const svc = new SubstitutionsService(makeDb([]) as never, audit as never);
     await expect(
       svc.create({ principalId: 'someone-else', deputyId: 'me', scope: 'docflow' }, user({})),
     ).rejects.toMatchObject({ status: 403 });
   });
 
   it('lets a user delegate their OWN duties', async () => {
-    const svc = new SubstitutionsService(makeDb([row({ principalId: 'me' })]) as never, audit);
+    const svc = new SubstitutionsService(
+      makeDb([row({ principalId: 'me' })]) as never,
+      audit as never,
+    );
     const dto = await svc.create(
       { principalId: 'me', deputyId: 'deputy', scope: 'docflow' },
       user({}),
@@ -88,7 +91,7 @@ describe('SubstitutionsService — authorization', () => {
   });
 
   it('lets an admin delegate anyone’s duties', async () => {
-    const svc = new SubstitutionsService(makeDb([row({})]) as never, audit);
+    const svc = new SubstitutionsService(makeDb([row({})]) as never, audit as never);
     const dto = await svc.create(
       { principalId: 'p1', deputyId: 'me', scope: 'docflow' },
       user({ permissions: ['admin.substitutions.manage'] }),
