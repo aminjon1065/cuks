@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 6 (Звонки) — **завершена** (6.1–6.7). Следующая — фаза 7 (Hardening). Фаза 5 завершена.
-- **Последняя сессия**: 2026-07-16 — задача 6.7 (приёмка §9: e2e прав на запись + ручной runbook) — ФАЗА 6 ЗАВЕРШЕНА
+- **Фаза**: 7 (Hardening) — в работе. 7.1 готова. Фаза 6 завершена (6.1–6.7).
+- **Последняя сессия**: 2026-07-17 — задача 7.1 (prod-стек: Dockerfile, compose.prod, Caddy, LiveKit, установка «с нуля»)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -21,11 +21,60 @@
 | 4 Задачи          | 🟢 задачи 4.1–4.6 готовы       | —                  |
 | 5 Чат             | 🟢 задачи 5.1–5.8 готовы       | приёмка §10: критерии закрыты, финальный ОК заказчика — открыт |
 | 6 Звонки          | 🟢 задачи 6.1–6.7 готовы       | приёмка §9: автотесты закрыты, медиа-критерии — ручной runbook (14-acceptance.md), финальный ОК заказчика — открыт |
-| 7 Hardening       | ⬜                           | —                  |
+| 7 Hardening       | 🟡 7.1 готова (7.2–7.8 впереди) | —                  |
 
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-17 — Фаза 7: задача 7.1 (production-развёртывание)
+
+**Сделано** (по `docs/08-deployment.md`; коммиты `feat(api): split internal/public endpoints…`,
+`feat(infra): production compose stack…`, `docs: install-from-scratch runbook…`):
+
+- **Образы** (`infra/docker/Dockerfile`): один build-слой собирает monorepo (`pnpm install --frozen-lockfile`
+  + `pnpm build`), из него — рантайм-таргеты `api` / `worker` / `caddy`. api/worker несут весь собранный
+  репозиторий, чтобы тот же образ гонял миграции drizzle-kit; caddy вшивает собранный SPA в `/srv/web`.
+  HEALTHCHECK api — `/api/health`. worker ставит `gdal-bin` (geo-import). `.dockerignore` режет
+  node_modules/dist/.git/секреты из контекста.
+- **Стек** (`infra/docker/compose.prod.yaml`, `name: cuks`): 12 сервисов (caddy, api, worker, postgres,
+  redis, minio, livekit, egress, martin, geoserver, clamav, backup) с `mem_limit`, healthcheck,
+  `restart: unless-stopped`, `logging: json-file 50m×5`, именованными volume'ами. Секреты — из корневого
+  `.env` через `${…}` (обязательные — с `:?`). Наружу — только Caddy (80/443) и LiveKit (7881/tcp,
+  7882/udp). Egress-конфиг встроен через `EGRESS_CONFIG_BODY` (секрет не попадает в git), ключи LiveKit —
+  через `LIVEKIT_KEYS`. Ночной локальный слепок volume'ов (полный restic — в 7.2).
+- **Caddy** (`infra/caddy/Caddyfile`): security-заголовки + CSP, маршруты `/api` `/socket.io` `/livekit`
+  `/tiles`(forward_auth к tile-auth) `/geoserver`, SPA-fallback; отдельный блок `s3.<домен>` — чтобы
+  presigned-URL проходили проверку SigV4 (Caddy сохраняет Host). Два TLS-сценария: публичный домен (авто
+  Let's Encrypt) и закрытая сеть (`CUKS_TLS_INTERNAL=tls internal`).
+- **LiveKit prod** (`infra/docker/livekit/livekit.prod.yaml`): SFU + webhooks → api; встроенный TURN по
+  умолчанию **выключен** (opt-in для строгих NAT — нужен сертификат + layer4-маршрут на :5349).
+- **Разделение internal/public endpoints** (код): за Caddy api ходит в MinIO и LiveKit по внутренней
+  docker-сети, а браузеру нужны presigned-S3 и wss на публичном домене. Добавлены `S3_PUBLIC_ENDPOINT`
+  (второй S3-клиент только для подписи URL; все реальные операции — по внутреннему `S3_ENDPOINT`) и
+  `LIVEKIT_INTERNAL_URL` (серверные RPC модерации/egress идут напрямую в SFU, минуя Caddy). Оба опциональны
+  и падают обратно на публичные значения в dev.
+- **Инструкция «с нуля»** (`docs/runbook-install.md`): требования к серверу, файрвол, `.env` из
+  `.env.prod.example` (все prod-переменные), сборка, порядок init БД (up данных → gis_reader → migrate →
+  seed → up остального → restart martin), TLS-сценарии, TURN, первый вход, smoke-проверка, обновление.
+
+**Валидация**: `docker compose config` рендерится; `docker build --target api` проходит (сборка внутри
+контейнера — pnpm install + build). Полный гейт зелёный (typecheck/lint/test). Попутно починен устаревший
+assert в `retention.processor.spec` (sweep получил 4-й select — purgeExpiredRecordings из 6.7).
+
+**Решения**:
+
+- **Записи и presigned**: api reaches MinIO по `http://minio:9000`, подписывает URL на `https://s3.<домен>`
+  (`S3_PUBLIC_ENDPOINT`) — без hairpin через Caddy и без необходимости доверять внутреннему CA в контейнере.
+- **Размер образа api ≈ 2.1 ГБ**: сознательный размен (весь репозиторий в образе ради запуска миграций тем
+  же образом) на простоту single-server деплоя.
+- **UDP-mux 7882** вместо диапазона 50000–50200/udp из спеки — один порт на файрволе, рекомендованный
+  LiveKit путь для контейнеров.
+- **gis_reader**: GeoServer подключается к PostGIS read-only ролью (создаётся шагом установки, docs/09).
+
+**Открыто / вперёд**: TURN-TLS на :5349 (сертификат + layer4) настраивается оператором при необходимости;
+финальная проверка стека — только на реальном сервере (медиа не рендерится в CI). Дальше — 7.2 (бэкапы +
+restore drill).
 
 ### 2026-07-16 — Фаза 6: задача 6.7 (приёмка §9) — ФАЗА 6 ЗАВЕРШЕНА
 
