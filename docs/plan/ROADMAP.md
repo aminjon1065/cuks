@@ -90,7 +90,7 @@
 
 ## Фаза 4 — Задачи (3 нед)
 
-- [ ] 4.1 Модель: projects/columns/tasks/labels/checklist/activity, fractional index
+- [x] 4.1 Модель: projects/columns/tasks/labels/checklist/activity, fractional index
 - [ ] 4.2 Доска: dnd-kit, realtime board:*, фильтры, вид-список, WIP
 - [ ] 4.3 Карточка-SidePanel (все поля, чеклист, комментарии-упоминания, история)
 - [ ] 4.4 Мои задачи (+бейдж сайдбара, виджет дашборда), уведомления сроков

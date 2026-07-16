@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 3 (Документооборот) — **завершена** (задачи 3.1–3.12)
-- **Последняя сессия**: 2026-07-16 — задача 3.12 (e2e приёмки: конкурентная нумерация 50 параллельно, полный входящий цикл «в дело», история циклов маршрута)
+- **Фаза**: 4 (Задачи) — в работе; задача 4.1 готова. Фаза 3 завершена (3.1–3.12).
+- **Последняя сессия**: 2026-07-16 — задача 4.1 (модель задач/канбан: схема projects/columns/tasks/labels/checklist/activity + fractional index)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -18,7 +18,7 @@
 | 1 Файлы           | 🟢 задачи 1.1–1.9 готовы      | приёмка §9: критерии закрыты, финальный ОК заказчика — открыт |
 | 2 ГИС/аналитика   | 🟢 задачи 2.1–2.13 готовы      | —                  |
 | 3 Документооборот | 🟢 задачи 3.1–3.12 готовы      | —                  |
-| 4 Задачи          | ⬜                           | —                  |
+| 4 Задачи          | 🟡 задача 4.1 (модель)        | —                  |
 | 5 Чат             | ⬜                           | —                  |
 | 6 Звонки          | ⬜                           | —                  |
 | 7 Hardening       | ⬜                           | —                  |
@@ -26,6 +26,42 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-16 — Фаза 4: задача 4.1 (модель задач/канбан + fractional index)
+
+**Сделано** (по `docs/modules/15` §2; коммиты `0159bc9`, `811b42e`, `c3ac337`):
+
+- **`feat(shared)`**: enums `TASK_PRIORITIES` (p1–p4, по умолчанию p3), `PROJECT_ROLES` (owner/
+  editor/viewer); безлибовый **fractional index** `keyBetween`/`keysBetween`/`isValidOrderKey`
+  (base-62, порядок — обычным лексикографическим сравнением; перемещение переписывает только свою
+  строку, без каскадов). 11 тестов (append/prepend/insert/midpoint/fuzz).
+- **`feat(db)`**: миграция `0037` — схема канбана: `task_projects` (key для номеров карточек +
+  `last_seq`, `visible_to_org_unit`), `task_project_members` (ACL owner/editor/viewer), `task_columns`
+  (order_key fractional, wip_limit, is_done_column), `task_labels`, `tasks` (seq/project unique,
+  title, description TipTap JSON + `description_text`-зеркало для FTS, assignee/watcher/labels uuid[]
+  GIN, priority, due/start, order_in_column fractional, completed/archived), `task_checklist_items`,
+  `task_activity`.
+
+**Тесты/проверка**: корневой gate typecheck/lint/test — зелёный (shared +11 fractional-тестов);
+миграции `0037`/`0038` применены на реальном Postgres.
+
+**Adversarial-review** (3 измерения: fractional-index, schema-integrity, model-completeness → два
+скептика; **1 находка подтверждена двумя голосами и исправлена**, `c3ac337`; остальные измерения —
+чисто):
+
+- **[HIGH] порядок ломался из-за коллации**: ключи fractional index сортируются по ASCII (JS), но
+  кластер — `en_US.utf8` (регистронезависимая, ставит 'd' раньше 'V'), и `ORDER BY order_in_column`
+  на `text` перемешал бы карточки, а сравнение соседей в move-API (позже) могло бы бросить `a >= b`.
+  **Исправлено** (`0038`): три order-колонки — `COLLATE "C"` (байтовый порядок = JS). Проверено:
+  en_US даёт `8,d,G,l,V`, `COLLATE "C"` — `8,G,V,d,l`.
+
+**Решения**:
+
+- Порядок — fractional index (base-62), НЕ int с каскадами; order-колонки обязательно `COLLATE "C"`
+  (кластер en_US.utf8). Метки — `uuid[]` в `tasks.labels` (как спека «labels uuid[] → task_labels»;
+  как `accessList` в ДОУ — без FK, чистка на уровне приложения). Комментарии/вложения/связи — общие
+  (`comments`/`files`/`entity_links`), вне 4.1 (приходят с UI-задачами 4.3/4.5). Номер карточки —
+  `last_seq` на проекте (атомарный минтинг — 4.2) + unique(project, seq).
 
 ### 2026-07-16 — Фаза 3: задача 3.12 (e2e приёмки) — **ФАЗА 3 ЗАВЕРШЕНА**
 
