@@ -10,8 +10,10 @@ import { createDb, type Database } from './client';
 import {
   adminUnits,
   incidents,
+  meetRooms,
   notificationOutbox,
   notifications,
+  recordings,
   roles,
   userRoles,
   users,
@@ -247,6 +249,42 @@ async function provisionScopedIncidents(
   return { sughdCount: 3, khatlonIncidentId };
 }
 
+// Fixed ids for a `ready` recording fixture (task 6.7 §9 «доступна только участникам»): the recording
+// belongs to a room hosted by the admin, with the duty officer as its only participant.
+const REC_ROOM_ID = '01900000-0000-7000-8000-0000000000a1';
+const REC_ID = '01900000-0000-7000-8000-0000000000a2';
+
+/** Seed a completed recording whose participant is the duty officer (started/managed by the admin), so
+ *  the acceptance e2e can assert the participant/non-participant/manage access rules deterministically
+ *  without a real egress file. */
+async function provisionRecording(
+  db: Database,
+  opts: { starterId: string; participantId: string },
+): Promise<void> {
+  await db.delete(recordings).where(eq(recordings.id, REC_ID));
+  await db.delete(meetRooms).where(eq(meetRooms.id, REC_ROOM_ID));
+  await db.insert(meetRooms).values({
+    id: REC_ROOM_ID,
+    slug: 'e2e0e2e0e2e0e2e0',
+    kind: 'adhoc',
+    access: 'link',
+    livekitRoom: `meet-${REC_ROOM_ID}`,
+    createdBy: opts.starterId,
+    isActive: false,
+  });
+  await db.insert(recordings).values({
+    id: REC_ID,
+    roomId: REC_ROOM_ID,
+    title: 'E2E запись',
+    startedBy: opts.starterId,
+    participants: [opts.participantId],
+    fileKey: `recordings/${REC_ID}.mp4`,
+    duration: 42,
+    size: 1_048_576,
+    status: 'ready',
+  });
+}
+
 async function provision(db: Database): Promise<void> {
   // The API can be running while this deterministic seed is applied. Remove
   // stale incident handoff markers before clearing the e2e users' feeds so a
@@ -274,7 +312,7 @@ async function provision(db: Database): Promise<void> {
     fullName: 'E2E Пользователь 2',
     shortName: 'E2E Юзер 2',
   });
-  await provisionUser(db, {
+  const dutyId = await provisionUser(db, {
     username: E2E_DUTY_USERNAME,
     password: E2E_DUTY_PASSWORD,
     roleCode: 'duty_officer',
@@ -290,6 +328,7 @@ async function provision(db: Database): Promise<void> {
     shortName: 'E2E Согд',
     orgUnitId: SUGHD_ORG_UNIT_ID,
   });
+  await provisionRecording(db, { starterId: adminId, participantId: dutyId });
   await provisionMapIncidents(db, adminId);
   const scoped = await provisionScopedIncidents(db, adminId);
   console.log(
