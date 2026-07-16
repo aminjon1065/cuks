@@ -11,6 +11,9 @@ import type {
 export const MEET_MAX_CONCURRENT_RECORDINGS = 2;
 /** Recordings are kept this long before the retention sweep deletes them (docs/modules/14 §4). */
 export const MEET_RECORDING_RETENTION_DAYS = 180;
+/** Presigned lifetime for the inline stream URL — long enough to watch a whole recording without the
+ *  URL expiring mid-playback (the default 5-min download expiry is too short for a video). */
+export const MEET_RECORDING_STREAM_URL_EXPIRY_SECONDS = 4 * 60 * 60;
 
 /**
  * Meet DTOs (docs/modules/14 §7, task 6.2). The room-creation endpoint opens a call room for a DM,

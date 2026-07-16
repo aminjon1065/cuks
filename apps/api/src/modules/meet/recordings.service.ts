@@ -4,6 +4,7 @@ import { uuidv7 } from 'uuidv7';
 import { meetRooms, recordings, users, type Database } from '@cuks/db';
 import {
   MEET_MAX_CONCURRENT_RECORDINGS,
+  MEET_RECORDING_STREAM_URL_EXPIRY_SECONDS,
   type RecordingDto,
   type StartRecordingInput,
 } from '@cuks/shared';
@@ -50,10 +51,26 @@ export class RecordingsService {
     const title = input.title?.trim() || `Запись ${new Date().toISOString().slice(0, 16)}`;
     const recId = uuidv7();
 
-    // Reserve a slot: the count + insert happen under one advisory lock so two simultaneous starts
-    // can't both pass the ≤2 cap.
+    // Reserve a slot: the room-dedup + count + insert happen under one (global) advisory lock so two
+    // simultaneous starts can't both pass the ≤2 cap nor double-record one room.
     await this.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(${MEET_REC_LOCK_NS})`);
+      // One active recording per room — a double-click / second tab / replayed POST must not launch a
+      // second egress for the same room (it would consume both global slots and orphan an egress).
+      const [existingForRoom] = await tx
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+          and(
+            eq(recordings.roomId, room.id),
+            eq(recordings.status, 'processing'),
+            isNull(recordings.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (existingForRoom) {
+        throw AppException.conflict('meet.recording.already', 'Запись этой комнаты уже идёт');
+      }
       const counted = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(recordings)
@@ -158,7 +175,10 @@ export class RecordingsService {
   /** Presigned inline URL for the player (no audit — a play/seek issues many range requests). */
   async streamUrl(id: string, user: AuthUser): Promise<string> {
     const row = await this.requireReady(id, user);
-    return this.storage.getStreamUrl(row.fileKey as string);
+    return this.storage.getStreamUrl(
+      row.fileKey as string,
+      MEET_RECORDING_STREAM_URL_EXPIRY_SECONDS,
+    );
   }
 
   /** Presigned attachment URL for an explicit download — audited (docs/modules/14 §4). */

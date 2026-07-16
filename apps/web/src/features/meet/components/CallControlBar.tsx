@@ -89,6 +89,9 @@ export function CallControlBar(props: Props): React.JSX.Element {
   const stopRec = useStopRecording();
 
   const toggleRecording = (): void => {
+    // Ignore repeat clicks while a start/stop is in flight — a duplicate start would spin up a second
+    // egress for the same room (the server also rejects it, but don't even fire the request).
+    if (startRec.isPending || stopRec.isPending) return;
     const onError = (err: unknown): void => {
       toast({
         title: err instanceof ApiError ? err.message : t('toast.actionFailed'),
