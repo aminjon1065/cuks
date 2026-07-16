@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Server } from 'socket.io';
 import { wsRooms, type WsEventName, type WsEventPayloads } from '@cuks/shared';
 
@@ -9,6 +9,7 @@ import { wsRooms, type WsEventName, type WsEventPayloads } from '@cuks/shared';
  */
 @Injectable()
 export class RealtimeService {
+  private readonly logger = new Logger(RealtimeService.name);
   private server: Server | null = null;
 
   bind(server: Server): void {
@@ -37,14 +38,20 @@ export class RealtimeService {
   }
 
   /** The user ids with a live socket in a room (docs/modules/13 §6) — lets chat skip notifying people
-   *  who are already watching the channel. Cross-instance via the Redis adapter. */
+   *  who are already watching the channel. Cross-instance via the Redis adapter. Fails OPEN (returns
+   *  empty): a transient adapter timeout must not silently suppress notifications — over-notifying a
+   *  viewer is far better than dropping a mention, matching PresenceService's fail-open convention. */
   async userIdsInRoom(room: string): Promise<Set<string>> {
     const ids = new Set<string>();
     if (!this.server) return ids;
-    const sockets = await this.server.in(room).fetchSockets();
-    for (const socket of sockets) {
-      const userId = (socket.data as { userId?: string }).userId;
-      if (userId) ids.add(userId);
+    try {
+      const sockets = await this.server.in(room).fetchSockets();
+      for (const socket of sockets) {
+        const userId = (socket.data as { userId?: string }).userId;
+        if (userId) ids.add(userId);
+      }
+    } catch (err) {
+      this.logger.error({ err, room }, 'failed to read room membership; treating room as empty');
     }
     return ids;
   }
