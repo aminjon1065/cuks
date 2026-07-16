@@ -4,18 +4,38 @@ import { formatDate } from '@/lib/format';
 /** Consecutive messages from the same author within this window render under one header. */
 const AUTHOR_RUN_MS = 5 * 60 * 1000;
 
-/** A row in the virtualized feed: either a day separator or a message (with a header flag). */
+/** A row in the virtualized feed: a day separator, the «Новые» divider, or a message. */
 export type FeedRow =
   | { type: 'day'; key: string; day: string; iso: string }
+  | { type: 'new'; key: string }
   | { type: 'message'; key: string; message: MessageDto; showAuthor: boolean };
+
+export interface FeedRowOptions {
+  /** The caller's read anchor captured when the channel was OPENED (docs/modules/13 §4) — the «Новые»
+   *  divider goes before the first later message from someone else. Null = never read anything;
+   *  undefined = anchor unknown yet, no divider. */
+  lastReadId?: string | null | undefined;
+  /** The caller — their own messages never count as «new». */
+  meId?: string | undefined;
+}
+
+/** True when `m` is unread relative to the anchor: a real (non-optimistic) message from someone else,
+ *  newer than the anchor. Message ids are uuidv7, so string order matches time order. */
+function isUnread(m: MessageDto, lastReadId: string | null, meId: string | undefined): boolean {
+  if (m.authorId === meId || m.id.startsWith('temp-')) return false;
+  return lastReadId === null || m.id > lastReadId;
+}
 
 /**
  * Flatten chronological messages into feed rows (docs/modules/13 §7): a day separator whenever the
- * calendar day (Asia/Dushanbe) changes, and an author header on the first message of each author-run
- * (author change or a gap longer than {@link AUTHOR_RUN_MS}). A flat row list virtualizes cleanly.
+ * calendar day (Asia/Dushanbe) changes, an author header on the first message of each author-run
+ * (author change or a gap longer than {@link AUTHOR_RUN_MS}), and — when a read anchor is supplied —
+ * a single «Новые» divider before the first unread message. A flat row list virtualizes cleanly.
  */
-export function buildFeedRows(messages: MessageDto[]): FeedRow[] {
+export function buildFeedRows(messages: MessageDto[], options?: FeedRowOptions): FeedRow[] {
   const rows: FeedRow[] = [];
+  const withDivider = options?.lastReadId !== undefined;
+  let dividerPlaced = false;
   let lastDay: string | null = null;
   let lastAuthor: string | null = null;
   let lastTime = 0;
@@ -24,6 +44,12 @@ export function buildFeedRows(messages: MessageDto[]): FeedRow[] {
     if (day !== lastDay) {
       rows.push({ type: 'day', key: `day-${day}`, day, iso: m.createdAt });
       lastDay = day;
+      lastAuthor = null;
+      lastTime = 0;
+    }
+    if (withDivider && !dividerPlaced && isUnread(m, options.lastReadId ?? null, options.meId)) {
+      rows.push({ type: 'new', key: 'new-divider' });
+      dividerPlaced = true;
       lastAuthor = null;
       lastTime = 0;
     }

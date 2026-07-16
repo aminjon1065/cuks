@@ -12,13 +12,15 @@ import {
   Skeleton,
   cn,
 } from '@cuks/ui';
-import type { ChannelListItemDto } from '@cuks/shared';
+import type { ChannelListItemDto, PresenceStatus } from '@cuks/shared';
 import { formatRelativeTime } from '@/lib/format';
 import { useMyChannels } from '../api/queries';
+import { usePresence } from '../hooks/usePresence';
 import { channelDisplayName, initials, sectionChannels } from '../lib/grouping';
 import { CreateChannelDialog } from './CreateChannelDialog';
 import { NewDmDialog } from './NewDmDialog';
 import { CatalogDialog } from './CatalogDialog';
+import { PresenceDot } from './PresenceDot';
 
 type DialogKind = 'channel' | 'dm' | 'catalog';
 
@@ -44,6 +46,17 @@ export function ConversationList({
     );
     return sectionChannels(items);
   }, [channels.data, search, t]);
+
+  // Presence dots for DM rows — the single counterpart of each direct conversation.
+  const dmUserIds = useMemo(
+    () =>
+      (channels.data ?? [])
+        .filter((c) => c.kind === 'dm')
+        .map((c) => c.otherMembers[0]?.userId)
+        .filter((id): id is string => !!id),
+    [channels.data],
+  );
+  const presence = usePresence(dmUserIds);
 
   const total = sections.pinned.length + sections.channels.length + sections.personal.length;
 
@@ -109,6 +122,7 @@ export function ConversationList({
               activeId={activeChannelId}
               onSelect={onSelect}
               meFallback={t('kind.dm')}
+              presence={presence}
             />
             <Section
               title={t('sections.channels')}
@@ -116,6 +130,7 @@ export function ConversationList({
               activeId={activeChannelId}
               onSelect={onSelect}
               meFallback={t('kind.dm')}
+              presence={presence}
             />
             <Section
               title={t('sections.personal')}
@@ -123,6 +138,7 @@ export function ConversationList({
               activeId={activeChannelId}
               onSelect={onSelect}
               meFallback={t('kind.dm')}
+              presence={presence}
             />
           </div>
         )}
@@ -147,12 +163,14 @@ function Section({
   activeId,
   onSelect,
   meFallback,
+  presence,
 }: {
   title: string;
   items: ChannelListItemDto[];
   activeId: string | undefined;
   onSelect: (id: string) => void;
   meFallback: string;
+  presence: Map<string, PresenceStatus>;
 }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
@@ -168,6 +186,7 @@ function Section({
             active={c.id === activeId}
             onSelect={onSelect}
             fallback={meFallback}
+            presence={c.kind === 'dm' ? presence.get(c.otherMembers[0]?.userId ?? '') : undefined}
           />
         ))}
       </ul>
@@ -180,11 +199,13 @@ function ConversationRow({
   active,
   onSelect,
   fallback,
+  presence,
 }: {
   channel: ChannelListItemDto;
   active: boolean;
   onSelect: (id: string) => void;
   fallback: string;
+  presence: PresenceStatus | undefined;
 }): React.JSX.Element {
   const name = channelDisplayName(channel, fallback);
   const isDm = channel.kind === 'dm' || channel.kind === 'group';
@@ -201,13 +222,16 @@ function ConversationRow({
           active ? 'bg-primary/10 text-primary' : 'text-text hover:bg-surface-2',
         )}
       >
-        <span
-          className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-medium',
-            active ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-text-muted',
-          )}
-        >
-          {isDm ? initials(name) : <Icon className="size-4" />}
+        <span className="relative shrink-0">
+          <span
+            className={cn(
+              'flex size-8 items-center justify-center rounded-md text-xs font-medium',
+              active ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-text-muted',
+            )}
+          >
+            {isDm ? initials(name) : <Icon className="size-4" />}
+          </span>
+          <PresenceDot status={presence} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center justify-between gap-2">
@@ -219,6 +243,11 @@ function ConversationRow({
             ) : null}
           </span>
         </span>
+        {channel.unreadMentions > 0 ? (
+          <span className="min-w-5 shrink-0 rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold leading-5 text-white">
+            @{channel.unreadMentions > 99 ? '99+' : channel.unreadMentions}
+          </span>
+        ) : null}
         {channel.unreadCount > 0 ? (
           <span className="min-w-5 shrink-0 rounded-full bg-primary px-1.5 text-center text-[11px] font-semibold leading-5 text-primary-fg">
             {channel.unreadCount > 99 ? '99+' : channel.unreadCount}

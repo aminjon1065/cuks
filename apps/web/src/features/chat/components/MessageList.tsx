@@ -14,15 +14,25 @@ export function MessageList({
   hasMore,
   isFetchingOlder,
   onFetchOlder,
+  lastReadId,
+  meId,
+  onAtBottomChange,
 }: {
   messages: MessageDto[];
   hasMore: boolean;
   isFetchingOlder: boolean;
   onFetchOlder: () => void;
+  /** Read anchor captured at channel open — places the «Новые» divider (docs/modules/13 §4). */
+  lastReadId: string | null | undefined;
+  meId: string;
+  onAtBottomChange: (atBottom: boolean) => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const rows = useMemo(() => buildFeedRows(messages), [messages]);
+  const rows = useMemo(
+    () => buildFeedRows(messages, { lastReadId, meId }),
+    [messages, lastReadId, meId],
+  );
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -53,7 +63,9 @@ export function MessageList({
   const onScroll = (): void => {
     const el = scrollRef.current;
     if (!el) return;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (atBottom !== stick.current) onAtBottomChange(atBottom);
+    stick.current = atBottom;
     if (el.scrollTop < 120 && hasMore && !isFetchingOlder) {
       olderAnchor.current = el.scrollHeight;
       onFetchOlder();
@@ -100,6 +112,14 @@ export function MessageList({
                     {dayLabel(row.day)}
                   </span>
                   <span className="h-px flex-1 bg-border" />
+                </div>
+              ) : row.type === 'new' ? (
+                <div className="flex items-center gap-3 px-4 py-1.5" role="separator">
+                  <span className="h-px flex-1 bg-danger/50" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-danger">
+                    {t('feed.new')}
+                  </span>
+                  <span className="h-px flex-1 bg-danger/50" />
                 </div>
               ) : (
                 <MessageItem message={row.message} showAuthor={row.showAuthor} />

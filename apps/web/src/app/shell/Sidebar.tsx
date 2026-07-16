@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, Tooltip, TooltipContent, TooltipTrigger, cn } f
 import { useVisibleByPermission } from '@/lib/ability';
 import { useUiStore } from '@/lib/ui-store';
 import { useMyOverdueCount } from '@/features/tasks/api/queries';
+import { useUnreadTotals } from '@/features/chat/api/queries';
 import { ADMIN_NAV, MAIN_NAV, type NavItem } from './nav-items';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -14,15 +15,19 @@ function NavRow({
   item,
   collapsed,
   badge = 0,
+  badgeTone = 'danger',
 }: {
   item: NavItem;
   collapsed: boolean;
-  /** A count rendered as an attention pill (e.g. overdue tasks); 0 hides it. */
+  /** A count rendered as an attention pill (e.g. overdue tasks, unread chat); 0 hides it. */
   badge?: number;
+  /** danger — attention (overdue, mentions); primary — neutral activity (unread chat). */
+  badgeTone?: 'danger' | 'primary';
 }): React.JSX.Element {
   const { t } = useTranslation('nav');
   const label = t(`items.${item.key}`);
   const Icon = item.icon;
+  const pill = badgeTone === 'danger' ? 'bg-danger text-white' : 'bg-primary text-primary-fg';
   const link = (
     <NavLink
       to={item.path}
@@ -41,9 +46,19 @@ function NavRow({
       {collapsed ? null : <span className="truncate">{label}</span>}
       {badge > 0 ? (
         collapsed ? (
-          <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger" />
+          <span
+            className={cn(
+              'absolute right-1.5 top-1.5 size-2 rounded-full',
+              badgeTone === 'danger' ? 'bg-danger' : 'bg-primary',
+            )}
+          />
         ) : (
-          <span className="ml-auto min-w-5 rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold leading-5 text-white">
+          <span
+            className={cn(
+              'ml-auto min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-5',
+              pill,
+            )}
+          >
             {badge > 99 ? '99+' : badge}
           </span>
         )
@@ -72,6 +87,12 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
   const mainItems = useVisibleByPermission(MAIN_NAV);
   const adminItems = useVisibleByPermission(ADMIN_NAV);
   const overdue = useMyOverdueCount();
+  const chatTotals = useUnreadTotals();
+  // Mentions demand attention (red); plain unread is neutral activity (docs/modules/13 §4).
+  const chatBadge =
+    (chatTotals.data?.mentions ?? 0) > 0
+      ? { count: chatTotals.data!.mentions, tone: 'danger' as const }
+      : { count: chatTotals.data?.unread ?? 0, tone: 'primary' as const };
 
   const primaryOrg = me.orgContext.find((o) => o.isPrimary) ?? me.orgContext[0];
 
@@ -110,7 +131,10 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
             key={item.key}
             item={item}
             collapsed={collapsed}
-            badge={item.key === 'tasks' ? (overdue.data ?? 0) : 0}
+            badge={
+              item.key === 'tasks' ? (overdue.data ?? 0) : item.key === 'chat' ? chatBadge.count : 0
+            }
+            badgeTone={item.key === 'chat' ? chatBadge.tone : 'danger'}
           />
         ))}
 

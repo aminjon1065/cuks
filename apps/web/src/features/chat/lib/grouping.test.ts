@@ -33,6 +33,7 @@ function channel(over: Partial<ChannelListItemDto>): ChannelListItemDto {
     isPinned: false,
     memberCount: 1,
     unreadCount: 0,
+    unreadMentions: 0,
     otherMembers: [],
     ...over,
   };
@@ -75,6 +76,46 @@ describe('buildFeedRows (docs/modules/13 §7)', () => {
       msg({ id: 'm2', createdAt: '2026-07-17T06:00:00.000Z' }),
     ]);
     expect(rows.filter((r) => r.type === 'day')).toHaveLength(2);
+  });
+});
+
+describe('buildFeedRows — the «Новые» divider (docs/modules/13 §4)', () => {
+  // uuidv7-like ordering: lexicographic id order matches time order.
+  const older = msg({ id: 'a1', authorId: 'other', createdAt: '2026-07-16T06:00:00.000Z' });
+  const newer = msg({ id: 'b2', authorId: 'other', createdAt: '2026-07-16T06:01:00.000Z' });
+
+  it('goes before the first unread message from someone else', () => {
+    const rows = buildFeedRows([older, newer], { lastReadId: 'a1', meId: 'me' });
+    const types = rows.map((r) => r.type);
+    expect(types).toEqual(['day', 'message', 'new', 'message']);
+    // The message after the divider starts a fresh author header.
+    expect(rows[3]).toMatchObject({ type: 'message', showAuthor: true });
+  });
+
+  it('marks everything unread when nothing was ever read', () => {
+    const rows = buildFeedRows([older, newer], { lastReadId: null, meId: 'me' });
+    expect(rows.map((r) => r.type)).toEqual(['day', 'new', 'message', 'message']);
+  });
+
+  it('shows no divider when everything is read, and never for my own or optimistic messages', () => {
+    expect(
+      buildFeedRows([older, newer], { lastReadId: 'b2', meId: 'me' }).some((r) => r.type === 'new'),
+    ).toBe(false);
+    const mine = msg({ id: 'c3', authorId: 'me', createdAt: '2026-07-16T06:02:00.000Z' });
+    const temp = msg({ id: 'temp-x', authorId: 'other', createdAt: '2026-07-16T06:03:00.000Z' });
+    expect(
+      buildFeedRows([mine, temp], { lastReadId: null, meId: 'me' }).some((r) => r.type === 'new'),
+    ).toBe(false);
+  });
+
+  it('shows no divider when the anchor is unknown (options omitted)', () => {
+    expect(buildFeedRows([older, newer]).some((r) => r.type === 'new')).toBe(false);
+  });
+
+  it('is placed exactly once', () => {
+    const third = msg({ id: 'c3', authorId: 'other', createdAt: '2026-07-16T06:02:00.000Z' });
+    const rows = buildFeedRows([older, newer, third], { lastReadId: 'a1', meId: 'me' });
+    expect(rows.filter((r) => r.type === 'new')).toHaveLength(1);
   });
 });
 

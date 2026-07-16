@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, LogOut, Pencil, Search, UserPlus, X } from 'lucide-react';
 import { Avatar, AvatarFallback, Button, Input, Switch, cn, toast } from '@cuks/ui';
@@ -10,7 +10,9 @@ import {
   useUpdateChannel,
   useUpdateMembership,
 } from '../api/queries';
+import { usePresence } from '../hooks/usePresence';
 import { initials } from '../lib/grouping';
+import { PresenceDot } from './PresenceDot';
 
 const RANK: Record<ChannelMemberRole, number> = { member: 1, admin: 2, owner: 3 };
 const inputClass =
@@ -191,6 +193,8 @@ function MembersSection({
   const [adding, setAdding] = useState(false);
   const canLeave = channel.kind !== 'dm' && channel.kind !== 'org';
   const myRank = channel.myRole ? RANK[channel.myRole] : 0;
+  const memberIds = useMemo(() => channel.members.map((m) => m.userId), [channel.members]);
+  const presence = usePresence(memberIds);
 
   const roleLabel = (r: ChannelMemberRole): string =>
     r === 'owner'
@@ -242,9 +246,12 @@ function MembersSection({
           const removable = canManage && m.userId !== meId && RANK[m.role] < myRank;
           return (
             <li key={m.userId} className="group flex items-center gap-2.5 rounded-md px-1 py-1.5">
-              <Avatar className="size-8">
-                <AvatarFallback className="text-[11px]">{initials(m.name)}</AvatarFallback>
-              </Avatar>
+              <span className="relative shrink-0">
+                <Avatar className="size-8">
+                  <AvatarFallback className="text-[11px]">{initials(m.name)}</AvatarFallback>
+                </Avatar>
+                <PresenceDot status={presence.get(m.userId)} />
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] text-text">{m.name ?? m.userId}</div>
                 <div className="text-xs text-text-muted">{roleLabel(m.role)}</div>

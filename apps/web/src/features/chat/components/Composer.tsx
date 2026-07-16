@@ -7,9 +7,13 @@ import Mention from '@tiptap/extension-mention';
 import { Bold, Code, Italic, Link2, List, ListOrdered, SendHorizontal } from 'lucide-react';
 import { Button, Tooltip, TooltipContent, TooltipTrigger, cn, toast } from '@cuks/ui';
 import type { ChatMemberDto } from '@cuks/shared';
+import { useSocket } from '@/lib/socket';
 import { useSendMessage } from '../api/queries';
 import { makeMentionSuggestion } from './mentionSuggestion';
 import type { MentionItem } from './MentionList';
+
+/** Typing hints are re-emitted at most this often while the user types (docs/modules/13 §4). */
+const TYPING_THROTTLE_MS = 3_000;
 
 /** Rich-text message composer (docs/modules/13 §5): TipTap with bold/italic/code/lists/links,
  *  `@`-mentions of channel members, Enter-to-send / Shift+Enter for a newline, optimistic send. */
@@ -24,12 +28,29 @@ export function Composer({
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
   const send = useSendMessage(channelId, me);
+  const { socket } = useSocket();
 
   const membersRef = useRef<MentionItem[]>([]);
   membersRef.current = members.map((m) => ({ id: m.userId, label: m.name ?? m.userId }));
   const mentionOpenRef = useRef(false);
   const submitRef = useRef<() => void>(() => {});
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
+
+  // Typing hint (docs/modules/13 §4): at most one channel.typing per 3s while the user edits. Refs,
+  // because the editor (and its onUpdate closure) is created once per channel mount.
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
+  const lastTypingRef = useRef(0);
+  const emitTyping = (): void => {
+    const s = socketRef.current;
+    const now = Date.now();
+    if (!s || now - lastTypingRef.current < TYPING_THROTTLE_MS) return;
+    lastTypingRef.current = now;
+    // channel.typing is a client→server message, outside the server-event map.
+    (s as unknown as { emit: (e: string, p: unknown) => void }).emit('channel.typing', {
+      channelId,
+    });
+  };
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -64,7 +85,10 @@ export function Composer({
         return false;
       },
     },
-    onUpdate: () => forceRender(),
+    onUpdate: ({ editor: e }) => {
+      if (!e.isEmpty) emitTyping();
+      forceRender();
+    },
     onSelectionUpdate: () => forceRender(),
   });
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WsEventPayloads } from '@cuks/shared';
 import { useSocket, useSocketEvent } from '@/lib/socket';
-import { channelKey, channelsKey, messagesKey } from '../api/queries';
+import { channelKey, channelsKey, messagesKey, unreadTotalsKey } from '../api/queries';
 
 /**
  * Subscribe to a chat channel's `channel:{id}` room and refresh on live updates (docs/modules/13 §5).
@@ -34,6 +34,7 @@ export function useChatRealtime(channelId: string | undefined): void {
       if (payload.channelId !== channelId) return;
       void qc.invalidateQueries({ queryKey: messagesKey(payload.channelId) });
       void qc.invalidateQueries({ queryKey: channelsKey });
+      void qc.invalidateQueries({ queryKey: unreadTotalsKey });
     },
     [qc, channelId],
   );

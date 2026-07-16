@@ -10,6 +10,7 @@ import type {
   AddChannelMemberInput,
   ChannelDto,
   ChannelListItemDto,
+  ChatUnreadTotalsDto,
   CreateChannelInput,
   CreateDmInput,
   DirectoryUserDto,
@@ -24,6 +25,7 @@ import { api } from '@/lib/api-client';
 export const chatKey = ['chat'] as const;
 export const channelsKey = [...chatKey, 'channels'] as const;
 export const catalogKey = [...chatKey, 'catalog'] as const;
+export const unreadTotalsKey = [...chatKey, 'unread-totals'] as const;
 export const channelKey = (id: string) => [...channelsKey, id] as const;
 export const messagesKey = (channelId: string) => [...channelsKey, channelId, 'messages'] as const;
 
@@ -188,13 +190,27 @@ export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserD
   });
 }
 
-/** Mark the channel read up to a message — refreshes the unread badge. */
+/** Mark the channel read up to a message — refreshes the unread badges. */
 export function useMarkRead(channelId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (messageId: string) =>
       api.post(`/v1/chat/channels/${channelId}/read`, { messageId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: channelsKey }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: channelsKey });
+      void qc.invalidateQueries({ queryKey: unreadTotalsKey });
+    },
+  });
+}
+
+/** Sidebar totals — unread + mentions across all conversations (docs/modules/13 §4). Refreshed on an
+ *  interval like the tasks overdue badge, plus invalidations from realtime chat events. */
+export function useUnreadTotals(): UseQueryResult<ChatUnreadTotalsDto> {
+  return useQuery({
+    queryKey: unreadTotalsKey,
+    queryFn: () => api.get<ChatUnreadTotalsDto>('/v1/chat/channels/unread-count'),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
   });
 }
 
