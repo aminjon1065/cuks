@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, isNull } from 'drizzle-orm';
 import {
   certificates,
   documentFiles,
@@ -181,6 +181,7 @@ export class SignaturesService {
     }
     const payloadHash = await sha256Hex(utf8(payload));
 
+    let onBehalfOf: string | null = null;
     await this.db.transaction(async (tx) => {
       const located = await this.routes.lockActiveSignStep(tx, documentId, actor);
       if (!located) {
@@ -194,6 +195,8 @@ export class SignaturesService {
         documentId,
         docVersionId: main.docVersionId,
         userId: actor.id,
+        // «за»: a deputy signs with their own key on behalf of the absent principal (task 3.11).
+        onBehalfOf: located.onBehalfOf,
         certificateId: cert.id,
         routeStepId: located.step.id,
         algorithm: 'ECDSA_P256_SHA256',
@@ -212,6 +215,7 @@ export class SignaturesService {
         actor.id,
         now,
       );
+      onBehalfOf = located.onBehalfOf;
     });
     await this.audit.logAndWait({
       action: 'docflow.document.signed',
@@ -226,6 +230,15 @@ export class SignaturesService {
       entityType: 'document',
       entityId: documentId,
     });
+    if (onBehalfOf) {
+      this.audit.log({
+        action: 'auth.substitution.used',
+        actorId: actor.id,
+        entityType: 'document',
+        entityId: documentId,
+        meta: { principalId: onBehalfOf, context: 'sign' },
+      });
+    }
     // Signing may have activated an acknowledge step — expand its sheet and notify.
     await this.routes.expandAndNotifyAcknowledge(documentId);
     return this.forDocument(documentId, actor);
@@ -245,20 +258,29 @@ export class SignaturesService {
     if (!(await this.canViewDocument(documentId, doc, actor))) {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
+    const onBehalf = aliasedTable(users, 'sig_on_behalf');
     const rows = await this.db
-      .select({ sig: signatures, cert: certificates, userName: users.shortName })
+      .select({
+        sig: signatures,
+        cert: certificates,
+        userName: users.shortName,
+        onBehalfOfName: onBehalf.shortName,
+      })
       .from(signatures)
       .innerJoin(certificates, eq(certificates.id, signatures.certificateId))
       .leftJoin(users, eq(users.id, signatures.userId))
+      .leftJoin(onBehalf, eq(onBehalf.id, signatures.onBehalfOf))
       .where(eq(signatures.documentId, documentId))
       .orderBy(asc(signatures.signedAt));
 
     const currentHash = await this.currentMainHash(documentId);
     return Promise.all(
-      rows.map(async ({ sig, cert, userName }) => ({
+      rows.map(async ({ sig, cert, userName, onBehalfOfName }) => ({
         id: sig.id,
         userId: sig.userId,
         userName: userName ?? null,
+        onBehalfOfId: sig.onBehalfOf,
+        onBehalfOfName: onBehalfOfName ?? null,
         certificateId: sig.certificateId,
         certificateSerial: cert.serial,
         algorithm: sig.algorithm,
@@ -290,12 +312,22 @@ export class SignaturesService {
       .where(eq(documents.id, sig.documentId))
       .limit(1);
     const canSeeDoc = !!doc && (await this.canViewDocument(sig.documentId, doc, actor));
+    let onBehalfOfName: string | null = null;
+    if (sig.onBehalfOf) {
+      const [u] = await this.db
+        .select({ name: users.shortName })
+        .from(users)
+        .where(eq(users.id, sig.onBehalfOf))
+        .limit(1);
+      onBehalfOfName = u?.name ?? null;
+    }
     return {
       signatureId: sig.id,
       valid,
       checks,
       signerName: cert.subjectFullName,
       signerPosition: cert.subjectPosition,
+      onBehalfOfName,
       certificateSerial: cert.serial,
       context: sig.context,
       signedAt: sig.signedAt.toISOString(),

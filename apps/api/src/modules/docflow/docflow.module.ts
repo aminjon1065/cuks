@@ -9,6 +9,7 @@ import { AcknowledgementsController } from './acknowledgements.controller';
 import { DocumentLinksController } from './document-links.controller';
 import { ControlController } from './control.controller';
 import { ReportsController } from './reports.controller';
+import { SubstitutionsController } from './substitutions.controller';
 import { CorrespondentsService } from './correspondents.service';
 import { DocflowDictionariesService } from './docflow-dictionaries.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
@@ -24,6 +25,7 @@ import { DocumentLinksService } from './document-links.service';
 import { ControlService } from './control.service';
 import { ReportsService } from './reports.service';
 import { ReadLogService } from './read-log.service';
+import { SubstitutionsService } from './substitutions.service';
 import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service';
 
 /**
@@ -44,6 +46,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentLinksController,
     ControlController,
     ReportsController,
+    SubstitutionsController,
   ],
   providers: [
     JournalsService,
@@ -61,6 +64,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ControlService,
     ReportsService,
     ReadLogService,
+    SubstitutionsService,
     DocflowDeadlineOutboxService,
   ],
   exports: [DocflowNumberingService, JournalsService],

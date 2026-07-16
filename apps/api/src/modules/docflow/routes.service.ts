@@ -28,6 +28,7 @@ import { DB } from '../../common/db/db.module';
 import { NotificationsService } from '../notifications/notifications.service';
 import { canViewDocumentBase } from './document-visibility';
 import { planApproval, type RouteStepState } from './route-engine';
+import { SubstitutionsService } from './substitutions.service';
 
 /** The identities a user matches for step assignment: self, held positions, and the
  *  org units they head (docs/modules/11 §3). */
@@ -45,6 +46,7 @@ export class RoutesService {
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly substitutions: SubstitutionsService,
   ) {}
 
   // --- Assignment resolution -------------------------------------------------
@@ -79,15 +81,6 @@ export class RoutesService {
     return false;
   }
 
-  private canAct(
-    step: { status: string; assigneeType: string; assigneeId: string },
-    a: ActorAssignments,
-    isSuperadmin: boolean,
-  ): boolean {
-    if (step.status !== 'active') return false;
-    return isSuperadmin || this.matchesAssignment(step, a);
-  }
-
   /** A SQL predicate over route_steps matching the caller's assignments (for the queue). */
   private assignmentPredicate(a: ActorAssignments): SQL | undefined {
     const clauses: SQL[] = [];
@@ -109,18 +102,102 @@ export class RoutesService {
     return clauses.length ? or(...clauses) : undefined;
   }
 
-  /** The caller's active steps of a given kind, as {documentId, stepId} — one step per
-   *  document (a document has at most one active step of a kind for a given assignee that
-   *  matters for the row action). Backs both the queue id list and the row action. */
+  // --- Substitution-aware acting (task 3.11) ---------------------------------
+
+  /** The caller's own assignments plus those of every principal they are an ACTIVE deputy for
+   *  (docs/05 §6). Acting, the queues and `acted_by` all resolve against this — the deputy sees
+   *  and executes the principal's steps while `acted_by` stays the deputy. */
+  private async actingContext(
+    userId: string,
+    now: Date,
+  ): Promise<{
+    own: ActorAssignments;
+    principals: { principalId: string; a: ActorAssignments }[];
+  }> {
+    const [own, principalIds] = await Promise.all([
+      this.actorAssignments(userId),
+      this.substitutions.activePrincipalsFor(userId, now),
+    ]);
+    const principals = await Promise.all(
+      principalIds.map(async (principalId) => ({
+        principalId,
+        a: await this.actorAssignments(principalId),
+      })),
+    );
+    return { own, principals };
+  }
+
+  /** Whether the caller may act on the step, and — if via a substitution — the principal they act
+   *  «за». Own/superadmin ⇒ onBehalfOf null; a principal match ⇒ that principal. Null ⇒ forbidden. */
+  private resolveActingStep(
+    step: { status: string; assigneeType: string; assigneeId: string },
+    ctx: { own: ActorAssignments; principals: { principalId: string; a: ActorAssignments }[] },
+    isSuperadmin: boolean,
+  ): { onBehalfOf: string | null } | null {
+    if (step.status !== 'active') return null;
+    if (isSuperadmin || this.matchesAssignment(step, ctx.own)) return { onBehalfOf: null };
+    const p = ctx.principals.find((p) => this.matchesAssignment(step, p.a));
+    return p ? { onBehalfOf: p.principalId } : null;
+  }
+
+  /** The route-step DTO's action flags: whether the caller may act, and — if only via a
+   *  substitution — the principal name they would act «за». */
+  private actAbility(
+    step: { status: string; assigneeType: string; assigneeId: string },
+    ctx: { own: ActorAssignments; principals: { principalId: string; a: ActorAssignments }[] },
+    isSuperadmin: boolean,
+    principalNames: Map<string, string | null>,
+  ): { canAct: boolean; actOnBehalfOfName: string | null } {
+    const resolved = this.resolveActingStep(step, ctx, isSuperadmin);
+    return {
+      canAct: !!resolved,
+      actOnBehalfOfName: resolved?.onBehalfOf
+        ? (principalNames.get(resolved.onBehalfOf) ?? null)
+        : null,
+    };
+  }
+
+  /** Resolve a set of user ids to their short names. */
+  private async userNames(ids: string[]): Promise<Map<string, string | null>> {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return new Map();
+    const rows = await this.db
+      .select({ id: users.id, name: users.shortName })
+      .from(users)
+      .where(inArray(users.id, unique));
+    return new Map(rows.map((r) => [r.id, r.name]));
+  }
+
+  /** The queue predicate over the caller's own AND their active principals' assignments. */
+  private actingPredicate(ctx: {
+    own: ActorAssignments;
+    principals: { principalId: string; a: ActorAssignments }[];
+  }): SQL | undefined {
+    const clauses = [ctx.own, ...ctx.principals.map((p) => p.a)]
+      .map((a) => this.assignmentPredicate(a))
+      .filter((c): c is SQL => Boolean(c));
+    return clauses.length ? or(...clauses) : undefined;
+  }
+
+  /** The caller's active steps of a given kind, as {documentId, stepId, onBehalfOf} — one step
+   *  per document (a document has at most one active step of a kind that matters for the row
+   *  action). Includes the principals' steps under an active substitution. Backs the queue id
+   *  list and the row action. */
   private async queueSteps(
     userId: string,
     kind: 'approve' | 'sign',
-  ): Promise<{ documentId: string; stepId: string }[]> {
-    const assignments = await this.actorAssignments(userId);
-    const match = this.assignmentPredicate(assignments);
+  ): Promise<{ documentId: string; stepId: string; onBehalfOf: string | null }[]> {
+    const ctx = await this.actingContext(userId, new Date());
+    const match = this.actingPredicate(ctx);
     if (!match) return [];
     const rows = await this.db
-      .select({ documentId: routes.documentId, stepId: routeSteps.id })
+      .select({
+        documentId: routes.documentId,
+        stepId: routeSteps.id,
+        status: routeSteps.status,
+        assigneeType: routeSteps.assigneeType,
+        assigneeId: routeSteps.assigneeId,
+      })
       .from(routeSteps)
       .innerJoin(routes, eq(routes.id, routeSteps.routeId))
       .where(
@@ -132,18 +209,26 @@ export class RoutesService {
         ),
       );
     // Keep the first step per document (an active step of this kind is actionable).
-    const byDoc = new Map<string, string>();
-    for (const r of rows) if (!byDoc.has(r.documentId)) byDoc.set(r.documentId, r.stepId);
-    return [...byDoc].map(([documentId, stepId]) => ({ documentId, stepId }));
+    const byDoc = new Map<string, { stepId: string; onBehalfOf: string | null }>();
+    for (const r of rows) {
+      if (byDoc.has(r.documentId)) continue;
+      const resolved = this.resolveActingStep(r, ctx, false);
+      byDoc.set(r.documentId, { stepId: r.stepId, onBehalfOf: resolved?.onBehalfOf ?? null });
+    }
+    return [...byDoc].map(([documentId, v]) => ({ documentId, ...v }));
   }
 
   /** The caller's «На согласование» documents with the active approve step to act on. */
-  approvalQueueSteps(userId: string): Promise<{ documentId: string; stepId: string }[]> {
+  approvalQueueSteps(
+    userId: string,
+  ): Promise<{ documentId: string; stepId: string; onBehalfOf: string | null }[]> {
     return this.queueSteps(userId, 'approve');
   }
 
   /** The caller's «На подпись» documents with the active sign step. */
-  signQueueSteps(userId: string): Promise<{ documentId: string; stepId: string }[]> {
+  signQueueSteps(
+    userId: string,
+  ): Promise<{ documentId: string; stepId: string; onBehalfOf: string | null }[]> {
     return this.queueSteps(userId, 'sign');
   }
 
@@ -166,8 +251,12 @@ export class RoutesService {
     tx: Database,
     documentId: string,
     actor: AuthUser,
-  ): Promise<{ route: typeof routes.$inferSelect; step: typeof routeSteps.$inferSelect } | null> {
-    const assignments = await this.actorAssignments(actor.id);
+  ): Promise<{
+    route: typeof routes.$inferSelect;
+    step: typeof routeSteps.$inferSelect;
+    onBehalfOf: string | null;
+  } | null> {
+    const ctx = await this.actingContext(actor.id, new Date());
     const [route] = await tx
       .select()
       .from(routes)
@@ -185,8 +274,11 @@ export class RoutesService {
           eq(routeSteps.status, 'active'),
         ),
       );
-    const step = steps.find((s) => this.canAct(s, assignments, actor.isSuperadmin));
-    return step ? { route, step } : null;
+    for (const step of steps) {
+      const resolved = this.resolveActingStep(step, ctx, actor.isSuperadmin);
+      if (resolved) return { route, step, onBehalfOf: resolved.onBehalfOf };
+    }
+    return null;
   }
 
   /**
@@ -331,6 +423,26 @@ export class RoutesService {
     return !!row;
   }
 
+  /** Flatten an acting context (own + all active principals) into one assignment set. */
+  private flattenActing(ctx: {
+    own: ActorAssignments;
+    principals: { principalId: string; a: ActorAssignments }[];
+  }): ActorAssignments {
+    const all = [ctx.own, ...ctx.principals.map((p) => p.a)];
+    return {
+      userIds: [...new Set(all.flatMap((a) => a.userIds))],
+      positionIds: [...new Set(all.flatMap((a) => a.positionIds))],
+      orgUnitIds: [...new Set(all.flatMap((a) => a.orgUnitIds))],
+    };
+  }
+
+  /** As {@link isRouteParticipant}, but also matching the steps of the principals the caller is an
+   *  active deputy for (task 3.11) — so a deputy may view a document they act on «за». */
+  async isRouteParticipantActing(documentId: string, userId: string): Promise<boolean> {
+    const ctx = await this.actingContext(userId, new Date());
+    return this.isRouteParticipant(documentId, this.flattenActing(ctx));
+  }
+
   // --- Route lifecycle -------------------------------------------------------
 
   async startRoute(
@@ -411,7 +523,8 @@ export class RoutesService {
     comment: string | null,
     actor: AuthUser,
   ): Promise<RouteDto[]> {
-    const assignments = await this.actorAssignments(actor.id);
+    const ctx = await this.actingContext(actor.id, new Date());
+    let onBehalfOf: string | null = null;
     const documentId = await this.db.transaction(async (tx) => {
       const [locate] = await tx
         .select({ routeId: routeSteps.routeId })
@@ -430,12 +543,14 @@ export class RoutesService {
         throw AppException.conflict('docflow.route.not_active', 'The route is not active');
       }
       const [step] = await tx.select().from(routeSteps).where(eq(routeSteps.id, stepId)).limit(1);
-      if (!step || !this.canAct(step, assignments, actor.isSuperadmin)) {
+      const resolved = step ? this.resolveActingStep(step, ctx, actor.isSuperadmin) : null;
+      if (!step || !resolved) {
         throw AppException.forbidden(
           'docflow.route_step.forbidden',
           'You may not act on this step',
         );
       }
+      onBehalfOf = resolved.onBehalfOf;
       // Steps with a dedicated completion path must not be completed by a plain approval,
       // which would bypass their gate: a `sign` step needs a cryptographic signature
       // (SignaturesService.sign, 2FA/password/certificate — docs/09-security.md §4), and an
@@ -487,8 +602,17 @@ export class RoutesService {
       actorId: actor.id,
       entityType: 'document',
       entityId: documentId,
-      meta: { stepId },
+      meta: { stepId, ...(onBehalfOf ? { onBehalfOf } : {}) },
     });
+    if (onBehalfOf) {
+      this.audit.log({
+        action: 'auth.substitution.used',
+        actorId: actor.id,
+        entityType: 'document',
+        entityId: documentId,
+        meta: { stepId, principalId: onBehalfOf },
+      });
+    }
     // Approving may have activated an acknowledge step — expand its sheet and notify.
     if (action === 'approve') await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
@@ -500,11 +624,13 @@ export class RoutesService {
       .from(documents)
       .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)))
       .limit(1);
-    const assignments = await this.actorAssignments(actor.id);
+    const ctx = await this.actingContext(actor.id, new Date());
     const visible =
       !!doc &&
-      (canViewDocumentBase(doc, actor) || (await this.isRouteParticipant(documentId, assignments)));
+      (canViewDocumentBase(doc, actor) ||
+        (await this.isRouteParticipant(documentId, this.flattenActing(ctx))));
     if (!visible) throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    const principalNames = await this.userNames(ctx.principals.map((p) => p.principalId));
 
     const routeRows = await this.db
       .select()
@@ -544,9 +670,14 @@ export class RoutesService {
           decision: s.decision,
           comment: s.comment,
           actedByName: s.actedBy ? (names.users.get(s.actedBy) ?? null) : null,
+          // «за кого» for a completed step: a deputy acted (acted_by ≠ the user-assignee principal).
+          actedForName:
+            s.actedBy && s.assigneeType === 'user' && s.actedBy !== s.assigneeId
+              ? names.assignee('user', s.assigneeId)
+              : null,
           actedAt: s.actedAt?.toISOString() ?? null,
           dueHours: s.dueHours,
-          canAct: this.canAct(s, assignments, actor.isSuperadmin),
+          ...this.actAbility(s, ctx, actor.isSuperadmin, principalNames),
         })),
     }));
   }

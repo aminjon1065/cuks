@@ -133,7 +133,8 @@ export class DocumentsService {
     // Action queues resolve to route steps: keep a doc→step map so each row can carry the
     // step to act on directly. «Мои поручения» resolves to document ids only.
     let queueDocIds: string[] | undefined;
-    let actionSteps: Map<string, string> | undefined;
+    let actionSteps: Map<string, { stepId: string; onBehalfOf: string | null }> | undefined;
+    let onBehalfNames: Map<string, string | null> | undefined;
     if (
       query.queue === 'to_approve' ||
       query.queue === 'to_sign' ||
@@ -145,8 +146,17 @@ export class DocumentsService {
           : query.queue === 'to_sign'
             ? await this.routes.signQueueSteps(user.id)
             : await this.acknowledgements.toAcknowledgeSteps(user.id);
-      actionSteps = new Map(steps.map((s) => [s.documentId, s.stepId]));
+      actionSteps = new Map(
+        steps.map((s) => {
+          // Acknowledge steps have no substitution «за» today; approve/sign carry onBehalfOf.
+          const onBehalfOf = (s as { onBehalfOf?: string | null }).onBehalfOf ?? null;
+          return [s.documentId, { stepId: s.stepId, onBehalfOf }] as const;
+        }),
+      );
       queueDocIds = [...actionSteps.keys()];
+      onBehalfNames = await this.userShortNames(
+        [...actionSteps.values()].map((v) => v.onBehalfOf).filter((v): v is string => !!v),
+      );
     } else if (query.queue === 'my_tasks') {
       queueDocIds = await this.resolutions.myTasksDocumentIds(user.id);
     }
@@ -191,7 +201,11 @@ export class DocumentsService {
         dueDate: r.dueDate?.toISOString() ?? null,
         regDate: r.regDate?.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),
-        actionStepId: actionSteps?.get(r.id) ?? null,
+        actionStepId: actionSteps?.get(r.id)?.stepId ?? null,
+        actionOnBehalfOfName: (() => {
+          const p = actionSteps?.get(r.id)?.onBehalfOf;
+          return p ? (onBehalfNames?.get(p) ?? null) : null;
+        })(),
       })),
       total: totalRows[0]?.total ?? 0,
       page: query.page,
@@ -256,9 +270,8 @@ export class DocumentsService {
       if (row.confidentiality === 'dsp') {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
-      const assignments = await this.routes.actorAssignments(user.id);
       const participant =
-        (await this.routes.isRouteParticipant(id, assignments)) ||
+        (await this.routes.isRouteParticipantActing(id, user.id)) ||
         (await this.resolutions.isResolutionParticipant(id, user.id)) ||
         (await this.acknowledgements.isAcquaintance(id, user.id));
       if (!participant) {
@@ -319,6 +332,7 @@ export class DocumentsService {
       createdAt: row.createdAt.toISOString(),
       // Row actions come from the queue list; the card drives actions via its sections.
       actionStepId: null,
+      actionOnBehalfOfName: null,
       summary: row.summary,
       orgUnitId: row.orgUnitId,
       orgUnitName: orgUnitRow[0]?.name ?? null,
@@ -674,6 +688,17 @@ export class DocumentsService {
       members: members.map((m) => ({ userId: m.userId, name: m.name ?? null })),
       canManage: canManageDocumentAccess(row, user),
     };
+  }
+
+  /** Resolve a set of user ids to their short names (for the queue «за кого» chip). */
+  private async userShortNames(ids: string[]): Promise<Map<string, string | null>> {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return new Map();
+    const rows = await this.db
+      .select({ id: users.id, name: users.shortName })
+      .from(users)
+      .where(inArray(users.id, unique));
+    return new Map(rows.map((r) => [r.id, r.name]));
   }
 
   private whereFor(query: ListDocumentsQuery, user: AuthUser, queueDocIds?: string[]): SQL[] {
