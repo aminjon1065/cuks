@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Link2, Video } from 'lucide-react';
-import { Button, Input, PageHeader, toast } from '@cuks/ui';
+import { CalendarPlus, Link2, Loader2, Video } from 'lucide-react';
+import type { MeetingDto, MeetingsRange } from '@cuks/shared';
+import { Button, EmptyState, Input, PageHeader, cn, toast } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
-import { useCreateRoom } from '../api/queries';
+import { useCreateRoom, useMeetings } from '../api/queries';
+import { MeetingCard } from '../components/MeetingCard';
+import { ScheduleMeetingDialog } from '../components/ScheduleMeetingDialog';
+
+const RANGES: MeetingsRange[] = ['today', 'upcoming', 'past'];
 
 /** Extract a room slug from a pasted link (`…/app/meet/r/<slug>`) or a bare code. */
 function parseSlug(raw: string): string | null {
@@ -12,19 +17,21 @@ function parseSlug(raw: string): string | null {
   if (!value) return null;
   const inLink = /\/meet\/r\/([^/?#\s]+)/.exec(value);
   if (inLink?.[1]) return inLink[1];
-  // A bare slug is hex (see the backend's newSlug); reject anything with a slash/space.
   return /^[^/\s]+$/.test(value) ? value : null;
 }
 
-/** Meet landing (docs/modules/14 §2): start a new meeting or join by link. The full meetings list
- *  (scheduled/upcoming/past) lands in task 6.5. */
+/** Meet landing (docs/modules/14 §2): the «Встречи» list (today/upcoming/past) plus starting an
+ *  instant call, joining by link, and scheduling a meeting. */
 export function MeetPage(): React.JSX.Element {
   const { t } = useTranslation('meet');
   const navigate = useNavigate();
   const createRoom = useCreateRoom();
+  const [range, setRange] = useState<MeetingsRange>('today');
   const [link, setLink] = useState('');
+  const [scheduling, setScheduling] = useState<MeetingDto | 'new' | null>(null);
+  const meetings = useMeetings(range);
 
-  const startMeeting = (): void => {
+  const startInstant = (): void =>
     createRoom.mutate(
       { kind: 'adhoc' },
       {
@@ -36,7 +43,6 @@ export function MeetPage(): React.JSX.Element {
           }),
       },
     );
-  };
 
   const joinByLink = (): void => {
     const slug = parseSlug(link);
@@ -49,48 +55,99 @@ export function MeetPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <PageHeader title={t('title')} description={t('landing.subtitle')} />
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-1 p-5">
-          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Video className="size-5" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-sm font-medium text-text">{t('landing.newMeeting')}</h2>
-            <p className="text-[13px] text-text-muted">{t('landing.newMeetingHint')}</p>
-          </div>
-          <Button onClick={startMeeting} disabled={createRoom.isPending}>
-            {t('landing.newMeeting')}
-          </Button>
-        </div>
-
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface-1 p-5">
-          <div className="flex size-10 items-center justify-center rounded-full bg-surface-2 text-text-muted">
-            <Link2 className="size-5" />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-sm font-medium text-text">{t('landing.joinByLink')}</h2>
-          </div>
-          <form
-            className="flex w-full gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              joinByLink();
-            }}
-          >
-            <Input
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-              placeholder={t('landing.joinPlaceholder')}
-              aria-label={t('landing.joinByLink')}
-            />
-            <Button type="submit" variant="secondary" disabled={!link.trim()}>
-              {t('landing.join')}
+      <PageHeader
+        title={t('title')}
+        description={t('landing.subtitle')}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" className="gap-1.5" onClick={() => setScheduling('new')}>
+              <CalendarPlus className="size-4" />
+              {t('landing.schedule')}
             </Button>
-          </form>
+            <Button className="gap-1.5" onClick={startInstant} disabled={createRoom.isPending}>
+              <Video className="size-4" />
+              {t('landing.newMeeting')}
+            </Button>
+          </div>
+        }
+      />
+
+      <form
+        className="mt-4 flex max-w-md gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          joinByLink();
+        }}
+      >
+        <div className="relative flex-1">
+          <Link2 className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+          <Input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder={t('landing.joinPlaceholder')}
+            aria-label={t('landing.joinByLink')}
+            className="pl-8"
+          />
+        </div>
+        <Button type="submit" variant="outline" disabled={!link.trim()}>
+          {t('landing.join')}
+        </Button>
+      </form>
+
+      <div className="mt-6" role="tablist" aria-label={t('title')}>
+        <div className="flex gap-1 border-b border-border">
+          {RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="tab"
+              aria-selected={range === r}
+              onClick={() => setRange(r)}
+              className={cn(
+                '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium',
+                range === r
+                  ? 'border-primary text-text'
+                  : 'border-transparent text-text-muted hover:text-text',
+              )}
+            >
+              {t(`range.${r}`)}
+            </button>
+          ))}
         </div>
       </div>
+
+      <div className="mt-4 space-y-2">
+        {meetings.isPending ? (
+          <div className="flex justify-center py-10 text-text-muted">
+            <Loader2 className="size-5 animate-spin" />
+          </div>
+        ) : meetings.isError ? (
+          <EmptyState icon={Video} title={t('toast.actionFailed')} />
+        ) : (meetings.data?.length ?? 0) === 0 ? (
+          <EmptyState
+            icon={CalendarPlus}
+            title={t('list.empty')}
+            description={t('list.emptyHint')}
+            action={
+              <Button variant="secondary" onClick={() => setScheduling('new')}>
+                {t('landing.schedule')}
+              </Button>
+            }
+          />
+        ) : (
+          meetings.data?.map((m) => (
+            <MeetingCard key={m.id} meeting={m} onEdit={(meeting) => setScheduling(meeting)} />
+          ))
+        )}
+      </div>
+
+      {scheduling ? (
+        <ScheduleMeetingDialog
+          key={scheduling === 'new' ? 'new' : scheduling.id}
+          meeting={scheduling === 'new' ? undefined : scheduling}
+          onClose={() => setScheduling(null)}
+        />
+      ) : null}
     </div>
   );
 }

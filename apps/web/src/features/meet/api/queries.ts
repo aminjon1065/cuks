@@ -1,16 +1,47 @@
-import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  CreateMeetingInput,
   CreateRoomInput,
   MeetHostTargetInput,
+  MeetingDto,
+  MeetingsRange,
   MeetRoomDto,
   MeetTokenDto,
   StartRingInput,
+  UpdateMeetingInput,
 } from '@cuks/shared';
 import { api } from '@/lib/api-client';
 
 export const meetKey = ['meet'] as const;
 export const roomsKey = [...meetKey, 'rooms'] as const;
 export const roomKey = (slug: string) => [...roomsKey, slug] as const;
+export const meetingsKey = [...meetKey, 'meetings'] as const;
+export const meetingsRangeKey = (range: MeetingsRange) => [...meetingsKey, range] as const;
+
+/** Scheduled meetings for a range (docs/modules/14 §2). */
+export function useMeetings(range: MeetingsRange): UseQueryResult<MeetingDto[]> {
+  return useQuery({
+    queryKey: meetingsRangeKey(range),
+    queryFn: () => api.get<MeetingDto[]>(`/v1/meet/meetings?range=${range}`),
+  });
+}
+
+export function useCreateMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateMeetingInput) => api.post<MeetingDto>('/v1/meet/meetings', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: meetingsKey }),
+  });
+}
+
+export function useUpdateMeeting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateMeetingInput }) =>
+      api.patch<MeetingDto>(`/v1/meet/meetings/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: meetingsKey }),
+  });
+}
 
 /** A call room by its permanent slug (the `/app/meet/r/:slug` route param). */
 export function useRoom(slug: string | undefined): UseQueryResult<MeetRoomDto> {
