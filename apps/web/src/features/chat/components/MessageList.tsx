@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { MessageDto } from '@cuks/shared';
@@ -47,6 +47,14 @@ export function MessageList({
   const stick = useRef(true);
   const prevLen = useRef(0);
   const olderAnchor = useRef<number | null>(null);
+
+  // A fresh mount opens pinned to the bottom — re-sync the parent, whose atBottom state survives
+  // remounts (error→retry, empty→first message) and would otherwise stay stale, muting mark-read.
+  const onAtBottomChangeRef = useRef(onAtBottomChange);
+  onAtBottomChangeRef.current = onAtBottomChange;
+  useEffect(() => {
+    onAtBottomChangeRef.current(true);
+  }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;

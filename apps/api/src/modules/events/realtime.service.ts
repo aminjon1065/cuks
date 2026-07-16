@@ -29,4 +29,10 @@ export class RealtimeService {
   emitToAll<E extends WsEventName>(event: E, payload: WsEventPayloads[E]): void {
     this.server?.emit(event, payload);
   }
+
+  /** Kick every live socket of a user out of a room — membership revocations must cut the live feed
+   *  too, not just future subscribes (docs/modules/13 §5). Works across instances via the adapter. */
+  evictUserFromRoom(userId: string, room: string): void {
+    this.server?.in(wsRooms.user(userId)).socketsLeave(room);
+  }
 }

@@ -203,14 +203,15 @@ export function useMarkRead(channelId: string) {
   });
 }
 
-/** Sidebar totals — unread + mentions across all conversations (docs/modules/13 §4). Refreshed on an
- *  interval like the tasks overdue badge, plus invalidations from realtime chat events. */
+/** Sidebar totals — unread + mentions across all conversations (docs/modules/13 §4). Message events
+ *  only reach subscribed (open) channel rooms, so cross-channel badge freshness rides on this 60s
+ *  interval until 5.7 adds per-user notification events (decision in docs/plan/STATUS.md). */
 export function useUnreadTotals(): UseQueryResult<ChatUnreadTotalsDto> {
   return useQuery({
     queryKey: unreadTotalsKey,
     queryFn: () => api.get<ChatUnreadTotalsDto>('/v1/chat/channels/unread-count'),
-    staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 

@@ -48,7 +48,8 @@ function makeAcl(kind: ChannelKind, roles: Record<string, ChannelMemberRole>) {
   } as unknown as ChatAclService;
 }
 
-const realtime = () => ({ emitToRoom: vi.fn() }) as unknown as RealtimeService;
+const realtime = () =>
+  ({ emitToRoom: vi.fn(), evictUserFromRoom: vi.fn() }) as unknown as RealtimeService;
 
 describe('ChannelsService.removeMember — rank + last-owner + kind guards (docs/modules/13 §1/§2)', () => {
   it('refuses an admin evicting the owner (cannot remove equal-or-higher rank)', async () => {

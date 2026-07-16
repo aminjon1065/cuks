@@ -160,27 +160,35 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   }
 
   /** Relay a typing hint to the channel room, except the sender (docs/modules/13 §4/§5). Gated on
-   *  actually being in the room — which only the membership-checked subscribe can join. */
+   *  actually being in the room — which only the membership-checked subscribe can join — and floored
+   *  server-side so a hostile client can't turn the room fan-out into an amplifier (the well-behaved
+   *  client throttles itself to 3s). */
   @SubscribeMessage('channel.typing')
   typing(@ConnectedSocket() client: Socket, @MessageBody() body: { channelId?: string }): void {
-    const userId = (client.data as { userId?: string }).userId;
+    const data = client.data as { userId?: string; lastTypingRelayAt?: number };
     const channelId = body?.channelId;
-    if (!userId || !channelId) return;
+    if (!data.userId || !channelId) return;
+    const now = Date.now();
+    if (data.lastTypingRelayAt !== undefined && now - data.lastTypingRelayAt < 500) return;
     const room = wsRooms.channel(channelId);
     if (!client.rooms.has(room)) return;
-    client.to(room).emit('chat.typing', { channelId, userId });
+    data.lastTypingRelayAt = now;
+    client.to(room).emit('chat.typing', { channelId, userId: data.userId });
   }
 
-  /** A user-activity ping (client throttles to ~1/min) — resets the away timer and lets clients
-   *  clear an away badge (docs/modules/13 §4). */
+  /** A user-activity ping — resets the away timer and lets clients clear an away badge
+   *  (docs/modules/13 §4). The client throttles itself to one a minute; the server floors it too,
+   *  because each accepted ping broadcasts to every socket. */
   @SubscribeMessage('presence.activity')
   async presenceActivity(@ConnectedSocket() client: Socket): Promise<void> {
-    const userId = (client.data as { userId?: string }).userId;
-    if (!userId) return;
+    const data = client.data as { userId?: string; lastActivityPingAt?: number };
+    if (!data.userId) return;
     const now = Date.now();
-    await this.presence.activity(userId, now);
+    if (data.lastActivityPingAt !== undefined && now - data.lastActivityPingAt < 30_000) return;
+    data.lastActivityPingAt = now;
+    await this.presence.activity(data.userId, now);
     this.realtime.emitToAll('presence.changed', {
-      userId,
+      userId: data.userId,
       status: 'online',
       activityAt: new Date(now).toISOString(),
     });

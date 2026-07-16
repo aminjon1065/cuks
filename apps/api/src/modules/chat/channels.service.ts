@@ -232,6 +232,9 @@ export class ChannelsService {
     await this.db
       .delete(chatMembers)
       .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)));
+    // Cut the live feed too: the removed user's sockets keep the room until they reconnect otherwise,
+    // still receiving messages and able to relay typing hints (docs/modules/13 §5).
+    this.realtime.evictUserFromRoom(userId, wsRooms.channel(channelId));
     this.emitChannelUpdated(channelId, actor.id);
   }
 
@@ -373,8 +376,10 @@ export class ChannelsService {
     return sql<string>`count(${chatMessages.id}) filter (where ${chatMessages.authorId} is distinct from ${userId} and jsonb_path_exists(${chatMessages.body}, '$.** ? (@.type == "mention" && @.attrs.id == $uid)', jsonb_build_object('uid', ${userId}::text)))`;
   }
 
-  /** Unread = messages after the member's last_read (or all, if never read), not deleted; plus the
-   *  personally-mentioning subset for the red badge (docs/modules/13 §4). */
+  /** Unread = messages FROM OTHERS after the member's last_read (or all, if never read), not
+   *  deleted — one's own sends never badge (matches the «Новые» divider semantics); plus the
+   *  personally-mentioning subset for the red badge (docs/modules/13 §4). `is distinct from` keeps
+   *  authorless system messages counted. */
   private async unreadCounts(
     userId: string,
     channelIds: string[],
@@ -392,6 +397,7 @@ export class ChannelsService {
         and(
           eq(chatMessages.channelId, chatMembers.channelId),
           isNull(chatMessages.deletedAt),
+          sql`${chatMessages.authorId} is distinct from ${userId}`,
           or(
             isNull(chatMembers.lastReadMessageId),
             gt(chatMessages.id, chatMembers.lastReadMessageId),
@@ -420,6 +426,7 @@ export class ChannelsService {
         and(
           eq(chatMessages.channelId, chatMembers.channelId),
           isNull(chatMessages.deletedAt),
+          sql`${chatMessages.authorId} is distinct from ${actor.id}`,
           or(
             isNull(chatMembers.lastReadMessageId),
             gt(chatMessages.id, chatMembers.lastReadMessageId),

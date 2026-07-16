@@ -55,7 +55,24 @@ export function SocketProvider({ children }: { children: React.ReactNode }): Rea
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
     s.on('connection.ready', onReady);
+
+    // Presence activity ping (docs/modules/13 §4): real user input resets the server's 10-minute
+    // away timer, at most once a minute. The connect handshake stamps activity server-side, so the
+    // first ping is only needed a minute into the session.
+    let lastActivityPing = Date.now();
+    const onActivity = (): void => {
+      const now = Date.now();
+      if (!s.connected || now - lastActivityPing < 60_000) return;
+      lastActivityPing = now;
+      // presence.activity is a client→server message, outside the server-event map.
+      (s as unknown as { emit: (e: string) => void }).emit('presence.activity');
+    };
+    window.addEventListener('pointerdown', onActivity);
+    window.addEventListener('keydown', onActivity);
+
     return () => {
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('keydown', onActivity);
       s.off('connect', onConnect);
       s.off('disconnect', onDisconnect);
       s.off('connection.ready', onReady);
