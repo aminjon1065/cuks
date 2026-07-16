@@ -345,6 +345,31 @@ export type ChatNotifyLevel = (typeof CHAT_NOTIFY_LEVELS)[number];
 export const CHAT_MESSAGE_KINDS = ['text', 'file', 'system', 'call'] as const;
 export type ChatMessageKind = (typeof CHAT_MESSAGE_KINDS)[number];
 
+// --- Calls / Meet (docs/modules/14, task 6.2) ---
+
+/** meet_rooms.kind (docs/modules/14 §5): a 1:1 DM call, a channel call, an ad-hoc «new meeting»
+ *  link room, or a scheduled meeting's room. */
+export const MEET_ROOM_KINDS = ['dm', 'channel', 'adhoc', 'meeting'] as const;
+export type MeetRoomKind = (typeof MEET_ROOM_KINDS)[number];
+
+/** meet_rooms.access (docs/modules/14 §2/§5): joinable by any platform user with the link, or only
+ *  by invited participants (lobby — host admits). */
+export const MEET_ROOM_ACCESS = ['link', 'invited'] as const;
+export type MeetRoomAccess = (typeof MEET_ROOM_ACCESS)[number];
+
+/** A participant's role in a call (docs/modules/14 §1): the host (creator/assigned — mute-all, remove,
+ *  end, record) or a plain participant. Maps to the LiveKit token grant (host => roomAdmin). */
+export const MEET_ROOM_ROLES = ['host', 'participant'] as const;
+export type MeetRoomRole = (typeof MEET_ROOM_ROLES)[number];
+
+/** meetings.status (docs/modules/14 §5). */
+export const MEETING_STATUS = ['scheduled', 'live', 'done', 'cancelled'] as const;
+export type MeetingStatus = (typeof MEETING_STATUS)[number];
+
+/** recordings.status (docs/modules/14 §4/§5): egress in progress, ready to play, or failed. */
+export const RECORDING_STATUS = ['processing', 'ready', 'failed'] as const;
+export type RecordingStatus = (typeof RECORDING_STATUS)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
