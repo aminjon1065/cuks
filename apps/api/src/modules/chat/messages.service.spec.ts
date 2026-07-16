@@ -35,7 +35,7 @@ function makeDb(rows: unknown[]) {
     return chain;
   };
   // Each query starts a fresh chain so groupBy on one doesn't leak into the next.
-  return { select: () => makeChain().select() } as never;
+  return { select: () => makeChain() } as never;
 }
 
 function msgRow(id: string, createdAt: string) {
@@ -135,7 +135,7 @@ function makeActionsDb(
     return chain;
   };
   const db = {
-    select: () => selectChain().select(),
+    select: () => selectChain(),
     update: () => ({
       set: (v: Record<string, unknown>) => ({
         where: () => {
