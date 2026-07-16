@@ -97,7 +97,10 @@ export function useArchiveCard(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.post(`/v1/tasks/cards/${id}/archive`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: boardKey(projectId) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKey(projectId) });
+      void qc.invalidateQueries({ queryKey: myTasksBaseKey });
+    },
   });
 }
 
@@ -130,6 +133,13 @@ function useCardInvalidator(projectId: string, cardId: string): () => void {
   };
 }
 
+/** Invalidate the personal queue + overdue badge — call after a change to assignees, watchers,
+ *  due date or completion/archival, all of which alter «Мои задачи». */
+function useMyTasksInvalidator(): () => void {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: myTasksBaseKey });
+}
+
 export function useCardDetail(cardId: string | undefined): UseQueryResult<TaskCardDetailDto> {
   return useQuery({
     queryKey: cardKey(cardId ?? ''),
@@ -141,6 +151,7 @@ export function useCardDetail(cardId: string | undefined): UseQueryResult<TaskCa
 export function useEditCard(projectId: string, cardId: string) {
   const qc = useQueryClient();
   const invalidate = useCardInvalidator(projectId, cardId);
+  const invalidateMy = useMyTasksInvalidator();
   return useMutation({
     mutationFn: (body: UpdateTaskInput) =>
       api.patch<TaskCardDto>(`/v1/tasks/cards/${cardId}`, body),
@@ -155,7 +166,10 @@ export function useEditCard(projectId: string, cardId: string) {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(cardKey(cardId), ctx.prev);
     },
-    onSettled: invalidate,
+    onSettled: () => {
+      invalidate();
+      invalidateMy();
+    },
   });
 }
 
@@ -178,9 +192,13 @@ function cardPatch(body: UpdateTaskInput): Partial<TaskCardDetailDto> {
 
 export function useCompleteCard(projectId: string, cardId: string) {
   const invalidate = useCardInvalidator(projectId, cardId);
+  const invalidateMy = useMyTasksInvalidator();
   return useMutation({
     mutationFn: () => api.post<TaskCardDto>(`/v1/tasks/cards/${cardId}/complete`),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      invalidateMy();
+    },
   });
 }
 
@@ -194,12 +212,16 @@ export function useCopyCard(projectId: string) {
 
 export function useSetWatching(projectId: string, cardId: string) {
   const invalidate = useCardInvalidator(projectId, cardId);
+  const invalidateMy = useMyTasksInvalidator();
   return useMutation({
     mutationFn: (watching: boolean) =>
       watching
         ? api.post<TaskCardDetailDto>(`/v1/tasks/cards/${cardId}/watch`)
         : api.delete<TaskCardDetailDto>(`/v1/tasks/cards/${cardId}/watch`),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      invalidateMy();
+    },
   });
 }
 
