@@ -1,27 +1,50 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Mention from '@tiptap/extension-mention';
 import { Button } from '@cuks/ui';
+import type { ChatMemberDto } from '@cuks/shared';
+import { makeMentionSuggestion } from './mentionSuggestion';
+import type { MentionItem } from './MentionList';
 
 /** In-place rich editor for editing a message (docs/modules/13 §4). Seeded from the stored TipTap
- *  body; Enter saves, Shift+Enter/Escape behave as expected. Formatting-only StarterKit (mentions are
- *  left intact in the underlying JSON but not re-editable here). */
+ *  body; Enter saves, Shift+Enter/Escape behave as expected. It MUST register the same Mention node
+ *  the composer uses — otherwise a stored body containing a mention hits an unknown-node-type error and
+ *  TipTap v3 blanks the whole document. */
 export function InlineEditor({
   body,
+  members,
   pending,
   onSave,
   onCancel,
 }: {
   body: unknown;
+  members: ChatMemberDto[];
   pending: boolean;
   onSave: (body: unknown) => void;
   onCancel: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
+  const membersRef = useRef<MentionItem[]>([]);
+  membersRef.current = members.map((m) => ({ id: m.userId, label: m.name ?? m.userId }));
+  const mentionOpenRef = useRef(false);
+
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit.configure({ heading: false, horizontalRule: false })],
+    extensions: [
+      StarterKit.configure({ heading: false, horizontalRule: false }),
+      Mention.configure({
+        HTMLAttributes: { class: 'chat-mention' },
+        suggestion: makeMentionSuggestion(
+          () => membersRef.current,
+          (open) => {
+            mentionOpenRef.current = open;
+          },
+          t('composer.mentionEmpty'),
+        ),
+      }),
+    ],
     content: (body as object) ?? undefined,
     editorProps: {
       attributes: {
@@ -31,12 +54,12 @@ export function InlineEditor({
         'aria-label': t('message.editLabel'),
       },
       handleKeyDown: (_view, event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
+        if (event.key === 'Enter' && !event.shiftKey && !mentionOpenRef.current) {
           event.preventDefault();
           if (editor && !editor.isEmpty) onSave(editor.getJSON());
           return true;
         }
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && !mentionOpenRef.current) {
           event.preventDefault();
           onCancel();
           return true;

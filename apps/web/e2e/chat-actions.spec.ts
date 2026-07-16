@@ -162,6 +162,47 @@ test('pins are admin-only and listed in the panel', async () => {
   }
 });
 
+test('chat UI: editing a message that contains a mention keeps the body', async ({ page }) => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const h = await headers(admin);
+  const me = await j<{ id: string; shortName: string }>(await admin.get('/api/auth/me'));
+  const name = `Edit mention ${Date.now()}`;
+  const channel = await j<{ id: string }>(
+    await admin.post('/api/v1/chat/channels', { headers: h, data: { kind: 'private', name } }),
+  );
+  // A message that mentions the author, then some text — this is what used to blank the inline editor.
+  await admin.post(`/api/v1/chat/channels/${channel.id}/messages`, {
+    headers: h,
+    data: {
+      kind: 'text',
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'mention', attrs: { id: me.id, label: me.shortName } },
+              { type: 'text', text: ' проверьте документ' },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  await admin.dispose();
+
+  await page.goto(`/app/chat/${channel.id}`);
+  const message = page.getByText('проверьте документ');
+  await expect(message).toBeVisible();
+  await message.hover();
+  await page.getByRole('button', { name: 'Ещё' }).first().click();
+  await page.getByRole('menuitem', { name: 'Изменить' }).click();
+  // The inline editor must be seeded with the original body, not blanked.
+  await expect(page.getByRole('textbox', { name: 'Изменить сообщение' })).toContainText(
+    'проверьте документ',
+  );
+});
+
 test('chat UI: react to a message and see the chip', async ({ page }) => {
   const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
   const h = await headers(admin);

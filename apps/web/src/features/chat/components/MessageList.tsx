@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { MessageDto } from '@cuks/shared';
+import type { ChatMemberDto, MessageDto } from '@cuks/shared';
 import { formatDate } from '@/lib/format';
 import { buildFeedRows } from '../lib/grouping';
 import { MessageItem } from './MessageItem';
@@ -16,6 +16,7 @@ export function MessageList({
   onFetchOlder,
   lastReadId,
   meId,
+  members,
   canModerate,
   pinnedIds,
   onReply,
@@ -28,6 +29,7 @@ export function MessageList({
   /** Read anchor captured at channel open — places the «Новые» divider (docs/modules/13 §4). */
   lastReadId: string | null | undefined;
   meId: string;
+  members: ChatMemberDto[];
   canModerate: boolean;
   pinnedIds: ReadonlySet<string>;
   onReply: (m: MessageDto) => void;
@@ -140,6 +142,7 @@ export function MessageList({
                   message={row.message}
                   showAuthor={row.showAuthor}
                   meId={meId}
+                  members={members}
                   canModerate={canModerate}
                   pinned={pinnedIds.has(row.message.id)}
                   onReply={onReply}

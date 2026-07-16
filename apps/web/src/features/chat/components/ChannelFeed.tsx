@@ -186,6 +186,7 @@ export function ChannelFeed({
           onFetchOlder={() => void messagesQ.fetchNextPage()}
           lastReadId={anchorRef.current.set ? anchorRef.current.id : undefined}
           meId={me.id}
+          members={channel.data.members}
           canModerate={canModerate}
           pinnedIds={pinnedIds}
           onReply={setReplyingTo}

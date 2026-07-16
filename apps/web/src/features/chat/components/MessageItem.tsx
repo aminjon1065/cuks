@@ -22,7 +22,7 @@ import {
   cn,
   toast,
 } from '@cuks/ui';
-import type { MessageDto } from '@cuks/shared';
+import type { ChatMemberDto, MessageDto } from '@cuks/shared';
 import { formatTime } from '@/lib/format';
 import {
   useDeleteMessage,
@@ -45,6 +45,7 @@ export function MessageItem({
   message,
   showAuthor,
   meId,
+  members,
   canModerate,
   pinned,
   onReply,
@@ -52,6 +53,7 @@ export function MessageItem({
   message: MessageDto;
   showAuthor: boolean;
   meId: string;
+  members: ChatMemberDto[];
   canModerate: boolean;
   pinned: boolean;
   onReply: (m: MessageDto) => void;
@@ -139,6 +141,7 @@ export function MessageItem({
         ) : editing ? (
           <InlineEditor
             body={message.body}
+            members={members}
             pending={edit.isPending}
             onSave={doEdit}
             onCancel={() => setEditing(false)}
