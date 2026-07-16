@@ -168,21 +168,27 @@ export class RingService {
     });
   }
 
-  /** Read + delete the ring, asserting the actor is the expected party. */
+  /**
+   * Atomically claim + delete the ring, asserting the actor is the expected party. GETDEL (not a
+   * GET-then-DEL) is what makes accept/decline/cancel and the timeout mutually exclusive — exactly one
+   * resolves a given ring, so a late accept racing the 30 s timeout can never double-post/double-emit.
+   * If the wrong party calls, the ring is restored so a real accept/decline still works.
+   */
   private async take(
     roomId: string,
     userId: string,
     who: 'caller' | 'recipient',
   ): Promise<RingState> {
-    const raw = await this.redis.get(ringKey(roomId));
+    const raw = await this.redis.getdel(ringKey(roomId));
     if (!raw) throw AppException.notFound('meet.ring.not_found', 'No active ring for this room');
     const state = JSON.parse(raw) as RingState;
     const owner = who === 'caller' ? state.callerId : state.recipientId;
     if (owner !== userId) {
+      // Not our ring to resolve — put it back and refuse.
+      await this.redis.set(ringKey(roomId), raw, 'EX', RING_TTL_SECONDS);
       throw AppException.forbidden('meet.ring.forbidden', 'Not a party to this ring');
     }
-    await this.redis.del(ringKey(roomId));
-    // Cancel the pending timeout (best-effort — the timeout also checks the key is gone).
+    // Cancel the pending timeout (best-effort — an already-firing timeout GETDELs nil and no-ops).
     await this.queue.remove(jobId(roomId)).catch(() => undefined);
     return state;
   }

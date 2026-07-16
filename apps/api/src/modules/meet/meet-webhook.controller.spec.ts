@@ -1,10 +1,21 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { AccessToken } from 'livekit-server-sdk';
+import type { Database } from '@cuks/db';
 import { LivekitService } from './livekit.service';
 import { MeetWebhookController } from './meet-webhook.controller';
 import { MeetWebhookService } from './meet-webhook.service';
 import type { ConfigService } from '../../config/config.service';
+import type { RealtimeService } from '../events/realtime.service';
+
+function makeMeet(): MeetWebhookService {
+  const db = {
+    update: () => ({
+      set: () => ({ where: () => ({ returning: () => Promise.resolve([]) }) }),
+    }),
+  } as unknown as Database;
+  return new MeetWebhookService(db, { emitToRoom: vi.fn() } as unknown as RealtimeService);
+}
 
 const KEY = 'testkey';
 const SECRET = 'testsecrettestsecrettestsecrettest';
@@ -27,7 +38,7 @@ async function signWebhook(body: string): Promise<string> {
 
 describe('MeetWebhookController', () => {
   it('accepts a validly signed webhook and dispatches it', async () => {
-    const meet = new MeetWebhookService();
+    const meet = makeMeet();
     const dispatch = vi.spyOn(meet, 'handle');
     const controller = new MeetWebhookController(new LivekitService(config()), meet);
     const body = JSON.stringify({ event: 'room_started', id: 'r1' });
@@ -39,7 +50,7 @@ describe('MeetWebhookController', () => {
   });
 
   it('accepts-and-ignores when LiveKit is not configured', async () => {
-    const meet = new MeetWebhookService();
+    const meet = makeMeet();
     const dispatch = vi.spyOn(meet, 'handle');
     const controller = new MeetWebhookController(
       new LivekitService(config({ LIVEKIT_URL: undefined })),
@@ -51,7 +62,7 @@ describe('MeetWebhookController', () => {
   });
 
   it('rejects an invalid signature without dispatching', async () => {
-    const meet = new MeetWebhookService();
+    const meet = makeMeet();
     const dispatch = vi.spyOn(meet, 'handle');
     const controller = new MeetWebhookController(new LivekitService(config()), meet);
 

@@ -40,7 +40,7 @@ export class MeetWebhookController {
       // Missing/forged signature or a body tampered after signing.
       throw AppException.forbidden('meet.webhook.invalid', 'Invalid webhook signature');
     }
-    this.meetWebhook.handle(event);
+    await this.meetWebhook.handle(event);
     return { received: true };
   }
 }
