@@ -16,6 +16,7 @@ import type {
   DirectoryUserDto,
   MessageDto,
   MessagesPage,
+  PinnedMessageDto,
   SendMessageInput,
   UpdateChannelInput,
   UpdateMembershipInput,
@@ -28,6 +29,7 @@ export const catalogKey = [...chatKey, 'catalog'] as const;
 export const unreadTotalsKey = [...chatKey, 'unread-totals'] as const;
 export const channelKey = (id: string) => [...channelsKey, id] as const;
 export const messagesKey = (channelId: string) => [...channelsKey, channelId, 'messages'] as const;
+export const pinsKey = (channelId: string) => [...channelsKey, channelId, 'pins'] as const;
 
 export function useMyChannels(): UseQueryResult<ChannelListItemDto[]> {
   return useQuery({
@@ -85,6 +87,8 @@ export function useSendMessage(channelId: string, me: { id: string; name: string
         body: body.body ?? null,
         bodyText: null,
         replyToId: body.replyToId ?? null,
+        replyTo: null,
+        reactions: [],
         fileIds: body.fileIds ?? [],
         createdAt: new Date().toISOString(),
         editedAt: null,
@@ -111,6 +115,73 @@ export function useSendMessage(channelId: string, me: { id: string; name: string
       );
       void qc.invalidateQueries({ queryKey: messagesKey(channelId) });
     },
+  });
+}
+
+/** Edit a message body (author, ≤24h). The realtime refetch reconciles the feed. */
+export function useEditMessage(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: unknown }) =>
+      api.patch<MessageDto>(`/v1/chat/messages/${id}`, { body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: messagesKey(channelId) }),
+  });
+}
+
+/** Soft-delete a message (author or channel admin). */
+export function useDeleteMessage(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/v1/chat/messages/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: messagesKey(channelId) }),
+  });
+}
+
+/** Toggle the caller's reaction on a message, optimistically flipping the chip. */
+export function useToggleReaction(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, emoji }: { id: string; emoji: string }) =>
+      api.put(`/v1/chat/messages/${id}/reactions`, { emoji }),
+    onMutate: async ({ id, emoji }) => {
+      await qc.cancelQueries({ queryKey: messagesKey(channelId) });
+      const prev = qc.getQueryData<InfiniteData<MessagesPage>>(messagesKey(channelId));
+      qc.setQueryData<InfiniteData<MessagesPage>>(messagesKey(channelId), (old) =>
+        mapMessages(old, id, (m) => ({ ...m, reactions: toggleReactionChip(m.reactions, emoji) })),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(messagesKey(channelId), ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: messagesKey(channelId) }),
+  });
+}
+
+/** The channel's pinned messages (info panel). */
+export function usePins(channelId: string | undefined): UseQueryResult<PinnedMessageDto[]> {
+  return useQuery({
+    queryKey: pinsKey(channelId ?? ''),
+    queryFn: () => api.get<PinnedMessageDto[]>(`/v1/chat/channels/${channelId}/pins`),
+    enabled: !!channelId,
+  });
+}
+
+export function usePinMessage(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api.post(`/v1/chat/channels/${channelId}/pins`, { messageId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pinsKey(channelId) }),
+  });
+}
+
+export function useUnpinMessage(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (messageId: string) =>
+      api.delete(`/v1/chat/channels/${channelId}/pins/${messageId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: pinsKey(channelId) }),
   });
 }
 
@@ -244,6 +315,37 @@ function replaceMessage(
       items: page.items.map((m) => (m.id === tempId ? message : m)),
     })),
   };
+}
+
+function mapMessages(
+  data: InfiniteData<MessagesPage> | undefined,
+  id: string,
+  fn: (m: MessageDto) => MessageDto,
+): InfiniteData<MessagesPage> | undefined {
+  if (!data) return data;
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      items: page.items.map((m) => (m.id === id ? fn(m) : m)),
+    })),
+  };
+}
+
+/** Optimistically flip the caller's reaction on one emoji chip: add (count+1, mine), remove
+ *  (count-1, dropping the chip at zero). The server reconciles the exact counts on settle. */
+export function toggleReactionChip(
+  reactions: MessageDto['reactions'],
+  emoji: string,
+): MessageDto['reactions'] {
+  const existing = reactions.find((r) => r.emoji === emoji);
+  if (!existing) return [...reactions, { emoji, count: 1, mine: true }];
+  if (existing.mine) {
+    return reactions
+      .map((r) => (r.emoji === emoji ? { ...r, count: r.count - 1, mine: false } : r))
+      .filter((r) => r.count > 0);
+  }
+  return reactions.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, mine: true } : r));
 }
 
 function removeMessage(

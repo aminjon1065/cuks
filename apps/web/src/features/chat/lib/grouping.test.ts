@@ -12,6 +12,8 @@ function msg(over: Partial<MessageDto>): MessageDto {
     body: null,
     bodyText: 'hi',
     replyToId: null,
+    replyTo: null,
+    reactions: [],
     fileIds: [],
     createdAt: '2026-07-16T06:00:00.000Z',
     editedAt: null,

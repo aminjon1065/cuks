@@ -16,6 +16,9 @@ export function MessageList({
   onFetchOlder,
   lastReadId,
   meId,
+  canModerate,
+  pinnedIds,
+  onReply,
   onAtBottomChange,
 }: {
   messages: MessageDto[];
@@ -25,6 +28,9 @@ export function MessageList({
   /** Read anchor captured at channel open — places the «Новые» divider (docs/modules/13 §4). */
   lastReadId: string | null | undefined;
   meId: string;
+  canModerate: boolean;
+  pinnedIds: ReadonlySet<string>;
+  onReply: (m: MessageDto) => void;
   onAtBottomChange: (atBottom: boolean) => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
@@ -130,7 +136,14 @@ export function MessageList({
                   <span className="h-px flex-1 bg-danger/50" />
                 </div>
               ) : (
-                <MessageItem message={row.message} showAuthor={row.showAuthor} />
+                <MessageItem
+                  message={row.message}
+                  showAuthor={row.showAuthor}
+                  meId={meId}
+                  canModerate={canModerate}
+                  pinned={pinnedIds.has(row.message.id)}
+                  onReply={onReply}
+                />
               )}
             </div>
           );

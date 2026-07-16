@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WsEventPayloads } from '@cuks/shared';
 import { useSocket, useSocketEvent } from '@/lib/socket';
-import { channelKey, channelsKey, messagesKey, unreadTotalsKey } from '../api/queries';
+import { channelKey, channelsKey, messagesKey, pinsKey, unreadTotalsKey } from '../api/queries';
 
 /**
  * Subscribe to a chat channel's `channel:{id}` room and refresh on live updates (docs/modules/13 §5).
@@ -43,10 +43,23 @@ export function useChatRealtime(channelId: string | undefined): void {
     (payload: WsEventPayloads['chat.channel.updated']) => {
       void qc.invalidateQueries({ queryKey: channelKey(payload.channelId) });
       void qc.invalidateQueries({ queryKey: channelsKey });
+      void qc.invalidateQueries({ queryKey: pinsKey(payload.channelId) });
     },
     [qc],
   );
 
+  // Edits, deletes and reactions all refresh the open channel's feed.
+  const onMessageChanged = useCallback(
+    (payload: { channelId: string; messageId: string; actorId: string }) => {
+      if (payload.channelId !== channelId) return;
+      void qc.invalidateQueries({ queryKey: messagesKey(payload.channelId) });
+    },
+    [qc, channelId],
+  );
+
   useSocketEvent('chat.message.created', onMessage);
   useSocketEvent('chat.channel.updated', onChannelUpdated);
+  useSocketEvent('chat.message.updated', onMessageChanged);
+  useSocketEvent('chat.message.deleted', onMessageChanged);
+  useSocketEvent('chat.reaction.updated', onMessageChanged);
 }

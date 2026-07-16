@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, LogOut, Pencil, Search, UserPlus, X } from 'lucide-react';
+import { Check, LogOut, Pencil, Pin, Search, UserPlus, X } from 'lucide-react';
 import { Avatar, AvatarFallback, Button, Input, Switch, cn, toast } from '@cuks/ui';
 import type { ChannelDto, ChannelMemberRole, ChatNotifyLevel } from '@cuks/shared';
 import {
   useAddMember,
   useDirectoryUsers,
+  usePins,
   useRemoveMember,
+  useUnpinMessage,
   useUpdateChannel,
   useUpdateMembership,
 } from '../api/queries';
@@ -38,8 +40,57 @@ export function InfoPanel({
     <div className="flex h-full min-h-0 flex-col overflow-y-auto" aria-label={t('info.title')}>
       <TopicSection channel={channel} canEdit={canManage} />
       <MySettings channel={channel} />
+      <PinsSection channelId={channel.id} canManage={canManage} />
       <MembersSection channel={channel} meId={meId} canManage={canManageMembers} onLeft={onLeft} />
     </div>
+  );
+}
+
+function PinsSection({
+  channelId,
+  canManage,
+}: {
+  channelId: string;
+  canManage: boolean;
+}): React.JSX.Element {
+  const { t } = useTranslation('chat');
+  const pins = usePins(channelId);
+  const unpin = useUnpinMessage(channelId);
+
+  return (
+    <Section title={t('info.pinned')}>
+      {pins.isPending ? (
+        <p className="text-[13px] text-text-muted">{t('info.pinsLoading')}</p>
+      ) : (pins.data ?? []).length === 0 ? (
+        <p className="text-[13px] text-text-muted">{t('info.noPins')}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {pins.data!.map((p) => (
+            <li key={p.messageId} className="group flex items-start gap-2 text-[13px]">
+              <Pin className="mt-0.5 size-3.5 shrink-0 text-text-muted" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-text-muted">{p.authorName ?? '—'}</div>
+                <div className="line-clamp-2 text-text">{p.bodyText ?? t('message.deleted')}</div>
+              </div>
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    unpin.mutate(p.messageId, {
+                      onError: () => toast({ title: t('info.failed'), tone: 'danger' }),
+                    })
+                  }
+                  className="opacity-0 transition group-hover:opacity-100 hover:text-danger"
+                  aria-label={t('message.unpin')}
+                >
+                  <X className="size-4 text-text-muted" />
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }
 

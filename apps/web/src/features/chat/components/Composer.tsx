@@ -4,9 +4,9 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
-import { Bold, Code, Italic, Link2, List, ListOrdered, SendHorizontal } from 'lucide-react';
+import { Bold, Code, Italic, Link2, List, ListOrdered, SendHorizontal, X } from 'lucide-react';
 import { Button, Tooltip, TooltipContent, TooltipTrigger, cn, toast } from '@cuks/ui';
-import type { ChatMemberDto } from '@cuks/shared';
+import type { ChatMemberDto, MessageDto } from '@cuks/shared';
 import { useSocket } from '@/lib/socket';
 import { useSendMessage } from '../api/queries';
 import { makeMentionSuggestion } from './mentionSuggestion';
@@ -16,19 +16,27 @@ import type { MentionItem } from './MentionList';
 const TYPING_THROTTLE_MS = 3_000;
 
 /** Rich-text message composer (docs/modules/13 §5): TipTap with bold/italic/code/lists/links,
- *  `@`-mentions of channel members, Enter-to-send / Shift+Enter for a newline, optimistic send. */
+ *  `@`-mentions of channel members, Enter-to-send / Shift+Enter for a newline, optimistic send, and
+ *  an optional reply banner (docs/modules/13 §4). */
 export function Composer({
   channelId,
   members,
   me,
+  replyingTo,
+  onCancelReply,
 }: {
   channelId: string;
   members: ChatMemberDto[];
   me: { id: string; name: string | null };
+  replyingTo: MessageDto | null;
+  onCancelReply: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
   const send = useSendMessage(channelId, me);
   const { socket } = useSocket();
+
+  const replyToRef = useRef<MessageDto | null>(replyingTo);
+  replyToRef.current = replyingTo;
 
   const membersRef = useRef<MentionItem[]>([]);
   membersRef.current = members.map((m) => ({ id: m.userId, label: m.name ?? m.userId }));
@@ -92,15 +100,19 @@ export function Composer({
     onSelectionUpdate: () => forceRender(),
   });
 
+  const onCancelReplyRef = useRef(onCancelReply);
+  onCancelReplyRef.current = onCancelReply;
   const submit = useCallback(() => {
     if (!editor || editor.isEmpty) return;
     const body = editor.getJSON();
+    const replyToId = replyToRef.current?.id;
     send.mutate(
-      { kind: 'text', body, fileIds: [] },
+      { kind: 'text', body, fileIds: [], ...(replyToId ? { replyToId } : {}) },
       { onError: () => toast({ title: t('composer.sendFailed'), tone: 'danger' }) },
     );
     editor.commands.clearContent(true);
     editor.commands.focus();
+    onCancelReplyRef.current();
   }, [editor, send, t]);
   submitRef.current = submit;
 
@@ -120,6 +132,21 @@ export function Composer({
 
   return (
     <div className="border-t border-border p-3">
+      {replyingTo ? (
+        <div className="mb-1 flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-xs">
+          <span className="shrink-0 text-text-muted">{t('message.replyingTo')}</span>
+          <span className="font-medium text-text">{replyingTo.authorName ?? '—'}</span>
+          <span className="min-w-0 flex-1 truncate text-text-muted">{replyingTo.bodyText}</span>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label={t('common.cancel')}
+            className="shrink-0 rounded-sm p-0.5 text-text-muted hover:bg-surface hover:text-text"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
       <div className="rounded-lg border border-border bg-surface focus-within:ring-2 focus-within:ring-primary/40">
         <div className="flex items-center gap-0.5 border-b border-border px-2 py-1">
           <ToolbarButton

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessagesSquare, WifiOff } from 'lucide-react';
 import { Button, EmptyState, Skeleton } from '@cuks/ui';
-import type { WsEventPayloads } from '@cuks/shared';
+import type { MessageDto, WsEventPayloads } from '@cuks/shared';
 import { useSocketEvent } from '@/lib/socket';
-import { useChannel, useMarkRead, useMessages } from '../api/queries';
+import { useChannel, useMarkRead, useMessages, usePins } from '../api/queries';
 import { useChatRealtime } from '../hooks/useChatRealtime';
 import { ChannelHeader } from './ChannelHeader';
 import { MessageList } from './MessageList';
@@ -30,8 +30,12 @@ export function ChannelFeed({
   const { t } = useTranslation('chat');
   const channel = useChannel(channelId);
   const messagesQ = useMessages(channelId);
+  const pins = usePins(channelId);
   useChatRealtime(channelId);
   const markRead = useMarkRead(channelId);
+  const [replyingTo, setReplyingTo] = useState<MessageDto | null>(null);
+  const pinnedIds = useMemo(() => new Set((pins.data ?? []).map((p) => p.messageId)), [pins.data]);
+  const canModerate = channel.data?.myRole === 'owner' || channel.data?.myRole === 'admin';
 
   // Pages come newest-first (each page descending); flatten and reverse to chronological order.
   const messages = useMemo(() => {
@@ -182,6 +186,9 @@ export function ChannelFeed({
           onFetchOlder={() => void messagesQ.fetchNextPage()}
           lastReadId={anchorRef.current.set ? anchorRef.current.id : undefined}
           meId={me.id}
+          canModerate={canModerate}
+          pinnedIds={pinnedIds}
+          onReply={setReplyingTo}
           onAtBottomChange={setAtBottom}
         />
       )}
@@ -195,7 +202,13 @@ export function ChannelFeed({
             : null}
       </div>
 
-      <Composer channelId={channelId} members={channel.data.members} me={me} />
+      <Composer
+        channelId={channelId}
+        members={channel.data.members}
+        me={me}
+        replyingTo={replyingTo}
+        onCancelReply={() => setReplyingTo(null)}
+      />
     </div>
   );
 }
