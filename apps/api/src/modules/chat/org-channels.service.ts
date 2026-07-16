@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   chatChannels,
   chatMembers,
@@ -10,6 +10,10 @@ import {
   type Database,
 } from '@cuks/db';
 import { DB } from '../../common/db/db.module';
+
+// Advisory-lock namespace that serializes membership reconciles per org unit (distinct from the
+// org-tree move lock) so a stale reader cannot delete a current member.
+const SYNC_LOCK_NS = 4242002;
 
 /**
  * Auto-provisioned org-unit channels (docs/modules/13 §2, task 5.1). Every org unit has one `org`
@@ -67,43 +71,52 @@ export class OrgChannelsService {
     return row?.id ?? null;
   }
 
-  /** Reconcile the org channel's membership to the unit's current staff. */
+  /** Reconcile the org channel's membership to the unit's current staff. Serialized per unit so two
+   *  concurrent reconciles (e.g. an unassign racing a re-assign) can't leave a stale membership. */
   async syncOrgUnit(orgUnitId: string): Promise<void> {
     try {
       const channelId = await this.ensureChannel(orgUnitId);
       if (!channelId) return;
 
-      const staff = await this.db
-        .selectDistinct({ userId: userPositions.userId })
-        .from(userPositions)
-        .innerJoin(
-          positions,
-          and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
-        )
-        .innerJoin(users, and(eq(users.id, userPositions.userId), isNull(users.deletedAt)))
-        .where(eq(positions.orgUnitId, orgUnitId));
-      const target = new Set(staff.map((s) => s.userId));
+      await this.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${SYNC_LOCK_NS}, hashtext(${orgUnitId}))`,
+        );
 
-      const current = await this.db
-        .select({ userId: chatMembers.userId })
-        .from(chatMembers)
-        .where(eq(chatMembers.channelId, channelId));
-      const currentSet = new Set(current.map((m) => m.userId));
+        const staff = await tx
+          .selectDistinct({ userId: userPositions.userId })
+          .from(userPositions)
+          .innerJoin(
+            positions,
+            and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+          )
+          .innerJoin(users, and(eq(users.id, userPositions.userId), isNull(users.deletedAt)))
+          .where(eq(positions.orgUnitId, orgUnitId));
+        const target = new Set(staff.map((s) => s.userId));
 
-      const toAdd = [...target].filter((id) => !currentSet.has(id));
-      const toRemove = [...currentSet].filter((id) => !target.has(id));
+        const current = await tx
+          .select({ userId: chatMembers.userId })
+          .from(chatMembers)
+          .where(eq(chatMembers.channelId, channelId));
+        const currentSet = new Set(current.map((m) => m.userId));
 
-      if (toAdd.length) {
-        await this.db
-          .insert(chatMembers)
-          .values(toAdd.map((userId) => ({ channelId, userId, memberRole: 'member' as const })))
-          .onConflictDoNothing();
-      }
-      if (toRemove.length) {
-        await this.db
-          .delete(chatMembers)
-          .where(and(eq(chatMembers.channelId, channelId), inArray(chatMembers.userId, toRemove)));
-      }
+        const toAdd = [...target].filter((id) => !currentSet.has(id));
+        const toRemove = [...currentSet].filter((id) => !target.has(id));
+
+        if (toAdd.length) {
+          await tx
+            .insert(chatMembers)
+            .values(toAdd.map((userId) => ({ channelId, userId, memberRole: 'member' as const })))
+            .onConflictDoNothing();
+        }
+        if (toRemove.length) {
+          await tx
+            .delete(chatMembers)
+            .where(
+              and(eq(chatMembers.channelId, channelId), inArray(chatMembers.userId, toRemove)),
+            );
+        }
+      });
     } catch (error) {
       // Membership sync is best-effort — a personnel change must not fail because of it.
       this.logger.error({ error, orgUnitId }, 'org channel sync failed');

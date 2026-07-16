@@ -38,9 +38,7 @@ function makeDb(staff: string[], current: string[]) {
     return chain;
   };
 
-  const db = {
-    select: reader,
-    selectDistinct: reader,
+  const writes = {
     insert: () => ({
       values(v: { userId: string }[]) {
         inserted.push(v.map((r) => r.userId));
@@ -48,12 +46,25 @@ function makeDb(staff: string[], current: string[]) {
       },
     }),
     delete: () => ({
-      where(clause: { ids?: string[] }) {
+      where(clause: unknown) {
         deleted.push('members');
         void clause;
         return Promise.resolve(undefined);
       },
     }),
+  };
+  // The reconcile runs inside a serialized transaction; the tx mirrors the reader + writes.
+  const tx = {
+    execute: () => Promise.resolve(undefined),
+    select: reader,
+    selectDistinct: reader,
+    ...writes,
+  };
+  const db = {
+    select: reader,
+    selectDistinct: reader,
+    transaction: (run: (t: typeof tx) => unknown) => run(tx),
+    ...writes,
   };
   const service = new OrgChannelsService(db as never);
   return { service, inserted, deleted };
