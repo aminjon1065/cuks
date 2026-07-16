@@ -66,9 +66,19 @@ export function useChatRealtime(channelId: string | undefined): void {
     [qc, channelId],
   );
 
+  // A call started/ended on this channel — refresh the «Идёт звонок» banner (docs/modules/14 §2).
+  const onCallUpdated = useCallback(
+    (payload: WsEventPayloads['meet.room.updated']) => {
+      if (payload.channelId !== channelId) return;
+      void qc.invalidateQueries({ queryKey: channelKey(payload.channelId) });
+    },
+    [qc, channelId],
+  );
+
   useSocketEvent('chat.message.created', onMessage);
   useSocketEvent('chat.channel.updated', onChannelUpdated);
   useSocketEvent('chat.message.updated', onMessageChanged);
   useSocketEvent('chat.message.deleted', onMessageChanged);
   useSocketEvent('chat.reaction.updated', onMessageChanged);
+  useSocketEvent('meet.room.updated', onCallUpdated);
 }

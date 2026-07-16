@@ -5,6 +5,9 @@ import {
   CornerUpLeft,
   MoreHorizontal,
   Pencil,
+  Phone,
+  PhoneMissed,
+  PhoneOff,
   Pin,
   PinOff,
   SmilePlus,
@@ -22,7 +25,7 @@ import {
   cn,
   toast,
 } from '@cuks/ui';
-import type { ChatMemberDto, MessageDto } from '@cuks/shared';
+import type { ChatMemberDto, MeetCallMessageBody, MessageDto } from '@cuks/shared';
 import { formatTime } from '@/lib/format';
 import {
   useDeleteMessage,
@@ -73,6 +76,23 @@ export function MessageItem({
     return (
       <div className="py-1 text-center text-xs text-text-muted">
         {message.bodyText ?? t('message.system')}
+      </div>
+    );
+  }
+
+  if (message.kind === 'call') {
+    const call = message.body as MeetCallMessageBody | null;
+    const event = call?.call ?? 'ended';
+    const CallIcon = event === 'missed' ? PhoneMissed : event === 'declined' ? PhoneOff : Phone;
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center gap-1.5 py-1 text-xs',
+          event === 'missed' ? 'text-danger' : 'text-text-muted',
+        )}
+      >
+        <CallIcon className="size-3.5" />
+        {t(`message.call.${event}`)}
       </div>
     );
   }

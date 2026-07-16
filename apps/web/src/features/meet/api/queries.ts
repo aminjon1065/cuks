@@ -1,5 +1,11 @@
 import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { CreateRoomInput, MeetHostTargetInput, MeetRoomDto, MeetTokenDto } from '@cuks/shared';
+import type {
+  CreateRoomInput,
+  MeetHostTargetInput,
+  MeetRoomDto,
+  MeetTokenDto,
+  StartRingInput,
+} from '@cuks/shared';
 import { api } from '@/lib/api-client';
 
 export const meetKey = ['meet'] as const;
@@ -28,6 +34,27 @@ export function useMintToken() {
   return useMutation({
     mutationFn: (roomId: string) => api.post<MeetTokenDto>(`/v1/meet/rooms/${roomId}/token`),
   });
+}
+
+/** Ring the other member of a DM for a 1:1 call (docs/modules/14 §2). */
+export function useStartRing() {
+  return useMutation({
+    mutationFn: (body: StartRingInput) => api.post<void>('/v1/meet/ring', body),
+  });
+}
+
+/** Accept / decline an incoming ring, or cancel one you started (docs/modules/14 §2). */
+export function useRingActions() {
+  const accept = useMutation({
+    mutationFn: (roomId: string) => api.post<void>(`/v1/meet/ring/${roomId}/accept`),
+  });
+  const decline = useMutation({
+    mutationFn: (roomId: string) => api.post<void>(`/v1/meet/ring/${roomId}/decline`),
+  });
+  const cancel = useMutation({
+    mutationFn: (roomId: string) => api.post<void>(`/v1/meet/ring/${roomId}/cancel`),
+  });
+  return { accept, decline, cancel };
 }
 
 /** Host moderation (docs/modules/14 §3). All gated server-side to the room host. */

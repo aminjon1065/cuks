@@ -7,6 +7,7 @@ import type { MessageDto, WsEventPayloads } from '@cuks/shared';
 import { useSocketEvent } from '@/lib/socket';
 import { useChannel, useMarkRead, useMessages, usePins } from '../api/queries';
 import { useChatRealtime } from '../hooks/useChatRealtime';
+import { CallBanner } from '@/features/meet/components/CallBanner';
 import { ChannelHeader } from './ChannelHeader';
 import { MessageList } from './MessageList';
 import { FocusedFragment } from './FocusedFragment';
@@ -160,6 +161,7 @@ export function ChannelFeed({
         onBack={onBack}
         onOpenSearch={onOpenSearch}
       />
+      <CallBanner channel={channel.data} />
 
       {focusMsgId ? (
         <FocusedFragment

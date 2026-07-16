@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronLeft, Hash, Info, Lock, Search, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, Button, cn } from '@cuks/ui';
 import type { ChannelDto } from '@cuks/shared';
+import { ChannelCallButtons } from '@/features/meet/components/ChannelCallButtons';
 import { usePresence } from '../hooks/usePresence';
 import { channelDisplayName, initials } from '../lib/grouping';
 import { PresenceDot } from './PresenceDot';
@@ -75,6 +76,8 @@ export function ChannelHeader({
           </span>
         ) : null}
       </div>
+
+      <ChannelCallButtons channel={channel} />
 
       <Button size="icon" variant="ghost" onClick={onOpenSearch} aria-label={t('search.title')}>
         <Search className="size-4" />

@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AbilityProvider } from '@/lib/ability';
 import { SocketProvider } from '@/lib/socket';
 import { useMe } from '@/features/auth/api/queries';
+import { IncomingCallDialog } from '@/features/meet/components/IncomingCallDialog';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
@@ -50,6 +51,7 @@ export function AppShell(): React.JSX.Element | null {
           </div>
         </div>
         <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+        <IncomingCallDialog />
       </SocketProvider>
     </AbilityProvider>
   );
