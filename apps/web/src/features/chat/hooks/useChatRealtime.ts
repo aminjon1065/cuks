@@ -22,12 +22,21 @@ export function useChatRealtime(channelId: string | undefined): void {
     const emit = (socket as unknown as { emit: (e: string, p: unknown) => void }).emit.bind(socket);
     const subscribe = (): void => emit('channel.subscribe', { channelId });
     subscribe();
-    socket.on('connect', subscribe);
+    // On every (re)connect, re-join the room AND refetch — a socket blip can drop live events, so we
+    // reconcile the last page + unread counts on reconnect (docs/modules/13 §5). The refetch replaces
+    // the message cache wholesale, so it can never leave a duplicate of an optimistic/echoed message.
+    const onConnect = (): void => {
+      subscribe();
+      void qc.invalidateQueries({ queryKey: messagesKey(channelId) });
+      void qc.invalidateQueries({ queryKey: channelsKey });
+      void qc.invalidateQueries({ queryKey: unreadTotalsKey });
+    };
+    socket.on('connect', onConnect);
     return () => {
-      socket.off('connect', subscribe);
+      socket.off('connect', onConnect);
       emit('channel.unsubscribe', { channelId });
     };
-  }, [socket, channelId]);
+  }, [socket, channelId, qc]);
 
   const onMessage = useCallback(
     (payload: WsEventPayloads['chat.message.created']) => {
