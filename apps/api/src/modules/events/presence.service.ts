@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
+import { PRESENCE_AWAY_AFTER_MS, type PresenceStatusDto } from '@cuks/shared';
 import { REDIS } from '../../common/redis/redis.module';
 
 const HEARTBEAT_MS = 30_000;
@@ -21,10 +22,32 @@ function lastSeenKey(userId: string): string {
   return `presence:user:${userId}:last_seen`;
 }
 
+function activityKey(userId: string): string {
+  return `presence:user:${userId}:activity`;
+}
+
 export interface PresenceState {
   online: boolean;
   /** Infinity means the user has no recorded socket activity and is considered long-offline. */
   offlineForMs: number;
+}
+
+/** Derive the user-facing status (docs/modules/13 §4): online while connected and active within the
+ *  last 10 minutes; away while connected but idle; offline without a live socket. Pure — unit-tested. */
+export function derivePresence(
+  socketCount: number,
+  activityAtMs: number | null,
+  now: number,
+): Pick<PresenceStatusDto, 'status' | 'activityAt'> {
+  const activityAt =
+    activityAtMs !== null && Number.isFinite(activityAtMs)
+      ? new Date(activityAtMs).toISOString()
+      : null;
+  if (socketCount <= 0) return { status: 'offline', activityAt };
+  if (activityAtMs === null || now - activityAtMs > PRESENCE_AWAY_AFTER_MS) {
+    return { status: 'away', activityAt };
+  }
+  return { status: 'online', activityAt };
 }
 
 /**
@@ -52,7 +75,41 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
 
   async connect(userId: string, socketId: string): Promise<void> {
     this.localSockets.set(socketId, userId);
-    await this.refreshSocket(userId, socketId, Date.now());
+    const now = Date.now();
+    await Promise.all([this.refreshSocket(userId, socketId, now), this.activity(userId, now)]);
+  }
+
+  /** Record a user-activity ping (docs/modules/13 §4) — resets the 10-minute away timer. */
+  async activity(userId: string, now = Date.now()): Promise<void> {
+    try {
+      await this.redis.set(activityKey(userId), String(now), 'EX', KEY_TTL_SECONDS);
+    } catch (err) {
+      this.logger.error({ err, userId }, 'failed to record presence activity');
+    }
+  }
+
+  /** Bulk user-facing statuses for member lists / DM rows (docs/modules/13 §4). Fails open to
+   *  offline — presence is cosmetic, never a gate. */
+  async statusOf(userIds: string[], now = Date.now()): Promise<PresenceStatusDto[]> {
+    if (userIds.length === 0) return [];
+    try {
+      const pipe = this.redis.multi();
+      for (const id of userIds) {
+        pipe.zremrangebyscore(socketsKey(id), '-inf', now);
+        pipe.zcard(socketsKey(id));
+        pipe.get(activityKey(id));
+      }
+      const res = await pipe.exec();
+      return userIds.map((userId, i) => {
+        const count = Number(res?.[i * 3 + 1]?.[1] ?? 0);
+        const activityRaw = res?.[i * 3 + 2]?.[1] as string | null;
+        const activityAtMs = activityRaw ? Number(activityRaw) : null;
+        return { userId, ...derivePresence(count, activityAtMs, now) };
+      });
+    } catch (err) {
+      this.logger.error({ err }, 'failed to read bulk presence');
+      return userIds.map((userId) => ({ userId, status: 'offline', activityAt: null }));
+    }
   }
 
   async disconnect(socketId: string): Promise<void> {

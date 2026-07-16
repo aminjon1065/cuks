@@ -17,3 +17,4 @@ export * from './docflow';
 export * from './substitutions';
 export * from './tasks';
 export * from './chat';
+export * from './presence';

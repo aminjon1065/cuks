@@ -34,6 +34,8 @@ export interface ChannelListItemDto {
   isPinned: boolean;
   memberCount: number;
   unreadCount: number;
+  /** Unread messages that personally mention the caller — badged red (docs/modules/13 §4). */
+  unreadMentions: number;
   /** For DM/group rendering: the members other than the caller. */
   otherMembers: { userId: string; name: string | null }[];
 }
@@ -43,6 +45,14 @@ export interface ChannelDto extends ChannelListItemDto {
   members: ChatMemberDto[];
   /** The caller's own notification level for this channel (for the info panel controls). */
   myNotifyLevel: ChatNotifyLevel;
+  /** The caller's read anchor at fetch time — the «Новые» divider goes after it (docs/modules/13 §4). */
+  myLastReadMessageId: string | null;
+}
+
+/** Sidebar totals across all the caller's conversations (docs/modules/13 §4). */
+export interface ChatUnreadTotalsDto {
+  unread: number;
+  mentions: number;
 }
 
 /** Create a standalone public or private channel (not org/dm/incident — those are provisioned). */

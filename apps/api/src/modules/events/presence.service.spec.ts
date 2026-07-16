@@ -1,15 +1,19 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PresenceService } from './presence.service';
+import { PRESENCE_AWAY_AFTER_MS } from '@cuks/shared';
+import { PresenceService, derivePresence } from './presence.service';
 
-type RedisCommand = () => void;
+type RedisCommand = () => unknown;
 
 interface RedisMultiMock {
   zadd(key: string, score: number, member: string): RedisMultiMock;
   expire(key: string, seconds: number): RedisMultiMock;
   set(key: string, value: string, mode: 'EX', seconds: number): RedisMultiMock;
   zrem(key: string, member: string): RedisMultiMock;
-  exec(): Promise<readonly (readonly [null, 'OK'])[]>;
+  zremrangebyscore(key: string, minimum: '-inf', maximum: number): RedisMultiMock;
+  zcard(key: string): RedisMultiMock;
+  get(key: string): RedisMultiMock;
+  exec(): Promise<readonly (readonly [null, unknown])[]>;
 }
 
 class RedisMock {
@@ -23,7 +27,10 @@ class RedisMock {
         commands.push(() => this.sortedSet(key).set(member, score));
         return chain;
       },
-      expire: () => chain,
+      expire: () => {
+        commands.push(() => 'OK');
+        return chain;
+      },
       set: (key, value) => {
         commands.push(() => this.strings.set(key, value));
         return chain;
@@ -32,12 +39,26 @@ class RedisMock {
         commands.push(() => this.sortedSets.get(key)?.delete(member));
         return chain;
       },
-      exec: async () => {
-        for (const command of commands) command();
-        return commands.map(() => [null, 'OK'] as const);
+      zremrangebyscore: (key, minimum, maximum) => {
+        commands.push(() => void this.zremrangebyscore(key, minimum, maximum));
+        return chain;
       },
+      zcard: (key) => {
+        commands.push(() => this.sortedSets.get(key)?.size ?? 0);
+        return chain;
+      },
+      get: (key) => {
+        commands.push(() => this.strings.get(key) ?? null);
+        return chain;
+      },
+      exec: async () => commands.map((command) => [null, command()] as const),
     };
     return chain;
+  }
+
+  set(key: string, value: string): Promise<'OK'> {
+    this.strings.set(key, value);
+    return Promise.resolve('OK');
   }
 
   async zremrangebyscore(key: string, _minimum: '-inf', maximum: number): Promise<number> {
@@ -138,5 +159,59 @@ describe('PresenceService', () => {
       online: false,
       offlineForMs: Number.POSITIVE_INFINITY,
     });
+  });
+});
+
+describe('derivePresence (docs/modules/13 §4)', () => {
+  const NOW = Date.parse('2026-07-16T10:00:00.000Z');
+
+  it('is offline without a live socket, keeping the last activity timestamp', () => {
+    const at = NOW - 60_000;
+    expect(derivePresence(0, at, NOW)).toEqual({
+      status: 'offline',
+      activityAt: new Date(at).toISOString(),
+    });
+    expect(derivePresence(0, null, NOW)).toEqual({ status: 'offline', activityAt: null });
+  });
+
+  it('is online while connected and active within the away window', () => {
+    expect(derivePresence(2, NOW - (PRESENCE_AWAY_AFTER_MS - 1000), NOW).status).toBe('online');
+    expect(derivePresence(1, NOW - PRESENCE_AWAY_AFTER_MS, NOW).status).toBe('online');
+  });
+
+  it('turns away once idle past the window, or with no recorded activity', () => {
+    expect(derivePresence(1, NOW - (PRESENCE_AWAY_AFTER_MS + 1000), NOW).status).toBe('away');
+    expect(derivePresence(1, null, NOW).status).toBe('away');
+  });
+});
+
+describe('PresenceService.statusOf (docs/modules/13 §4)', () => {
+  it('derives online / away / offline in one bulk read', async () => {
+    const { redis, service } = makeService();
+    await service.connect('u-online', 's1');
+    await service.connect('u-away', 's2');
+    const now = Date.now();
+    // Age u-away's activity past the window (the socket stays fresh via its TTL score).
+    await redis.set(
+      'presence:user:u-away:activity',
+      String(now - (PRESENCE_AWAY_AFTER_MS + 5_000)),
+    );
+
+    const statuses = await service.statusOf(['u-online', 'u-away', 'u-offline'], now);
+    expect(statuses.map((s) => [s.userId, s.status])).toEqual([
+      ['u-online', 'online'],
+      ['u-away', 'away'],
+      ['u-offline', 'offline'],
+    ]);
+  });
+
+  it('fails open to offline when Redis is unavailable', async () => {
+    const { redis, service } = makeService();
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(redis, 'multi').mockImplementation(() => {
+      throw new Error('Redis unavailable');
+    });
+    const statuses = await service.statusOf(['a']);
+    expect(statuses).toEqual([{ userId: 'a', status: 'offline', activityAt: null }]);
   });
 });

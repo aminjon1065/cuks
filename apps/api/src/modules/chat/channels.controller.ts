@@ -11,6 +11,7 @@ import {
   type AddChannelMemberInput,
   type ChannelDto,
   type ChannelListItemDto,
+  type ChatUnreadTotalsDto,
   type CreateChannelInput,
   type CreateDmInput,
   type MarkReadInput,
@@ -42,6 +43,12 @@ export class ChannelsController {
   @ApiOperation({ summary: 'Joinable public channels' })
   catalog(@CurrentUser() user: AuthUser): Promise<ChannelListItemDto[]> {
     return this.channels.catalog(user);
+  }
+
+  @Get('unread-count')
+  @ApiOperation({ summary: 'Sidebar totals: unread + mentions across my conversations' })
+  unreadCount(@CurrentUser() user: AuthUser): Promise<ChatUnreadTotalsDto> {
+    return this.channels.unreadTotals(user);
   }
 
   @Post()

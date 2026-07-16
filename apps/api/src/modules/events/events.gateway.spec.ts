@@ -19,8 +19,12 @@ function makeGateway() {
     findActiveById: vi.fn(),
     getPermissions: vi.fn().mockResolvedValue({ permissions: [], isSuperadmin: false }),
   };
-  const realtime = { bind: vi.fn() };
-  const presence = { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn() };
+  const realtime = { bind: vi.fn(), emitToAll: vi.fn() };
+  const presence = {
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn(),
+    status: vi.fn().mockResolvedValue({ online: false, offlineForMs: 0 }),
+  };
   const db = {};
   const gateway = new EventsGateway(
     sessions as never,
@@ -29,7 +33,7 @@ function makeGateway() {
     presence as never,
     db as never,
   );
-  return { gateway, sessions, users, presence };
+  return { gateway, sessions, users, presence, realtime };
 }
 
 describe('parseCookieHeader', () => {
@@ -65,6 +69,22 @@ describe('EventsGateway.handleConnection', () => {
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(socket.data.userId).toBe('u1');
     expect(g.presence.connect).toHaveBeenCalledWith('u1', 'sock1');
+    // First socket (was offline) → presence.changed(online) is broadcast (docs/modules/13 §4).
+    expect(g.realtime.emitToAll).toHaveBeenCalledWith(
+      'presence.changed',
+      expect.objectContaining({ userId: 'u1', status: 'online' }),
+    );
+  });
+
+  it('does not rebroadcast online for an additional socket of an already-online user', async () => {
+    g.sessions.get.mockResolvedValue({ userId: 'u1' });
+    g.users.findActiveById.mockResolvedValue({ id: 'u1', status: 'active' });
+    g.presence.status.mockResolvedValue({ online: true, offlineForMs: 0 });
+    const socket = makeSocket('cuks_session=s1');
+
+    await g.gateway.handleConnection(socket as never);
+
+    expect(g.realtime.emitToAll).not.toHaveBeenCalled();
   });
 
   it('disconnects a socket with no session cookie', async () => {

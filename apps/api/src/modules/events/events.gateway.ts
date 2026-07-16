@@ -159,6 +159,33 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     return { ok: true };
   }
 
+  /** Relay a typing hint to the channel room, except the sender (docs/modules/13 §4/§5). Gated on
+   *  actually being in the room — which only the membership-checked subscribe can join. */
+  @SubscribeMessage('channel.typing')
+  typing(@ConnectedSocket() client: Socket, @MessageBody() body: { channelId?: string }): void {
+    const userId = (client.data as { userId?: string }).userId;
+    const channelId = body?.channelId;
+    if (!userId || !channelId) return;
+    const room = wsRooms.channel(channelId);
+    if (!client.rooms.has(room)) return;
+    client.to(room).emit('chat.typing', { channelId, userId });
+  }
+
+  /** A user-activity ping (client throttles to ~1/min) — resets the away timer and lets clients
+   *  clear an away badge (docs/modules/13 §4). */
+  @SubscribeMessage('presence.activity')
+  async presenceActivity(@ConnectedSocket() client: Socket): Promise<void> {
+    const userId = (client.data as { userId?: string }).userId;
+    if (!userId) return;
+    const now = Date.now();
+    await this.presence.activity(userId, now);
+    this.realtime.emitToAll('presence.changed', {
+      userId,
+      status: 'online',
+      activityAt: new Date(now).toISOString(),
+    });
+  }
+
   afterInit(server: Server): void {
     this.realtime.bind(server);
   }
@@ -171,7 +198,15 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     }
     client.data.userId = userId;
     await client.join(wsRooms.user(userId));
+    const wasOnline = (await this.presence.status(userId)).online;
     await this.presence.connect(userId, client.id);
+    if (!wasOnline) {
+      this.realtime.emitToAll('presence.changed', {
+        userId,
+        status: 'online',
+        activityAt: new Date().toISOString(),
+      });
+    }
     const permissions = await this.users.getPermissions(userId);
     if (permissions.isSuperadmin || permissions.permissions.includes('gis.view')) {
       await client.join(wsRooms.gis());
@@ -183,6 +218,14 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const userId = (client.data as { userId?: string }).userId;
     if (userId) {
       await this.presence.disconnect(client.id);
+      const state = await this.presence.status(userId);
+      if (!state.online) {
+        this.realtime.emitToAll('presence.changed', {
+          userId,
+          status: 'offline',
+          activityAt: null,
+        });
+      }
       this.logger.debug(`socket ${client.id} disconnected (user ${userId})`);
     }
   }

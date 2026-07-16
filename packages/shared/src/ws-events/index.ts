@@ -17,7 +17,16 @@ export interface WsEventPayloads {
     id: string;
     action: 'created' | 'reported' | 'resource_added' | 'status_changed';
   };
-  'presence.changed': { userId: string; online: boolean };
+  /** A user's presence moved (docs/modules/13 §4): online on first socket / activity, away after
+   *  10 min idle (derived at read time), offline on last disconnect. Broadcast to all sockets. */
+  'presence.changed': {
+    userId: string;
+    status: 'online' | 'away' | 'offline';
+    activityAt: string | null;
+  };
+  /** Someone is typing in a channel (docs/modules/13 §4/§5, throttled 3s client-side); the client
+   *  resolves the name from the channel's member list and expires the hint after ~5s. */
+  'chat.typing': { channelId: string; userId: string };
   /** A task board changed (docs/modules/15 §3); a `board:{projectId}` subscriber refetches or
    *  patches. `actorId` lets a client skip echoing its own optimistic change. */
   'tasks.card.created': { projectId: string; taskId: string; actorId: string };

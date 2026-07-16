@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { aliasedTable, and, count, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
+import { aliasedTable, and, count, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { chatChannels, chatMembers, chatMessages, users, type Database } from '@cuks/db';
 import {
   wsRooms,
@@ -8,6 +8,7 @@ import {
   type ChannelListItemDto,
   type ChannelMemberRole,
   type ChatMemberDto,
+  type ChatUnreadTotalsDto,
   type CreateChannelInput,
   type CreateDmInput,
   type MarkReadInput,
@@ -67,7 +68,7 @@ export class ChannelsService {
         r.role,
         r.isPinned,
         memberCounts.get(r.channel.id) ?? 0,
-        unread.get(r.channel.id) ?? 0,
+        unread.get(r.channel.id) ?? { unread: 0, mentions: 0 },
         others.get(r.channel.id) ?? [],
       ),
     );
@@ -92,7 +93,9 @@ export class ChannelsService {
       )
       .orderBy(desc(chatChannels.lastMessageAt));
     const counts = await this.memberCounts(rows.map((r) => r.id));
-    return rows.map((r) => this.toListItem(r, null, false, counts.get(r.id) ?? 0, 0, []));
+    return rows.map((r) =>
+      this.toListItem(r, null, false, counts.get(r.id) ?? 0, { unread: 0, mentions: 0 }, []),
+    );
   }
 
   async get(channelId: string, actor: AuthUser): Promise<ChannelDto> {
@@ -110,10 +113,15 @@ export class ChannelsService {
       role,
       mine?.isPinned ?? false,
       memberCounts.get(channelId) ?? members.length,
-      unread.get(channelId) ?? 0,
+      unread.get(channelId) ?? { unread: 0, mentions: 0 },
       others.get(channelId) ?? [],
     );
-    return { ...base, members, myNotifyLevel: mine?.notifyLevel ?? 'all' };
+    return {
+      ...base,
+      members,
+      myNotifyLevel: mine?.notifyLevel ?? 'all',
+      myLastReadMessageId: mine?.lastReadMessageId ?? null,
+    };
   }
 
   async createChannel(input: CreateChannelInput, actor: AuthUser): Promise<ChannelDto> {
@@ -288,7 +296,7 @@ export class ChannelsService {
     role: ChatMemberDto['role'] | null,
     isPinned: boolean,
     memberCount: number,
-    unreadCount: number,
+    unread: { unread: number; mentions: number },
     otherMembers: { userId: string; name: string | null }[],
   ): ChannelListItemDto {
     return {
@@ -302,18 +310,27 @@ export class ChannelsService {
       myRole: role,
       isPinned,
       memberCount,
-      unreadCount,
+      unreadCount: unread.unread,
+      unreadMentions: unread.mentions,
       otherMembers,
     };
   }
 
-  /** The caller's own membership settings (pin/notify) for a channel, or null if not a member. */
+  /** The caller's own membership settings (pin/notify/read anchor), or null if not a member. */
   private async myMembership(
     channelId: string,
     userId: string,
-  ): Promise<{ isPinned: boolean; notifyLevel: ChatMemberDto['notifyLevel'] } | null> {
+  ): Promise<{
+    isPinned: boolean;
+    notifyLevel: ChatMemberDto['notifyLevel'];
+    lastReadMessageId: string | null;
+  } | null> {
     const [row] = await this.db
-      .select({ isPinned: chatMembers.isPinned, notifyLevel: chatMembers.notifyLevel })
+      .select({
+        isPinned: chatMembers.isPinned,
+        notifyLevel: chatMembers.notifyLevel,
+        lastReadMessageId: chatMembers.lastReadMessageId,
+      })
       .from(chatMembers)
       .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)))
       .limit(1);
@@ -350,11 +367,25 @@ export class ChannelsService {
     return new Map(rows.map((r) => [r.channelId, Number(r.n)]));
   }
 
-  /** Unread = messages after the member's last_read (or all, if never read), not deleted. */
-  private async unreadCounts(userId: string, channelIds: string[]): Promise<Map<string, number>> {
+  /** SQL: among the joined unread messages, those that personally mention `userId` — a TipTap
+   *  mention node anywhere in the body, authored by someone else (docs/modules/13 §4). */
+  private mentionCountSql(userId: string) {
+    return sql<string>`count(${chatMessages.id}) filter (where ${chatMessages.authorId} is distinct from ${userId} and jsonb_path_exists(${chatMessages.body}, '$.** ? (@.type == "mention" && @.attrs.id == $uid)', jsonb_build_object('uid', ${userId}::text)))`;
+  }
+
+  /** Unread = messages after the member's last_read (or all, if never read), not deleted; plus the
+   *  personally-mentioning subset for the red badge (docs/modules/13 §4). */
+  private async unreadCounts(
+    userId: string,
+    channelIds: string[],
+  ): Promise<Map<string, { unread: number; mentions: number }>> {
     if (!channelIds.length) return new Map();
     const rows = await this.db
-      .select({ channelId: chatMembers.channelId, n: count(chatMessages.id) })
+      .select({
+        channelId: chatMembers.channelId,
+        n: count(chatMessages.id),
+        mentions: this.mentionCountSql(userId),
+      })
       .from(chatMembers)
       .leftJoin(
         chatMessages,
@@ -369,7 +400,34 @@ export class ChannelsService {
       )
       .where(and(eq(chatMembers.userId, userId), inArray(chatMembers.channelId, channelIds)))
       .groupBy(chatMembers.channelId);
-    return new Map(rows.map((r) => [r.channelId, Number(r.n)]));
+    return new Map(
+      rows.map((r) => [r.channelId, { unread: Number(r.n), mentions: Number(r.mentions) }]),
+    );
+  }
+
+  /** Sidebar totals across all my conversations (docs/modules/13 §4). Muted channels are excluded —
+   *  mute silences the global badge as well as notifications (decision in docs/plan/STATUS.md). */
+  async unreadTotals(actor: AuthUser): Promise<ChatUnreadTotalsDto> {
+    const [row] = await this.db
+      .select({ unread: count(chatMessages.id), mentions: this.mentionCountSql(actor.id) })
+      .from(chatMembers)
+      .innerJoin(
+        chatChannels,
+        and(eq(chatChannels.id, chatMembers.channelId), isNull(chatChannels.deletedAt)),
+      )
+      .leftJoin(
+        chatMessages,
+        and(
+          eq(chatMessages.channelId, chatMembers.channelId),
+          isNull(chatMessages.deletedAt),
+          or(
+            isNull(chatMembers.lastReadMessageId),
+            gt(chatMessages.id, chatMembers.lastReadMessageId),
+          ),
+        ),
+      )
+      .where(and(eq(chatMembers.userId, actor.id), ne(chatMembers.notifyLevel, 'mute')));
+    return { unread: Number(row?.unread ?? 0), mentions: Number(row?.mentions ?? 0) };
   }
 
   private async otherMembers(

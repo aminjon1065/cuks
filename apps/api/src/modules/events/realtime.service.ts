@@ -24,4 +24,9 @@ export class RealtimeService {
   emitToRoom<E extends WsEventName>(room: string, event: E, payload: WsEventPayloads[E]): void {
     this.server?.to(room).emit(event, payload);
   }
+
+  /** Broadcast to every authorized socket (presence transitions — docs/modules/13 §4). */
+  emitToAll<E extends WsEventName>(event: E, payload: WsEventPayloads[E]): void {
+    this.server?.emit(event, payload);
+  }
 }
