@@ -3,10 +3,12 @@
  * base-62 string; a card/column is placed by computing a key strictly between its neighbours, so
  * a move rewrites only the moved row's key — never a cascade of `order` renumbering.
  *
- * Keys sort by ordinary lexicographic (byte) comparison, which is exactly how Postgres orders
- * `text`, so `ORDER BY order_in_column` returns board order with no extra work. Keys never end in
- * the lowest digit ('0'), the invariant the midpoint algorithm relies on (a dependency-free port
- * of the well-known scheme — https://observablehq.com/@dgreensp/implementing-fractional-indexing).
+ * Keys sort by ordinary lexicographic (byte / ASCII code-unit) comparison. Postgres reproduces
+ * that order ONLY under byte collation, so the order columns are declared `COLLATE "C"` (the
+ * cluster is en_US.utf8, which case-folds and would scramble the base-62 alphabet) — see
+ * packages/db/src/schema/tasks.ts. Keys never end in the lowest digit ('0'), the invariant the
+ * midpoint algorithm relies on (a dependency-free port of the well-known scheme —
+ * https://observablehq.com/@dgreensp/implementing-fractional-indexing).
  *
  * This is the midpoint-only variant (no integer-part optimisation): correct for insert-between,
  * prepend and append, with keys that grow slowly under repeated appends — fine for a board.

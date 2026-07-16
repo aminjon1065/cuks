@@ -23,6 +23,18 @@ const tsvector = customType<{ data: string; driverData: string }>({
 });
 
 /**
+ * A fractional order key (docs/modules/15 §3). Byte-ordered via `COLLATE "C"` so Postgres
+ * `ORDER BY` matches the JS `keyBetween` ASCII-lexicographic ordering. The cluster collation is
+ * en_US.utf8, which case-folds and interleaves the base-62 alphabet (e.g. it sorts 'd' before
+ * 'V') — plain `text` would scramble the board and could even make a neighbour comparison throw.
+ */
+const orderKeyCol = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'text collate "C"';
+  },
+});
+
+/**
  * Kanban projects (docs/modules/15 §2, task 4.1). `key` is the short code that prefixes card
  * numbers (`ОПЕР-142`); `last_seq` is the per-project card counter, minted atomically on create.
  * Visibility is the membership ACL (task_project_members) plus an optional «виден подразделению»
@@ -85,7 +97,7 @@ export const taskColumns = appSchema.table(
       .notNull()
       .references(() => taskProjects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    orderKey: text('order_key').notNull(),
+    orderKey: orderKeyCol('order_key').notNull(),
     wipLimit: integer('wip_limit'),
     isDoneColumn: boolean('is_done_column').notNull().default(false),
     createdAt: createdAt(),
@@ -148,7 +160,7 @@ export const tasks = appSchema.table(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
-    orderInColumn: text('order_in_column').notNull(),
+    orderInColumn: orderKeyCol('order_in_column').notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     searchTsv: tsvector('search_tsv').generatedAlwaysAs(
@@ -179,7 +191,7 @@ export const taskChecklistItems = appSchema.table(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     text: text('text').notNull(),
     isDone: boolean('is_done').notNull().default(false),
-    orderKey: text('order_key').notNull(),
+    orderKey: orderKeyCol('order_key').notNull(),
     createdAt: createdAt(),
   },
   (t) => [index('task_checklist_task_idx').on(t.taskId)],
