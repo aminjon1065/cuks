@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, LogOut, Pencil, Pin, Search, UserPlus, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Check, LogOut, Pencil, Pin, Search, ShieldAlert, UserPlus, X } from 'lucide-react';
 import { Avatar, AvatarFallback, Button, Input, Switch, cn, toast } from '@cuks/ui';
 import type { ChannelDto, ChannelMemberRole, ChatNotifyLevel } from '@cuks/shared';
 import {
@@ -39,6 +40,17 @@ export function InfoPanel({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto" aria-label={t('info.title')}>
       <TopicSection channel={channel} canEdit={canManage} />
+      {channel.linkedIncident ? (
+        <Section title={t('info.linkedIncident')}>
+          <Link
+            to={`/app/incidents/${channel.linkedIncident.id}`}
+            className="flex items-center gap-2 text-[13px] text-primary hover:underline"
+          >
+            <ShieldAlert className="size-4" />
+            {channel.linkedIncident.number}
+          </Link>
+        </Section>
+      ) : null}
       <MySettings channel={channel} />
       <PinsSection channelId={channel.id} canManage={canManage} />
       <MembersSection channel={channel} meId={meId} canManage={canManageMembers} onLeft={onLeft} />

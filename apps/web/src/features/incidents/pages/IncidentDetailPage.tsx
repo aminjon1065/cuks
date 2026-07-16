@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRightLeft, FileText, Plus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, FileText, MessageSquare, Plus, UsersRound } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { WsEventPayloads } from '@cuks/shared';
-import { Button, EmptyState, PageHeader, SeverityBadge, Skeleton, StatusBadge } from '@cuks/ui';
+import {
+  Button,
+  EmptyState,
+  PageHeader,
+  SeverityBadge,
+  Skeleton,
+  StatusBadge,
+  toast,
+} from '@cuks/ui';
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { useCan } from '@/lib/ability';
+import { useOpenIncidentChannel } from '@/features/chat/api/queries';
 import { formatDateTime } from '@/lib/format';
 import { useSocketEvent } from '@/lib/socket';
 import { incidentsKey, useIncident } from '../api/queries';
@@ -33,11 +42,21 @@ export function IncidentDetailPage(): React.JSX.Element {
   const canView = useCan('gis.view');
   const canCreate = useCan('incidents.create');
   const canManage = useCan('incidents.manage');
+  const canChat = useCan('chat.use');
+  const incidentChannel = useOpenIncidentChannel();
   const incident = useIncident(id);
   const [tab, setTab] = useState<Tab>('overview');
   const [reportOpen, setReportOpen] = useState(false);
   const [resourceOpen, setResourceOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+
+  const openChannel = useCallback((): void => {
+    if (!id) return;
+    incidentChannel.mutate(id, {
+      onSuccess: (channel) => void navigate(`/app/chat/${channel.id}`),
+      onError: () => toast({ title: t('card.openChatChannelFailed'), tone: 'danger' }),
+    });
+  }, [id, incidentChannel, navigate, t]);
 
   const onIncidentUpdate = useCallback(
     (event: WsEventPayloads['incidents.updated']) => {
@@ -135,6 +154,16 @@ export function IncidentDetailPage(): React.JSX.Element {
         actions={
           <>
             <SeverityBadge level={data.severity} label={t(`severity.${data.severity}`)} />
+            {canChat ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openChannel}
+                disabled={incidentChannel.isPending}
+              >
+                <MessageSquare /> {t('card.openChatChannel')}
+              </Button>
+            ) : null}
             {canManage ? (
               <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
                 <ArrowRightLeft /> {t('statusChange.action')}

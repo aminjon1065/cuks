@@ -29,10 +29,12 @@ export function ConversationList({
   meId,
   activeChannelId,
   onSelect,
+  onOpenSearch,
 }: {
   meId: string;
   activeChannelId: string | undefined;
   onSelect: (channelId: string) => void;
+  onOpenSearch: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
   const channels = useMyChannels();
@@ -72,6 +74,9 @@ export function ConversationList({
             placeholder={t('list.search')}
           />
         </div>
+        <Button size="icon" variant="ghost" onClick={onOpenSearch} aria-label={t('search.title')}>
+          <Search className="size-4" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="icon" variant="outline" aria-label={t('list.new')}>

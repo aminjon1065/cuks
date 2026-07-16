@@ -10,6 +10,8 @@ import type {
   AddChannelMemberInput,
   ChannelDto,
   ChannelListItemDto,
+  ChatSearchPage,
+  ChatSearchPeriod,
   ChatUnreadTotalsDto,
   CreateChannelInput,
   CreateDmInput,
@@ -65,6 +67,63 @@ export function useMessages(channelId: string | undefined) {
     initialPageParam: '' as string,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: !!channelId,
+  });
+}
+
+/** A window of messages around a target (jump-to-message, docs/modules/13 §4). First page centers on
+ *  the target; further pages load older via the cursor. */
+export function useMessageContext(channelId: string, targetId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: [...messagesKey(channelId), 'around', targetId ?? ''],
+    queryFn: ({ pageParam }) =>
+      api.get<MessagesPage>(
+        `/v1/chat/channels/${channelId}/messages?${
+          pageParam ? `cursor=${pageParam}` : `around=${targetId}`
+        }`,
+      ),
+    initialPageParam: '' as string,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: !!targetId,
+  });
+}
+
+/** Full-text search across my conversations (docs/modules/13 §4). */
+export function useChatSearch(params: {
+  q: string;
+  channelId?: string | undefined;
+  fromUserId?: string | undefined;
+  period: ChatSearchPeriod;
+}) {
+  const q = params.q.trim();
+  return useInfiniteQuery({
+    queryKey: [
+      ...chatKey,
+      'search',
+      q,
+      params.channelId ?? '',
+      params.fromUserId ?? '',
+      params.period,
+    ],
+    queryFn: ({ pageParam }) => {
+      const sp = new URLSearchParams({ q, period: params.period });
+      if (params.channelId) sp.set('channelId', params.channelId);
+      if (params.fromUserId) sp.set('fromUserId', params.fromUserId);
+      if (pageParam) sp.set('cursor', pageParam);
+      return api.get<ChatSearchPage>(`/v1/chat/search?${sp.toString()}`);
+    },
+    initialPageParam: '' as string,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: q.length > 0,
+  });
+}
+
+/** Open (or create) the incident's chat channel — used from the incident card (docs/modules/13 §2). */
+export function useOpenIncidentChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (incidentId: string) =>
+      api.post<ChannelDto>('/v1/chat/channels/from-incident', { incidentId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: channelsKey }),
   });
 }
 

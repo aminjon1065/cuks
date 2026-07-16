@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, Hash, Info, Lock, Users } from 'lucide-react';
+import { ChevronLeft, Hash, Info, Lock, Search, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, Button, cn } from '@cuks/ui';
 import type { ChannelDto } from '@cuks/shared';
 import { usePresence } from '../hooks/usePresence';
@@ -14,11 +14,13 @@ export function ChannelHeader({
   infoOpen,
   onToggleInfo,
   onBack,
+  onOpenSearch,
 }: {
   channel: ChannelDto;
   infoOpen: boolean;
   onToggleInfo: () => void;
   onBack: () => void;
+  onOpenSearch: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
   const name = channelDisplayName(channel, t('kind.dm'));
@@ -74,6 +76,9 @@ export function ChannelHeader({
         ) : null}
       </div>
 
+      <Button size="icon" variant="ghost" onClick={onOpenSearch} aria-label={t('search.title')}>
+        <Search className="size-4" />
+      </Button>
       <Button
         size="icon"
         variant={infoOpen ? 'secondary' : 'ghost'}

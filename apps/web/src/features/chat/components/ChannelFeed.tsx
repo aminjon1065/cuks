@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessagesSquare, WifiOff } from 'lucide-react';
 import { Button, EmptyState, Skeleton } from '@cuks/ui';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { MessageDto, WsEventPayloads } from '@cuks/shared';
 import { useSocketEvent } from '@/lib/socket';
 import { useChannel, useMarkRead, useMessages, usePins } from '../api/queries';
 import { useChatRealtime } from '../hooks/useChatRealtime';
 import { ChannelHeader } from './ChannelHeader';
 import { MessageList } from './MessageList';
+import { FocusedFragment } from './FocusedFragment';
 import { Composer } from './Composer';
 
 /** How long a typing hint stays visible without a follow-up event (sender re-emits every 3s). */
@@ -20,14 +22,19 @@ export function ChannelFeed({
   infoOpen,
   onToggleInfo,
   onBack,
+  onOpenSearch,
 }: {
   channelId: string;
   me: { id: string; name: string | null };
   infoOpen: boolean;
   onToggleInfo: () => void;
   onBack: () => void;
+  onOpenSearch: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusMsgId = searchParams.get('msg');
   const channel = useChannel(channelId);
   const messagesQ = useMessages(channelId);
   const pins = usePins(channelId);
@@ -63,14 +70,15 @@ export function ChannelFeed({
   const markReadRef = useRef(markRead.mutate);
   markReadRef.current = markRead.mutate;
   useEffect(() => {
-    if (!lastRealId || !atBottom) return;
+    // Don't advance the read marker while the user is viewing an old fragment (jump-to-message).
+    if (!lastRealId || !atBottom || focusMsgId) return;
     const fire = (): void => {
       if (document.visibilityState === 'visible') markReadRef.current(lastRealId);
     };
     fire();
     document.addEventListener('visibilitychange', fire);
     return () => document.removeEventListener('visibilitychange', fire);
-  }, [lastRealId, channelId, atBottom]);
+  }, [lastRealId, channelId, atBottom, focusMsgId]);
 
   // Typing hints (docs/modules/13 §4): userId → expiry; senders re-emit every 3s, entries expire
   // after 5s or as soon as that user's message lands.
@@ -150,9 +158,20 @@ export function ChannelFeed({
         infoOpen={infoOpen}
         onToggleInfo={onToggleInfo}
         onBack={onBack}
+        onOpenSearch={onOpenSearch}
       />
 
-      {messagesQ.isPending ? (
+      {focusMsgId ? (
+        <FocusedFragment
+          channel={channel.data}
+          targetId={focusMsgId}
+          me={me}
+          canModerate={canModerate}
+          pinnedIds={pinnedIds}
+          onReply={setReplyingTo}
+          onExit={() => navigate(`/app/chat/${channelId}`)}
+        />
+      ) : messagesQ.isPending ? (
         <div className="flex-1 space-y-4 p-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-12 rounded-md" />

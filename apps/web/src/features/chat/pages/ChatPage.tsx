@@ -7,6 +7,7 @@ import { useMe } from '@/features/auth/api/queries';
 import { ConversationList } from '../components/ConversationList';
 import { ChannelFeed } from '../components/ChannelFeed';
 import { InfoPanel } from '../components/InfoPanel';
+import { SearchDialog } from '../components/SearchDialog';
 import { useChannel } from '../api/queries';
 import '../chat.css';
 
@@ -19,6 +20,7 @@ export function ChatPage(): React.JSX.Element | null {
   const navigate = useNavigate();
   const me = useMe();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [search, setSearch] = useState<{ open: boolean; channelId?: string }>({ open: false });
   const isDesktop = useIsDesktop();
 
   useEffect(() => setInfoOpen(false), [channelId]);
@@ -31,6 +33,8 @@ export function ChatPage(): React.JSX.Element | null {
     setInfoOpen(false);
     void navigate('/app/chat');
   };
+  const jumpTo = (ch: string, messageId: string): void =>
+    void navigate(`/app/chat/${ch}?msg=${messageId}`);
 
   const infoAsAside = infoOpen && isDesktop && !!channelId;
   const infoAsOverlay = infoOpen && !isDesktop && !!channelId;
@@ -43,7 +47,12 @@ export function ChatPage(): React.JSX.Element | null {
           channelId ? 'hidden md:flex' : 'flex',
         )}
       >
-        <ConversationList meId={me.data.id} activeChannelId={channelId} onSelect={select} />
+        <ConversationList
+          meId={me.data.id}
+          activeChannelId={channelId}
+          onSelect={select}
+          onOpenSearch={() => setSearch({ open: true })}
+        />
       </aside>
 
       <main className={cn('min-h-0 min-w-0 flex-1', channelId ? 'flex' : 'hidden md:flex')}>
@@ -58,6 +67,7 @@ export function ChatPage(): React.JSX.Element | null {
               infoOpen={infoOpen}
               onToggleInfo={() => setInfoOpen((v) => !v)}
               onBack={back}
+              onOpenSearch={() => setSearch({ open: true, channelId })}
             />
           </div>
         ) : (
@@ -81,6 +91,15 @@ export function ChatPage(): React.JSX.Element | null {
         <SidePanel open onOpenChange={(o) => !o && setInfoOpen(false)} title={t('info.title')}>
           <InfoPanelContainer channelId={channelId!} meId={me.data.id} onLeft={closeAndBack} />
         </SidePanel>
+      ) : null}
+
+      {search.open ? (
+        <SearchDialog
+          meId={me.data.id}
+          presetChannelId={search.channelId}
+          onClose={() => setSearch({ open: false })}
+          onJump={jumpTo}
+        />
       ) : null}
     </div>
   );
