@@ -302,6 +302,17 @@ export type ControlSeverity = (typeof CONTROL_SEVERITIES)[number];
 export const SUBSTITUTION_SCOPES = ['all', 'docflow'] as const;
 export type SubstitutionScope = (typeof SUBSTITUTION_SCOPES)[number];
 
+// --- Tasks / kanban (docs/modules/15, task 4.1) ---
+
+/** Task priority (docs/modules/15 §2): p1 highest (danger) → p4 lowest (muted). Default p3. */
+export const TASK_PRIORITIES = ['p1', 'p2', 'p3', 'p4'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+/** Per-project ACL role (docs/modules/15 §1): owner manages the project, editor edits cards,
+ *  viewer is read-only. */
+export const PROJECT_ROLES = ['owner', 'editor', 'viewer'] as const;
+export type ProjectRole = (typeof PROJECT_ROLES)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
