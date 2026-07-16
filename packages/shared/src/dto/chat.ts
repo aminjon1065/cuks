@@ -49,6 +49,8 @@ export interface ChannelDto extends ChannelListItemDto {
   myLastReadMessageId: string | null;
   /** The linked incident (for an incident channel), shown in the info panel (docs/modules/13 §7). */
   linkedIncident: { id: string; number: string } | null;
+  /** An in-progress call on this channel — drives the «Идёт звонок» banner (docs/modules/14 §2). */
+  activeCall: { roomId: string; slug: string } | null;
 }
 
 /** Open (or create) the chat channel for an incident (docs/modules/13 §2). */

@@ -49,6 +49,25 @@ export interface WsEventPayloads {
   'chat.reaction.updated': { channelId: string; messageId: string; actorId: string };
   /** A channel's metadata or membership changed; subscribers refetch the channel / list. */
   'chat.channel.updated': { channelId: string; actorId: string };
+  /** Incoming 1:1 call (docs/modules/14 §2): the DM caller is ringing this user — show the accept/
+   *  decline prompt + ringtone. Delivered to the recipient's `user:{id}` room only. */
+  'meet.ring': {
+    roomId: string;
+    slug: string;
+    channelId: string;
+    fromUserId: string;
+    fromName: string;
+    media: 'audio' | 'video';
+  };
+  /** A ring ended before it was answered (docs/modules/14 §2): the caller cancelled, the callee
+   *  declined/accepted elsewhere, or it timed out — dismiss the prompt / stop the ringback. */
+  'meet.ring.cancelled': {
+    roomId: string;
+    reason: 'accepted' | 'declined' | 'cancelled' | 'missed';
+  };
+  /** A channel call started or ended (docs/modules/14 §2, §7): `channel:{id}` subscribers refresh the
+   *  «Идёт звонок» banner. */
+  'meet.room.updated': { channelId: string; roomId: string; active: boolean };
 }
 
 export type WsEventName = keyof WsEventPayloads;

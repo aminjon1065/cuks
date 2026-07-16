@@ -13,6 +13,7 @@ export const QUEUE = {
   retention: 'retention',
   geoImport: 'geo-import',
   geoExport: 'geo-export',
+  meetRing: 'meet-ring',
 } as const;
 
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
@@ -43,6 +44,19 @@ export interface GeoImportJobData {
 /** `geo-export` queue (docs/modules/10 §6). */
 export interface GeoExportJobData {
   exportId: string;
+}
+
+/**
+ * `meet-ring` queue (docs/modules/14 §2) — a delayed «no answer» timer for a 1:1 call ring. Consumed
+ * in the api process (it posts a system message + emits realtime), not the worker. If the ring was
+ * answered/declined/cancelled first (its Redis key is gone), the job is a no-op.
+ */
+export interface MeetRingJobData {
+  roomId: string;
+  recipientId: string;
+  channelId: string;
+  callerId: string;
+  media: 'audio' | 'video';
 }
 
 /**

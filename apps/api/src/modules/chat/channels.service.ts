@@ -6,6 +6,7 @@ import {
   chatMessages,
   entityLinks,
   incidents,
+  meetRooms,
   users,
   type Database,
 } from '@cuks/db';
@@ -108,14 +109,16 @@ export class ChannelsService {
 
   async get(channelId: string, actor: AuthUser): Promise<ChannelDto> {
     const channel = await this.acl.requireMember(channelId, actor);
-    const [members, memberCounts, unread, others, mine, linkedIncident] = await Promise.all([
-      this.channelMembers(channelId),
-      this.memberCounts([channelId]),
-      this.unreadCounts(actor.id, [channelId]),
-      this.otherMembers(actor.id, [channelId]),
-      this.myMembership(channelId, actor.id),
-      this.linkedIncident(channelId),
-    ]);
+    const [members, memberCounts, unread, others, mine, linkedIncident, activeCall] =
+      await Promise.all([
+        this.channelMembers(channelId),
+        this.memberCounts([channelId]),
+        this.unreadCounts(actor.id, [channelId]),
+        this.otherMembers(actor.id, [channelId]),
+        this.myMembership(channelId, actor.id),
+        this.linkedIncident(channelId),
+        this.activeCall(channelId),
+      ]);
     const role = members.find((m) => m.userId === actor.id)?.role ?? null;
     const base = this.toListItem(
       channel,
@@ -131,7 +134,18 @@ export class ChannelsService {
       myNotifyLevel: mine?.notifyLevel ?? 'all',
       myLastReadMessageId: mine?.lastReadMessageId ?? null,
       linkedIncident,
+      activeCall,
     };
+  }
+
+  /** The live call room on this channel, if any — drives the «Идёт звонок» banner (docs/modules/14 §2). */
+  private async activeCall(channelId: string): Promise<{ roomId: string; slug: string } | null> {
+    const [row] = await this.db
+      .select({ roomId: meetRooms.id, slug: meetRooms.slug })
+      .from(meetRooms)
+      .where(and(eq(meetRooms.channelId, channelId), eq(meetRooms.isActive, true)))
+      .limit(1);
+    return row ?? null;
   }
 
   /** The incident this channel was opened from, if any (entity_links, docs/modules/13 §7). */

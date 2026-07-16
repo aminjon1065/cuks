@@ -37,3 +37,31 @@ export const meetHostTargetSchema = z.object({
   identity: z.string().min(1),
 });
 export type MeetHostTargetInput = z.infer<typeof meetHostTargetSchema>;
+
+/** Ring a user for a 1:1 DM call (docs/modules/14 §2/§7): `roomId` is the DM's room, `userId` the
+ *  recipient (the other DM member). */
+export const startRingSchema = z.object({
+  roomId: z.string().uuid(),
+  userId: z.string().uuid(),
+  media: z.enum(['audio', 'video']).default('video'),
+});
+export type StartRingInput = z.infer<typeof startRingSchema>;
+
+/** The lifecycle event a `kind: 'call'` chat message records (docs/modules/14 §2). */
+export type MeetCallEvent = 'started' | 'ended' | 'missed' | 'declined';
+
+/** Body of a call system message (stored in `chat_messages.body`, rendered as a call card). */
+export interface MeetCallMessageBody {
+  call: MeetCallEvent;
+  media: 'audio' | 'video';
+  roomId: string;
+  slug: string;
+  /** Set on `ended` — the call's length in seconds (docs/modules/14 §9). */
+  durationSec?: number;
+}
+
+/** An in-progress call on a channel, for the «Идёт звонок» banner (docs/modules/14 §2). */
+export interface MeetActiveCallDto {
+  roomId: string;
+  slug: string;
+}

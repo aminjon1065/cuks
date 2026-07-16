@@ -3,11 +3,18 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { chatChannels, chatMembers, meetRooms, users, type Database } from '@cuks/db';
-import type { CreateRoomInput, MeetRoomDto, MeetRoomRole, MeetTokenDto } from '@cuks/shared';
+import {
+  wsRooms,
+  type CreateRoomInput,
+  type MeetRoomDto,
+  type MeetRoomRole,
+  type MeetTokenDto,
+} from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
+import { RealtimeService } from '../events/realtime.service';
 import { LivekitService } from './livekit.service';
 
 /** Advisory-lock namespace — serializes concurrent «open call room» on the same channel. */
@@ -28,6 +35,7 @@ export class MeetRoomsService {
     @Inject(DB) private readonly db: Database,
     private readonly livekit: LivekitService,
     private readonly audit: AuditService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   /** Open (or reuse) a call room. `dm`/`channel` rooms are one-per-conversation and membership-gated;
@@ -77,6 +85,12 @@ export class MeetRoomsService {
         entityType: 'meet_room',
         entityId: id,
         meta: { kind: body.kind, channelId },
+      });
+      // Raise the «Идёт звонок» banner in the conversation (docs/modules/14 §2).
+      this.realtime.emitToRoom(wsRooms.channel(channelId), 'meet.room.updated', {
+        channelId,
+        roomId: id,
+        active: true,
       });
     }
     return this.toDto(await this.requireRoomById(id), user);
@@ -168,6 +182,14 @@ export class MeetRoomsService {
       entityType: 'meet_room',
       entityId: room.id,
     });
+    // Drop the channel call banner (docs/modules/14 §2).
+    if (room.channelId) {
+      this.realtime.emitToRoom(wsRooms.channel(room.channelId), 'meet.room.updated', {
+        channelId: room.channelId,
+        roomId: room.id,
+        active: false,
+      });
+    }
   }
 
   /** Load a room and assert the caller is its host (docs/modules/14 §1: creator = host). */
