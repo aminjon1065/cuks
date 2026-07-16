@@ -64,6 +64,11 @@ const MeetPage = lazy(() =>
 const MeetRoomPage = lazy(() =>
   import('@/features/meet/pages/MeetRoomPage').then((m) => ({ default: m.MeetRoomPage })),
 );
+const MeetRecordingsPage = lazy(() =>
+  import('@/features/meet/pages/MeetRecordingsPage').then((m) => ({
+    default: m.MeetRecordingsPage,
+  })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
@@ -171,6 +176,14 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<div className="h-full w-full bg-background" />}>
             <MeetPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'meet/recordings',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <MeetRecordingsPage />
           </Suspense>
         ),
       },

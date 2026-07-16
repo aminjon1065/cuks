@@ -1,7 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { MediaDeviceMenu, useRoomContext, useTrackToggle } from '@livekit/components-react';
+import {
+  MediaDeviceMenu,
+  useIsRecording,
+  useRoomContext,
+  useTrackToggle,
+} from '@livekit/components-react';
 import { Track } from 'livekit-client';
 import {
+  Circle,
   Hand,
   MessageSquare,
   Mic,
@@ -10,14 +16,18 @@ import {
   PhoneOff,
   Settings,
   Smile,
+  Square,
   Users,
   Video,
   VideoOff,
 } from 'lucide-react';
 import type { MeetRoomDto } from '@cuks/shared';
-import { Button, Popover, PopoverContent, PopoverTrigger, cn } from '@cuks/ui';
+import { Button, Popover, PopoverContent, PopoverTrigger, cn, toast } from '@cuks/ui';
+import { ApiError } from '@/lib/api-client';
+import { useCan } from '@/lib/ability';
 import { usePushToTalk } from '../hooks/usePushToTalk';
 import { useRaiseHand } from '../hooks/useRaiseHand';
+import { useStartRecording, useStopRecording } from '../api/queries';
 
 export type CallPanel = 'participants' | 'chat' | null;
 
@@ -73,6 +83,21 @@ export function CallControlBar(props: Props): React.JSX.Element {
   const screen = useTrackToggle({ source: Track.Source.ScreenShare });
   const ptt = usePushToTalk();
   const hand = useRaiseHand();
+  const isRecording = useIsRecording();
+  const canRecord = useCan('meet.record') && props.room.myRole === 'host';
+  const startRec = useStartRecording();
+  const stopRec = useStopRecording();
+
+  const toggleRecording = (): void => {
+    const onError = (err: unknown): void => {
+      toast({
+        title: err instanceof ApiError ? err.message : t('toast.actionFailed'),
+        tone: 'danger',
+      });
+    };
+    if (isRecording) stopRec.mutate(props.room.id, { onError });
+    else startRec.mutate(props.room.id, { onError });
+  };
 
   return (
     <div className="flex items-center justify-center gap-1.5 border-t border-border bg-surface-1 px-3 py-2">
@@ -154,6 +179,15 @@ export function CallControlBar(props: Props): React.JSX.Element {
         active={props.audioOnly}
         onClick={() => props.onToggleAudioOnly(!props.audioOnly)}
       />
+      {canRecord ? (
+        <ControlButton
+          icon={isRecording ? Square : Circle}
+          label={isRecording ? t('room.stopRecord') : t('room.record')}
+          active={isRecording}
+          danger={isRecording}
+          onClick={toggleRecording}
+        />
+      ) : null}
 
       <Popover>
         <PopoverTrigger asChild>

@@ -7,6 +7,7 @@ import type {
   MeetingsRange,
   MeetRoomDto,
   MeetTokenDto,
+  RecordingDto,
   StartRingInput,
   UpdateMeetingInput,
 } from '@cuks/shared';
@@ -86,6 +87,40 @@ export function useRingActions() {
     mutationFn: (roomId: string) => api.post<void>(`/v1/meet/ring/${roomId}/cancel`),
   });
   return { accept, decline, cancel };
+}
+
+// --- Recordings (docs/modules/14 §4, task 6.6) ---
+
+export const recordingsKey = [...meetKey, 'recordings'] as const;
+
+export function useRecordings(): UseQueryResult<RecordingDto[]> {
+  return useQuery({
+    queryKey: recordingsKey,
+    queryFn: () => api.get<RecordingDto[]>('/v1/meet/recordings'),
+  });
+}
+
+export function useStartRecording() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roomId: string) =>
+      api.post<RecordingDto>(`/v1/meet/rooms/${roomId}/recording/start`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: recordingsKey }),
+  });
+}
+
+export function useStopRecording() {
+  return useMutation({
+    mutationFn: (roomId: string) => api.post<void>(`/v1/meet/rooms/${roomId}/recording/stop`),
+  });
+}
+
+export function useDeleteRecording() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/v1/meet/recordings/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: recordingsKey }),
+  });
 }
 
 /** Host moderation (docs/modules/14 §3). All gated server-side to the room host. */

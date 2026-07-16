@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CalendarPlus, Link2, Loader2, Video } from 'lucide-react';
+import { CalendarPlus, Film, Link2, Loader2, Video } from 'lucide-react';
 import type { MeetingDto, MeetingsRange } from '@cuks/shared';
 import { Button, EmptyState, Input, PageHeader, cn, toast } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
@@ -60,6 +60,14 @@ export function MeetPage(): React.JSX.Element {
         description={t('landing.subtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              className="gap-1.5"
+              onClick={() => navigate('/app/meet/recordings')}
+            >
+              <Film className="size-4" />
+              {t('recordings.title')}
+            </Button>
             <Button variant="secondary" className="gap-1.5" onClick={() => setScheduling('new')}>
               <CalendarPlus className="size-4" />
               {t('landing.schedule')}
