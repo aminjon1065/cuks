@@ -2,7 +2,7 @@
 # (api/web/worker) run on the host via `pnpm dev`. Credentials here are
 # dev-only and intentionally static — never reuse them in production.
 #
-# Services for later phases (LiveKit, Martin, GeoServer) are added in their
+# Services for later phases (Martin, GeoServer, LiveKit) are added in their
 # respective phases (2 and 6) to keep the dev footprint small.
 name: cuks-dev
 
@@ -130,9 +130,51 @@ services:
       timeout: 10s
       retries: 10
 
+  # Realtime SFU for calls/conferences (phase 6, docs/modules/14). Config + keys in
+  # infra/docker/livekit/livekit.yaml; the api is the sole token source (task 6.2)
+  # and verifies the webhooks LiveKit posts back. No healthcheck: the minimal image
+  # ships no shell/wget, so dependents wait on `service_started`.
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: ['--config', '/etc/livekit.yaml']
+    # The api runs on the host in dev; let LiveKit reach its webhook endpoint.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '7880:7880' # http/ws signaling
+      - '7881:7881' # ICE/TCP fallback
+      - '7882:7882/udp' # ICE/UDP mux
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Recording (Egress) runs headless Chrome — heavy and finicky on Docker Desktop —
+  # so it is opt-in via `docker compose --profile recording up` (used from task 6.6).
+  # The default `up` does not start it.
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    profiles: ['recording']
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./livekit/egress.yaml:/etc/egress.yaml:ro
+      - egresstmp:/tmp
+    # Chrome needs a larger shared-memory segment than the 64 MB default.
+    shm_size: '1gb'
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+
 volumes:
   pgdata:
   redisdata:
   miniodata:
   clamavdata:
   geoserverdata:
+  egresstmp:

@@ -1,0 +1,26 @@
+# LiveKit Egress config (docs/modules/14 §4/§6). Records room-composite MP4s to the
+# MinIO `recordings` bucket. DEV only; the key/secret match livekit.yaml and the
+# api's .env. Egress runs headless Chrome, so it is opt-in in dev (compose profile
+# `recording`) and fully exercised from task 6.6.
+redis:
+  address: redis:6379
+
+api_key: devkey
+api_secret: devsecretdevsecretdevsecretdevsecret
+
+# LiveKit signaling (plain ws in dev — see `insecure` below).
+ws_url: ws://livekit:7880
+
+# Recordings land in a dedicated bucket (provisioned in task 6.6). MinIO speaks the
+# S3 API with path-style addressing.
+s3:
+  access_key: cuks
+  secret: cuks-dev-secret
+  region: us-east-1
+  endpoint: http://minio:9000
+  bucket: recordings
+  force_path_style: true
+
+# Allow the non-TLS LiveKit ws:// and http:// MinIO endpoints in dev.
+insecure: true
+log_level: info

@@ -1,0 +1,44 @@
+# LiveKit SFU config (docs/modules/14 §6, docs/08-deployment.md). DEV values —
+# the key/secret below MUST match LIVEKIT_API_KEY / LIVEKIT_API_SECRET in the api's
+# .env and infra/docker/livekit/egress.yaml. Never reuse these in production.
+port: 7880
+
+# Bind RTC to a single UDP mux port plus a TCP fallback instead of the prod
+# 50000-50200/udp range (docs/08 §firewall): far fewer published ports for a
+# Docker-Desktop dev host, and enough for local calls. Prod widens the range on a
+# host-network deployment.
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Dev runs on localhost; don't probe or advertise a public IP.
+  use_external_ip: false
+
+redis:
+  address: redis:6379
+
+keys:
+  devkey: devsecretdevsecretdevsecretdevsecret
+
+# Webhooks -> api (participant/room/egress lifecycle, docs/modules/14 §6). In dev
+# the api runs on the host via `pnpm dev`, reachable from the container through
+# host.docker.internal (extra_hosts in compose.dev.yaml). The URL is version-neutral
+# so it stays stable across API versions.
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:3000/api/meet/webhook
+
+# Embedded TURN for clients behind strict NAT (docs/08 §firewall: 5349/tcp turns).
+# In prod TLS is terminated at the edge (Caddy layer4) and LiveKit sees plain TCP
+# (external_tls) — wired in task 7.1. Dev has no TLS edge and talks over localhost,
+# where no relay is needed, so TURN stays off here.
+turn:
+  enabled: false
+  # prod (task 7.1, behind Caddy):
+  #   enabled: true
+  #   tls_port: 5349
+  #   external_tls: true
+  #   domain: cuks.<domain>
+
+logging:
+  level: info
