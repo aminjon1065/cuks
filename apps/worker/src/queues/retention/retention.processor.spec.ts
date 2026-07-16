@@ -64,9 +64,12 @@ describe('RetentionProcessor — sweep order', () => {
       [], // purgeAbandonedUploads: no stale uploads
       [], // purgeTrash: nothing eligible
       [], // reconcileStalePendingScans: nothing stale
+      [], // purgeExpiredRecordings: nothing past its retention window (task 6.7)
     ]);
     await processor.process({} as never);
-    expect(db.select).toHaveBeenCalledTimes(3);
+    // Four selects: abandoned uploads, trash, stale-pending scans, expired recordings. (purgeExpiredLinks
+    // between the last two issues a delete, not a select, so it does not count here.)
+    expect(db.select).toHaveBeenCalledTimes(4);
   });
 });
 
