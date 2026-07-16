@@ -25,6 +25,8 @@ import { JournalsRegisterPage } from '@/features/docflow/pages/JournalsRegisterP
 import { ControlPage } from '@/features/docflow/pages/ControlPage';
 import { ReportsPage as DocflowReportsPage } from '@/features/docflow/pages/ReportsPage';
 import { SubstitutionsPage } from '@/features/docflow/pages/SubstitutionsPage';
+import { ProjectsPage as TasksProjectsPage } from '@/features/tasks/pages/ProjectsPage';
+import { BoardPage } from '@/features/tasks/pages/BoardPage';
 import { FilesPage } from '@/features/files/pages/FilesPage';
 
 // The map pulls in MapLibre + basemap themes (~800 kB); lazy-load it so that
@@ -51,7 +53,7 @@ const ReportsPage = lazy(() =>
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['tasks', 'chat', 'meet'];
+const PLACEHOLDER_PATHS = ['chat', 'meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -130,6 +132,8 @@ export const router = createBrowserRouter([
       { path: 'docs/settings', element: <DocflowSettingsPage /> },
       { path: 'docs/:id', element: <DocumentCardPage /> },
       { path: 'verify/:signatureId', element: <VerifyPage /> },
+      { path: 'tasks', element: <TasksProjectsPage /> },
+      { path: 'tasks/:projectKey', element: <BoardPage /> },
       {
         path: 'analytics',
         element: (
