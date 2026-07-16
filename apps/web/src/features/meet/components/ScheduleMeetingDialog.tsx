@@ -109,7 +109,11 @@ export function ScheduleMeetingDialog({
             </div>
           </div>
 
-          <MeetingParticipantsField value={participants} onChange={setParticipants} />
+          <MeetingParticipantsField
+            value={participants}
+            onChange={setParticipants}
+            knownNames={meeting?.participantUsers}
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="meeting-agenda">{t('schedule.agenda')}</Label>

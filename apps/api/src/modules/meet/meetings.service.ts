@@ -208,9 +208,23 @@ export class MeetingsService {
     return row;
   }
 
-  /** Resolve the invitee list ({users, orgUnits}) to a deduped set of active user ids. */
+  /** Resolve the invitee list ({users, orgUnits}) to a deduped set of ACTIVE user ids — the explicit
+   *  users are filtered for active/not-deleted too, so a blocked/removed invitee isn't notified. */
   private async resolveParticipantIds(participants: MeetingParticipants): Promise<Set<string>> {
-    const ids = new Set<string>(participants.users);
+    const ids = new Set<string>();
+    if (participants.users.length > 0) {
+      const rows = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            inArray(users.id, participants.users),
+            eq(users.status, 'active'),
+            isNull(users.deletedAt),
+          ),
+        );
+      for (const r of rows) ids.add(r.id);
+    }
     if (participants.orgUnits.length > 0) {
       const rows = await this.db
         .selectDistinct({ userId: userPositions.userId })
@@ -256,7 +270,10 @@ export class MeetingsService {
       priority: 'normal',
       // Reminders/cancellations are time-sensitive-in-app only; an invite may email an offline user.
       emailMode: kind === 'invited' ? 'offline' : 'never',
-      dedupeKey: `meet:meeting:${row.id}:${kind}`,
+      // Per-occurrence key: a repeat edit or a re-armed reminder (after reschedule) must NOT be
+      // swallowed by the (user, dedupe_key) unique index — only genuine duplicates (e.g. a job retry)
+      // should collapse. `invited`/`cancelled` fire once, so a stable key is fine.
+      dedupeKey: dedupeKeyFor(row, kind),
     });
   }
 
@@ -278,8 +295,9 @@ export class MeetingsService {
 
   private async toDto(row: MeetingRow, user: AuthUser): Promise<MeetingDto> {
     const participants = participantsOf(row);
-    const [ids, room, organizer] = await Promise.all([
+    const [ids, userNames, room, organizer] = await Promise.all([
       this.resolveParticipantIds(participants),
+      this.participantUserNames(participants),
       row.roomId
         ? this.db
             .select({ slug: meetRooms.slug })
@@ -306,12 +324,37 @@ export class MeetingsService {
       organizerId: row.organizerId,
       organizerName: organizer[0]?.name ?? null,
       participants,
+      participantUsers: userNames,
       participantCount: ids.size,
       recordPlanned: row.recordPlanned,
       status: row.status,
       canManage: row.organizerId === user.id,
     };
   }
+
+  /** Names of the explicitly-invited users, for labelling chips in the edit form. */
+  private async participantUserNames(
+    participants: MeetingParticipants,
+  ): Promise<{ id: string; name: string }[]> {
+    if (participants.users.length === 0) return [];
+    const rows = await this.db
+      .select({ id: users.id, name: users.shortName })
+      .from(users)
+      .where(inArray(users.id, participants.users));
+    return rows.map((r) => ({ id: r.id, name: r.name }));
+  }
+}
+
+/** A dedupe key that varies per occurrence so re-armed reminders / repeat reschedule notices deliver,
+ *  while a single fan-out (or its retry) stays idempotent. */
+function dedupeKeyFor(
+  row: MeetingRow,
+  kind: 'invited' | 'updated' | 'cancelled' | 'reminder',
+): string {
+  const base = `meet:meeting:${row.id}:${kind}`;
+  if (kind === 'reminder') return `${base}:${row.startsAt.getTime()}`;
+  if (kind === 'updated') return `${base}:${row.updatedAt.getTime()}`;
+  return base;
 }
 
 /** May the user see this meeting — organizer, an explicit invitee, or a member of an invited org unit. */

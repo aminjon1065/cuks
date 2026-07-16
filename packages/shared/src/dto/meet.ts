@@ -107,6 +107,8 @@ export interface MeetingDto {
   organizerId: string | null;
   organizerName: string | null;
   participants: MeetingParticipants;
+  /** Display names for the explicitly-invited users — so the edit form can label their chips. */
+  participantUsers: { id: string; name: string }[];
   /** Resolved headcount (explicit users + org-unit members, deduped) — for the card. */
   participantCount: number;
   recordPlanned: boolean;
