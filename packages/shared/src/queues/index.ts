@@ -14,6 +14,7 @@ export const QUEUE = {
   geoImport: 'geo-import',
   geoExport: 'geo-export',
   meetRing: 'meet-ring',
+  meetReminder: 'meet-reminder',
 } as const;
 
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
@@ -57,6 +58,15 @@ export interface MeetRingJobData {
   channelId: string;
   callerId: string;
   media: 'audio' | 'video';
+}
+
+/**
+ * `meet-reminder` queue (docs/modules/14 §2) — a delayed «15 minutes before» reminder for a scheduled
+ * meeting. Consumed in the api process so it can fan out realtime notifications. A no-op if the meeting
+ * was cancelled/rescheduled (its jobId was removed) or is no longer scheduled.
+ */
+export interface MeetReminderJobData {
+  meetingId: string;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { MeetRoomAccess, MeetRoomKind, MeetRoomRole } from '../enums/index';
+import type { MeetingStatus, MeetRoomAccess, MeetRoomKind, MeetRoomRole } from '../enums/index';
 
 /**
  * Meet DTOs (docs/modules/14 §7, task 6.2). The room-creation endpoint opens a call room for a DM,
@@ -64,4 +64,53 @@ export interface MeetCallMessageBody {
 export interface MeetActiveCallDto {
   roomId: string;
   slug: string;
+}
+
+// --- Scheduled meetings (docs/modules/14 §2/§5/§7, task 6.5) ---
+
+/** Who is invited to a meeting: explicit users and/or whole org units (docs/modules/14 §5). */
+export const meetingParticipantsSchema = z.object({
+  users: z.array(z.string().uuid()).max(500).default([]),
+  orgUnits: z.array(z.string().uuid()).max(100).default([]),
+});
+export type MeetingParticipants = z.infer<typeof meetingParticipantsSchema>;
+
+/** Schedule a meeting (docs/modules/14 §2): theme, time, duration, invitees, agenda, record flag. */
+export const createMeetingSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  agenda: z.string().trim().max(4000).nullish(),
+  startsAt: z.string().datetime(),
+  durationMin: z.number().int().min(5).max(600).default(60),
+  participants: meetingParticipantsSchema.default({ users: [], orgUnits: [] }),
+  recordPlanned: z.boolean().default(false),
+});
+export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
+
+/** Edit or cancel a meeting (organizer only). Any field may be updated; `status: cancelled` cancels. */
+export const updateMeetingSchema = createMeetingSchema
+  .partial()
+  .extend({ status: z.enum(['scheduled', 'cancelled']).optional() });
+export type UpdateMeetingInput = z.infer<typeof updateMeetingSchema>;
+
+/** «Встречи» list segments (docs/modules/14 §2): today, upcoming, or past. */
+export const meetingsRangeSchema = z.enum(['today', 'upcoming', 'past']);
+export type MeetingsRange = z.infer<typeof meetingsRangeSchema>;
+
+export interface MeetingDto {
+  id: string;
+  roomId: string;
+  slug: string;
+  title: string;
+  agenda: string | null;
+  startsAt: string;
+  durationMin: number;
+  organizerId: string | null;
+  organizerName: string | null;
+  participants: MeetingParticipants;
+  /** Resolved headcount (explicit users + org-unit members, deduped) — for the card. */
+  participantCount: number;
+  recordPlanned: boolean;
+  status: MeetingStatus;
+  /** The caller organizes this meeting (may edit / cancel). */
+  canManage: boolean;
 }

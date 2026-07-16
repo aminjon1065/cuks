@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { QUEUE } from '@cuks/shared';
 import { EventsModule } from '../events/events.module';
 import { LivekitService } from './livekit.service';
+import { MeetReminderProcessor } from './meet-reminder.processor';
 import { MeetRingController } from './meet-ring.controller';
 import { MeetRingProcessor } from './meet-ring.processor';
 import { MeetRoomsController } from './meet-rooms.controller';
@@ -10,6 +11,8 @@ import { MeetRoomsService } from './meet-rooms.service';
 import { MeetSystemMessagesService } from './meet-system-messages.service';
 import { MeetWebhookController } from './meet-webhook.controller';
 import { MeetWebhookService } from './meet-webhook.service';
+import { MeetingsController } from './meetings.controller';
+import { MeetingsService } from './meetings.service';
 import { RingService } from './ring.service';
 
 /**
@@ -19,8 +22,11 @@ import { RingService } from './ring.service';
  * so it can emit realtime events. LivekitService is exported for later tasks to reuse.
  */
 @Module({
-  imports: [EventsModule, BullModule.registerQueue({ name: QUEUE.meetRing })],
-  controllers: [MeetWebhookController, MeetRoomsController, MeetRingController],
+  imports: [
+    EventsModule,
+    BullModule.registerQueue({ name: QUEUE.meetRing }, { name: QUEUE.meetReminder }),
+  ],
+  controllers: [MeetWebhookController, MeetRoomsController, MeetRingController, MeetingsController],
   providers: [
     LivekitService,
     MeetWebhookService,
@@ -28,6 +34,8 @@ import { RingService } from './ring.service';
     MeetSystemMessagesService,
     RingService,
     MeetRingProcessor,
+    MeetingsService,
+    MeetReminderProcessor,
   ],
   exports: [LivekitService],
 })
