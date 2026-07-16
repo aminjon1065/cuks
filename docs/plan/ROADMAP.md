@@ -114,7 +114,7 @@
 
 ## Фаза 6 — Звонки (3.5 нед)
 
-- [ ] 6.1 LiveKit+Egress в dev/prod compose, TURN, конфиги, webhook-приёмник
+- [x] 6.1 LiveKit+Egress в dev/prod compose, TURN, конфиги, webhook-приёмник
 - [ ] 6.2 Токен-сервис, meet_rooms/meetings/recordings/calls
 - [ ] 6.3 Пре-джойн, комната (грид/спикер, screen-share, контролы, host-действия, качество)
 - [ ] 6.4 Ring-flow 1:1 из DM + баннер канала + системные сообщения
