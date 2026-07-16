@@ -18,6 +18,17 @@ export interface WsEventPayloads {
     action: 'created' | 'reported' | 'resource_added' | 'status_changed';
   };
   'presence.changed': { userId: string; online: boolean };
+  /** A task board changed (docs/modules/15 §3); a `board:{projectId}` subscriber refetches or
+   *  patches. `actorId` lets a client skip echoing its own optimistic change. */
+  'tasks.card.created': { projectId: string; taskId: string; actorId: string };
+  'tasks.card.updated': { projectId: string; taskId: string; actorId: string };
+  'tasks.card.moved': {
+    projectId: string;
+    taskId: string;
+    columnId: string;
+    actorId: string;
+  };
+  'tasks.board.changed': { projectId: string; actorId: string };
 }
 
 export type WsEventName = keyof WsEventPayloads;

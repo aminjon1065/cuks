@@ -20,6 +20,23 @@ export function previewObjectKey(versionId: string, size: string): string {
   return `previews/${versionId}/${size}.webp`;
 }
 
+/**
+ * Extract plain text from a TipTap / ProseMirror JSON doc (docs/modules/15 §2) — used to keep a
+ * `description_text` mirror for full-text search. Walks the node tree collecting `text` leaves,
+ * joining block nodes with spaces; ignores marks/attrs. Returns '' for anything unparsable.
+ */
+export function tiptapPlainText(doc: unknown): string {
+  const out: string[] = [];
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const n = node as { type?: string; text?: string; content?: unknown[] };
+    if (typeof n.text === 'string') out.push(n.text);
+    if (Array.isArray(n.content)) n.content.forEach(walk);
+  };
+  walk(doc);
+  return out.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Truncates a string to at most `maxLength` UTF-16 code units without splitting
  *  a surrogate pair — a plain `slice(0, n)` can cut between a high and low
  *  surrogate (e.g. an emoji straddling the boundary), producing a lone surrogate

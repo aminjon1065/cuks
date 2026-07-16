@@ -15,3 +15,4 @@ export * from './incidents';
 export * from './analytics';
 export * from './docflow';
 export * from './substitutions';
+export * from './tasks';
