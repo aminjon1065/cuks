@@ -46,6 +46,7 @@ void i18n.use(initReactI18next).init({
     'reports',
     'docflow',
     'tasks',
+    'chat',
   ],
   interpolation: { escapeValue: false },
   returnNull: false,

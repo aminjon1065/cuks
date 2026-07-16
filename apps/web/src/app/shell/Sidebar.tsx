@@ -69,6 +69,7 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
     () => window.matchMedia('(max-width: 1023px)').matches,
   );
   const collapsed = storedCollapsed || compactViewport;
+  const mainItems = useVisibleByPermission(MAIN_NAV);
   const adminItems = useVisibleByPermission(ADMIN_NAV);
   const overdue = useMyOverdueCount();
 
@@ -104,7 +105,7 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {MAIN_NAV.map((item) => (
+        {mainItems.map((item) => (
           <NavRow
             key={item.key}
             item={item}

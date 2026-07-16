@@ -11,8 +11,10 @@ import { CommandPalette } from './CommandPalette';
 export function AppShell(): React.JSX.Element | null {
   const { data: me } = useMe();
   const [commandOpen, setCommandOpen] = useState(false);
-  // The map is full-bleed (docs/06 §3): no content padding, no page scroll.
-  const fullbleed = useLocation().pathname === '/app/map';
+  // The map and chat are full-bleed (docs/06 §3): no content padding, no page scroll — they own their
+  // own full-height layout and internal scroll regions.
+  const { pathname } = useLocation();
+  const fullbleed = pathname === '/app/map' || pathname.startsWith('/app/chat');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

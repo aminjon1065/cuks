@@ -12,6 +12,7 @@ import type {
   ChannelListItemDto,
   CreateChannelInput,
   CreateDmInput,
+  DirectoryUserDto,
   MessageDto,
   MessagesPage,
   SendMessageInput,
@@ -144,6 +145,18 @@ export function useAddMember(channelId: string) {
   });
 }
 
+/** Remove a member, or leave the channel (userId = me). */
+export function useRemoveMember(channelId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.delete(`/v1/chat/channels/${channelId}/members/${userId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: channelKey(channelId) });
+      void qc.invalidateQueries({ queryKey: channelsKey });
+    },
+  });
+}
+
 export function useUpdateChannel(channelId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -162,6 +175,16 @@ export function useUpdateMembership(channelId: string) {
     mutationFn: (body: UpdateMembershipInput) =>
       api.patch(`/v1/chat/channels/${channelId}/membership`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: channelsKey }),
+  });
+}
+
+/** People directory for the DM / add-member pickers (task 1.5 `/directory/users`). */
+export function useDirectoryUsers(search: string): UseQueryResult<DirectoryUserDto[]> {
+  const q = search.trim();
+  return useQuery({
+    queryKey: ['directory', 'users', q],
+    queryFn: () =>
+      api.get<DirectoryUserDto[]>(`/v1/directory/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   });
 }
 

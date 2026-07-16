@@ -33,6 +33,17 @@ export function formatDate(iso: string): string {
   return D.format(new Date(iso));
 }
 
+const T = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Asia/Dushanbe',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Clock time only (HH:MM) in Asia/Dushanbe — for chat message headers. */
+export function formatTime(iso: string): string {
+  return T.format(new Date(iso));
+}
+
 const RTF = new Intl.RelativeTimeFormat('ru-RU', { numeric: 'auto' });
 
 /** Relative time from now — "5 минут назад" (docs/06 §5, for feeds). Past a week

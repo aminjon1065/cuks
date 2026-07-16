@@ -51,10 +51,15 @@ const StatisticsPage = lazy(() =>
 const ReportsPage = lazy(() =>
   import('@/features/reports/pages/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 );
+// Chat pulls in the TipTap editor (~150 kB gz); lazy-load so that weight ships only when the chat
+// screen is opened.
+const ChatPage = lazy(() =>
+  import('@/features/chat/pages/ChatPage').then((m) => ({ default: m.ChatPage })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['chat', 'meet'];
+const PLACEHOLDER_PATHS = ['meet'];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -137,6 +142,8 @@ export const router = createBrowserRouter([
       { path: 'tasks/projects', element: <TasksProjectsPage /> },
       { path: 'tasks/projects/:projectKey', element: <BoardPage /> },
       { path: 'tasks/projects/:projectKey/:seq', element: <BoardPage /> },
+      { path: 'chat', element: <ChatPage /> },
+      { path: 'chat/:channelId', element: <ChatPage /> },
       {
         path: 'analytics',
         element: (

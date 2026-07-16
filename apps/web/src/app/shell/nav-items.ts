@@ -34,7 +34,7 @@ export const MAIN_NAV: NavItem[] = [
   { key: 'analytics', path: '/app/analytics', icon: BarChart3 },
   { key: 'docs', path: '/app/docs', icon: FileText },
   { key: 'tasks', path: '/app/tasks', icon: ListTodo },
-  { key: 'chat', path: '/app/chat', icon: MessageSquare },
+  { key: 'chat', path: '/app/chat', icon: MessageSquare, permission: 'chat.use' },
   { key: 'meet', path: '/app/meet', icon: CalendarClock },
   { key: 'files', path: '/app/files', icon: FolderClosed },
 ];

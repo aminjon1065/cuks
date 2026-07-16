@@ -1,0 +1,49 @@
+/* Composer editor (TipTap) styling keyed to design tokens — docs/06 §2, docs/modules/13 §5. */
+.chat-composer {
+  outline: none;
+}
+.chat-composer p {
+  margin: 0;
+}
+.chat-composer ul,
+.chat-composer ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.chat-composer ul {
+  list-style: disc;
+}
+.chat-composer ol {
+  list-style: decimal;
+}
+.chat-composer pre {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  overflow-x: auto;
+}
+.chat-composer code {
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 0 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+/* Placeholder shown while the editor is empty. */
+.chat-composer p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+/* Inline @-mention chips (composer + rendered messages share the look). */
+.chat-mention {
+  color: var(--primary);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-radius: 4px;
+  padding: 0 2px;
+}
