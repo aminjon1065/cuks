@@ -1,6 +1,6 @@
 import { expect, request, test, type APIRequestContext } from '@playwright/test';
 import { apiLogin, csrfHeaders } from './support/api';
-import { E2E_USER2, STORAGE_STATE } from './support/fixtures';
+import { E2E_ADMIN, E2E_USER2, STORAGE_STATE } from './support/fixtures';
 
 /**
  * Kanban board (docs/modules/15 §3/§8, task 4.2). Drives the real API + PostgreSQL: a project is
@@ -22,6 +22,7 @@ interface CardDto {
   id: string;
   seq: number;
   columnId: string;
+  orderKey: string;
   completedAt: string | null;
 }
 interface BoardDto {
@@ -118,6 +119,67 @@ test('board: 50 concurrent card creations mint a unique, gap-free sequence', asy
   expect(seqs, 'the sequence is 1..N with no gaps').toEqual(
     Array.from({ length: N }, (_, i) => i + 1),
   );
+
+  await admin.dispose();
+});
+
+test('board: concurrent moves stay consistent — no duplicate order keys, no wedge', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const project = await createProject(admin, headers);
+  const cols = (await board(admin, project.id)).columns;
+  const [src, dst] = [cols[0]!.id, cols[1]!.id];
+
+  const cards = await Promise.all(
+    Array.from({ length: 6 }, (_, i) =>
+      admin
+        .post(`/api/v1/tasks/projects/${project.id}/cards`, {
+          headers,
+          data: { columnId: src, title: `C${i}` },
+        })
+        .then((r) => json<CardDto>(r)),
+    ),
+  );
+
+  // Every card races into the SAME slot (top of dst) at once — before the tx+row-lock fix these
+  // read identical neighbours and minted the same order key.
+  const moves = await Promise.all(
+    cards.map((c) =>
+      admin.post(`/api/v1/tasks/cards/${c.id}/move`, {
+        headers,
+        data: { columnId: dst, afterTaskId: null },
+      }),
+    ),
+  );
+  expect(moves.every((r) => r.ok())).toBe(true);
+
+  const after = (await board(admin, project.id)).cards.filter((c) => c.columnId === dst);
+  const keys = after.map((c) => c.orderKey);
+  expect(new Set(keys).size, 'order keys within a column are all distinct').toBe(keys.length);
+
+  // A further insert between two neighbours must not wedge on keyBetween(k, k) → 500.
+  const ordered = [...after].sort((a, b) => (a.orderKey < b.orderKey ? -1 : 1));
+  const between = await admin.post(`/api/v1/tasks/cards/${ordered.at(-1)!.id}/move`, {
+    headers,
+    data: { columnId: dst, afterTaskId: ordered[0]!.id },
+  });
+  expect(between.ok(), 'inserting between two cards still succeeds').toBeTruthy();
+
+  await admin.dispose();
+});
+
+test('board: the sole owner cannot demote themselves and orphan the project', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const adminId = (await userIds(admin))[E2E_ADMIN.username];
+  const project = await createProject(admin, headers);
+
+  // The creator is the sole owner; demoting themselves to viewer must be refused (keep-one-owner).
+  const demote = await admin.post(`/api/v1/tasks/projects/${project.id}/members`, {
+    headers,
+    data: { userId: adminId, role: 'viewer' },
+  });
+  expect(demote.status(), 'demoting the last owner is rejected').toBe(400);
 
   await admin.dispose();
 });

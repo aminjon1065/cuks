@@ -8,10 +8,17 @@ import {
   type OnGatewayInit,
   WebSocketGateway,
 } from '@nestjs/websockets';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Server, Socket } from 'socket.io';
 import { SESSION_COOKIE, WS_NAMESPACE, wsRooms } from '@cuks/shared';
-import { taskProjectMembers, type Database } from '@cuks/db';
+import {
+  orgUnits,
+  positions,
+  taskProjectMembers,
+  taskProjects,
+  userPositions,
+  type Database,
+} from '@cuks/db';
 import { DB } from '../../common/db/db.module';
 import { SessionService } from '../auth/session.service';
 import { UsersService } from '../users/users.service';
@@ -49,9 +56,9 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     @Inject(DB) private readonly db: Database,
   ) {}
 
-  /** Join a task board's room to receive its live updates (docs/modules/15 §3) — allowed to a
-   *  project member or a superadmin. The HTTP board fetch enforces the full ACL; this only gates
-   *  the realtime stream. */
+  /** Join a task board's room to receive its live updates (docs/modules/15 §3). Gated by the same
+   *  view rule as the HTTP board fetch (TasksAclService.canView): a project member, a superadmin,
+   *  or — when the project is «виден подразделению» — a user in the project's org-unit subtree. */
   @SubscribeMessage('board.subscribe')
   async subscribeBoard(
     @ConnectedSocket() client: Socket,
@@ -60,6 +67,14 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const userId = (client.data as { userId?: string }).userId;
     const projectId = body?.projectId;
     if (!userId || !projectId) return { ok: false };
+    if (!(await this.canViewBoard(userId, projectId))) return { ok: false };
+    await client.join(wsRooms.board(projectId));
+    return { ok: true };
+  }
+
+  /** Mirror of TasksAclService.canView, resolved directly here to keep the events module free of a
+   *  dependency on the tasks module. */
+  private async canViewBoard(userId: string, projectId: string): Promise<boolean> {
     const [member] = await this.db
       .select({ id: taskProjectMembers.id })
       .from(taskProjectMembers)
@@ -67,10 +82,37 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         and(eq(taskProjectMembers.projectId, projectId), eq(taskProjectMembers.userId, userId)),
       )
       .limit(1);
+    if (member) return true;
     const perms = await this.users.getPermissions(userId);
-    if (!member && !perms.isSuperadmin) return { ok: false };
-    await client.join(wsRooms.board(projectId));
-    return { ok: true };
+    if (perms.isSuperadmin) return true;
+    const [project] = await this.db
+      .select({ orgUnitId: taskProjects.orgUnitId, visible: taskProjects.visibleToOrgUnit })
+      .from(taskProjects)
+      .where(and(eq(taskProjects.id, projectId), isNull(taskProjects.deletedAt)))
+      .limit(1);
+    if (!project?.visible || !project.orgUnitId) return false;
+    const [ou] = await this.db
+      .select({ path: orgUnits.path })
+      .from(orgUnits)
+      .where(eq(orgUnits.id, project.orgUnitId))
+      .limit(1);
+    if (!ou) return false;
+    const [hit] = await this.db
+      .select({ id: positions.id })
+      .from(userPositions)
+      .innerJoin(
+        positions,
+        and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+      )
+      .innerJoin(orgUnits, eq(orgUnits.id, positions.orgUnitId))
+      .where(
+        and(
+          eq(userPositions.userId, userId),
+          or(eq(orgUnits.id, project.orgUnitId), sql`${orgUnits.path} like ${`${ou.path}.%`}`),
+        ),
+      )
+      .limit(1);
+    return !!hit;
   }
 
   @SubscribeMessage('board.unsubscribe')

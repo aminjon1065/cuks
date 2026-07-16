@@ -32,6 +32,8 @@ import { ProjectsService } from './projects.service';
 
 type TaskRow = typeof tasks.$inferSelect;
 type ColumnRow = typeof taskColumns.$inferSelect;
+/** A Drizzle transaction handle — the same query surface as `Database`. */
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 @Injectable()
 export class TasksService {
@@ -179,22 +181,36 @@ export class TasksService {
   async moveCard(taskId: string, input: MoveTaskInput, actor: AuthUser): Promise<TaskCardDto> {
     const card = await this.requireCardWithRole(taskId, actor, 'editor');
     const column = await this.requireColumn(card.projectId, input.columnId);
-    const [before, after] = await this.cardNeighbourKeys(input.columnId, input.afterTaskId, taskId);
     const enteringDone = column.isDoneColumn;
-    await this.db
-      .update(tasks)
-      .set({
-        columnId: input.columnId,
-        orderInColumn: keyBetween(before, after),
-        completedAt: enteringDone ? (card.completedAt ?? new Date()) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(tasks.id, taskId));
-    await this.db.insert(taskActivity).values({
-      taskId,
-      actorId: actor.id,
-      action: 'tasks.card.moved',
-      meta: { columnId: input.columnId },
+    // Serialize order mutations within the project (the same row lock createCard holds), so two
+    // concurrent moves cannot read the same neighbours and mint a duplicate order key.
+    await this.db.transaction(async (tx) => {
+      await tx
+        .select({ id: taskProjects.id })
+        .from(taskProjects)
+        .where(eq(taskProjects.id, card.projectId))
+        .for('update');
+      const [before, after] = await this.cardNeighbourKeys(
+        tx,
+        input.columnId,
+        input.afterTaskId,
+        taskId,
+      );
+      await tx
+        .update(tasks)
+        .set({
+          columnId: input.columnId,
+          orderInColumn: keyBetween(before, after),
+          completedAt: enteringDone ? (card.completedAt ?? new Date()) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, taskId));
+      await tx.insert(taskActivity).values({
+        taskId,
+        actorId: actor.id,
+        action: 'tasks.card.moved',
+        meta: { columnId: input.columnId },
+      });
     });
     this.audit.log({
       action: 'tasks.card.moved',
@@ -306,12 +322,13 @@ export class TasksService {
   }
 
   private async cardNeighbourKeys(
+    exec: Database | Tx,
     columnId: string,
     afterTaskId: string | null,
     excludeId: string,
   ): Promise<[string | null, string | null]> {
     const cards = (
-      await this.db
+      await exec
         .select({ id: tasks.id, orderKey: tasks.orderInColumn })
         .from(tasks)
         .where(and(eq(tasks.columnId, columnId), isNull(tasks.deletedAt), isNull(tasks.archivedAt)))

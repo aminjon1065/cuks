@@ -35,6 +35,7 @@ export function BoardView({
   projectKey,
   readOnly,
   cards,
+  allCards,
   onMoveCard,
   onCardClick,
   onQuickAdd,
@@ -42,12 +43,48 @@ export function BoardView({
   board: BoardDto;
   projectKey: string;
   readOnly: boolean;
+  /** The cards to render — may be a filtered subset of the board. */
   cards: TaskCardDto[];
+  /** The full, server-ordered card set — used to resolve drop positions against hidden cards. */
+  allCards: TaskCardDto[];
   onMoveCard: (cardId: string, columnId: string, afterTaskId: string | null) => void;
   onCardClick: (card: TaskCardDto) => void;
   onQuickAdd: (columnId: string, title: string) => void;
 }): React.JSX.Element {
   const cardsById = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  const visibleIds = useMemo(() => new Set(cards.map((c) => c.id)), [cards]);
+
+  // The full server order per column (allCards arrives sorted by order key within each column).
+  const fullOrder = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const col of board.columns) map[col.id] = [];
+    for (const c of allCards) (map[c.columnId] ??= []).push(c.id);
+    return map;
+  }, [board.columns, allCards]);
+  const currentColumnOf = useMemo(
+    () => new Map(allCards.map((c) => [c.id, c.columnId])),
+    [allCards],
+  );
+
+  /**
+   * Translate a drop in the (possibly filtered) visible list into an afterTaskId against the FULL
+   * order, so a card never leapfrogs cards hidden by a filter. Dropping below a visible card keeps
+   * that card as the anchor; dropping at the visible top anchors on the full-order card just above
+   * the first visible one (or null only when it is truly the column's first card).
+   */
+  const resolveAfterTaskId = (
+    columnId: string,
+    movedId: string,
+    visibleList: string[],
+  ): string | null => {
+    const pos = visibleList.indexOf(movedId);
+    if (pos > 0) return visibleList[pos - 1]!;
+    const full = (fullOrder[columnId] ?? []).filter((id) => id !== movedId);
+    const firstVisible = full.findIndex((id) => visibleIds.has(id));
+    if (firstVisible === -1) return full.length ? full[full.length - 1]! : null;
+    if (firstVisible === 0) return null;
+    return full[firstVisible - 1]!;
+  };
 
   // Local per-column ordering, resynced from the server board when not mid-drag.
   const serverItems = useMemo<CardsByColumn>(() => {
@@ -95,7 +132,8 @@ export function BoardView({
   const onDragEnd = (e: DragEndEvent) => {
     dragging.current = false;
     setActiveId(null);
-    const activeCol = columnOf(String(e.active.id));
+    const movedId = String(e.active.id);
+    const activeCol = columnOf(movedId);
     const overCol = columnOf(String(e.over?.id ?? ''));
     if (!activeCol || !overCol) {
       setItems(serverItems);
@@ -104,17 +142,25 @@ export function BoardView({
     let next = items;
     if (activeCol === overCol) {
       const list = items[activeCol]!;
-      const oldIdx = list.indexOf(String(e.active.id));
+      const oldIdx = list.indexOf(movedId);
       const overIdx = list.indexOf(String(e.over?.id));
       if (oldIdx !== overIdx && overIdx >= 0) {
         next = { ...items, [activeCol]: arrayMove(list, oldIdx, overIdx) };
         setItems(next);
       }
     }
-    const finalList = next[overCol]!;
-    const pos = finalList.indexOf(String(e.active.id));
-    const afterTaskId = pos > 0 ? finalList[pos - 1]! : null;
-    onMoveCard(String(e.active.id), overCol, afterTaskId);
+    const afterTaskId = resolveAfterTaskId(overCol, movedId, next[overCol]!);
+
+    // Skip a drop that lands exactly where the card already sits — no server write, no broadcast.
+    const srcCol = currentColumnOf.get(movedId);
+    const srcOrder = fullOrder[srcCol ?? ''] ?? [];
+    const srcIdx = srcOrder.indexOf(movedId);
+    const srcAfter = srcIdx > 0 ? srcOrder[srcIdx - 1]! : null;
+    if (overCol === srcCol && afterTaskId === srcAfter) {
+      setItems(serverItems);
+      return;
+    }
+    onMoveCard(movedId, overCol, afterTaskId);
   };
 
   return (

@@ -25,7 +25,7 @@ export function BoardPage(): React.JSX.Element {
   const project = useProjectByKey(projectKey);
   const projectId = project.data?.id;
   const board = useBoard(projectId);
-  useBoardRealtime(projectId, me.data?.id);
+  useBoardRealtime(projectId);
 
   const move = useMoveCard(projectId ?? '');
   const create = useCreateCard(projectId ?? '');
@@ -153,6 +153,7 @@ export function BoardPage(): React.JSX.Element {
             projectKey={board.data.project.key}
             readOnly={readOnly}
             cards={cards}
+            allCards={board.data.cards}
             onMoveCard={onMoveCard}
             onCardClick={noop}
             onQuickAdd={onQuickAdd}

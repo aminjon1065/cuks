@@ -152,6 +152,16 @@ export class ProjectsService {
     actor: AuthUser,
   ): Promise<ProjectMemberDto[]> {
     await this.acl.loadWithRole(id, actor, 'owner');
+    // Keep at least one owner: demoting the sole owner (incl. self) would orphan the project.
+    if (input.role !== 'owner') {
+      const owners = await this.db
+        .select({ userId: taskProjectMembers.userId })
+        .from(taskProjectMembers)
+        .where(and(eq(taskProjectMembers.projectId, id), eq(taskProjectMembers.role, 'owner')));
+      if (owners.length === 1 && owners[0]!.userId === input.userId) {
+        throw AppException.badRequest('tasks.project.last_owner', 'A project must keep an owner');
+      }
+    }
     await this.db
       .insert(taskProjectMembers)
       .values({ projectId: id, userId: input.userId, role: input.role })
