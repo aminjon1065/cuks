@@ -49,4 +49,8 @@ export class AppException extends HttpException {
   static tooManyRequests(code: string, message = 'Too many requests'): AppException {
     return new AppException(code, message, HttpStatus.TOO_MANY_REQUESTS);
   }
+
+  static serviceUnavailable(code: string, message = 'Service unavailable'): AppException {
+    return new AppException(code, message, HttpStatus.SERVICE_UNAVAILABLE);
+  }
 }

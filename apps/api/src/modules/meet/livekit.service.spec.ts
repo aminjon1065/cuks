@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, TokenVerifier } from 'livekit-server-sdk';
 import { LivekitService } from './livekit.service';
 import type { ConfigService } from '../../config/config.service';
 
@@ -71,5 +71,59 @@ describe('LivekitService', () => {
     const event = await svc.receiveWebhook(body, await signWebhook(body));
     expect(event.event).toBe('participant_joined');
     expect(event.participant?.identity).toBe('u1');
+  });
+
+  describe('createJoinToken', () => {
+    it('exposes the public SFU url', () => {
+      expect(new LivekitService(config()).publicUrl).toBe('ws://localhost:7880');
+    });
+
+    it('mints a participant token scoped to the room, without room-admin', async () => {
+      const svc = new LivekitService(config());
+      const jwt = await svc.createJoinToken({
+        room: 'meet-1',
+        identity: 'u1',
+        name: 'User One',
+        avatar: null,
+        role: 'participant',
+      });
+      const claims = await new TokenVerifier(KEY, SECRET).verify(jwt);
+      expect(claims.sub).toBe('u1'); // identity
+      expect(claims.name).toBe('User One');
+      expect(claims.video?.roomJoin).toBe(true);
+      expect(claims.video?.room).toBe('meet-1');
+      expect(claims.video?.canPublish).toBe(true);
+      expect(claims.video?.canSubscribe).toBe(true);
+      expect(claims.video?.canPublishData).toBe(true);
+      expect(claims.video?.roomAdmin).toBeFalsy();
+      expect(JSON.parse(claims.metadata ?? '{}')).toEqual({ avatar: null, role: 'participant' });
+    });
+
+    it('grants room-admin (host powers) to a host and carries the avatar in metadata', async () => {
+      const svc = new LivekitService(config());
+      const jwt = await svc.createJoinToken({
+        room: 'meet-1',
+        identity: 'host-1',
+        name: 'Host',
+        avatar: 'file-9',
+        role: 'host',
+      });
+      const claims = await new TokenVerifier(KEY, SECRET).verify(jwt);
+      expect(claims.video?.roomAdmin).toBe(true);
+      expect(JSON.parse(claims.metadata ?? '{}')).toEqual({ avatar: 'file-9', role: 'host' });
+    });
+
+    it('throws when LiveKit is not configured', async () => {
+      const svc = new LivekitService(config({ LIVEKIT_API_KEY: undefined }));
+      await expect(
+        svc.createJoinToken({
+          room: 'r',
+          identity: 'u',
+          name: 'U',
+          avatar: null,
+          role: 'participant',
+        }),
+      ).rejects.toThrow('not configured');
+    });
   });
 });

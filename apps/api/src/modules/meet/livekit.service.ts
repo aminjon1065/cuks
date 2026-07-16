@@ -1,7 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { WebhookReceiver } from 'livekit-server-sdk';
-import type { WebhookEvent } from 'livekit-server-sdk';
+import { AccessToken, WebhookReceiver } from 'livekit-server-sdk';
+import type { VideoGrant, WebhookEvent } from 'livekit-server-sdk';
+import type { MeetRoomRole } from '@cuks/shared';
 import { ConfigService } from '../../config/config.service';
+
+/** Inputs for a LiveKit join token (docs/modules/14 §6). */
+export interface JoinTokenInput {
+  /** The LiveKit room NAME (meet_rooms.livekit_room) — not the DB id. */
+  room: string;
+  /** Participant identity — the user id (unique per live participant in a room). */
+  identity: string;
+  /** Display name shown to other participants. */
+  name: string;
+  /** Avatar file id (or null) — carried in participant metadata for the room UI. */
+  avatar: string | null;
+  /** `host` gets room-admin powers (mute-all, remove, end); `participant` does not. */
+  role: MeetRoomRole;
+}
+
+/** Join tokens are short-lived (docs/modules/14 §6: TTL 10 мин). */
+const JOIN_TOKEN_TTL = '10m';
 
 /**
  * Thin wrapper around the LiveKit server SDK (docs/modules/14 §6). The api is the
@@ -25,6 +43,40 @@ export class LivekitService {
   /** True only when the SFU URL and API key/secret are all configured. */
   get enabled(): boolean {
     return Boolean(this.url && this.apiKey && this.apiSecret);
+  }
+
+  /** The browser-facing LiveKit WebSocket URL (`room.connect(url, token)`), or undefined if unset. */
+  get publicUrl(): string | undefined {
+    return this.url;
+  }
+
+  /**
+   * Mint a LiveKit join token (docs/modules/14 §6). The api is the sole token source: rights are
+   * checked before calling this, and the grants encode the participant's authority. A `host` also
+   * gets `roomAdmin` — LiveKit gates every host RPC (mute-all, remove participant, end room) on that
+   * single grant. `canPublishData` (default) carries the ephemeral room chat/reactions data channel.
+   */
+  async createJoinToken(input: JoinTokenInput): Promise<string> {
+    if (!this.enabled || !this.apiKey || !this.apiSecret) {
+      throw new Error('LiveKit is not configured');
+    }
+    const at = new AccessToken(this.apiKey, this.apiSecret, {
+      identity: input.identity,
+      name: input.name,
+      ttl: JOIN_TOKEN_TTL,
+      metadata: JSON.stringify({ avatar: input.avatar, role: input.role }),
+    });
+    const grant: VideoGrant = {
+      roomJoin: true,
+      room: input.room,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+      canUpdateOwnMetadata: true,
+    };
+    if (input.role === 'host') grant.roomAdmin = true;
+    at.addGrant(grant);
+    return at.toJwt();
   }
 
   /**
