@@ -12,6 +12,7 @@ import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Server, Socket } from 'socket.io';
 import { SESSION_COOKIE, WS_NAMESPACE, wsRooms } from '@cuks/shared';
 import {
+  chatMembers,
   orgUnits,
   positions,
   taskProjectMembers,
@@ -121,6 +122,35 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     @MessageBody() body: { projectId?: string },
   ): Promise<{ ok: boolean }> {
     if (body?.projectId) await client.leave(wsRooms.board(body.projectId));
+    return { ok: true };
+  }
+
+  /** Join a chat channel's room to receive its live messages (docs/modules/13 §5) — members only,
+   *  the same rule the REST message endpoints enforce. */
+  @SubscribeMessage('channel.subscribe')
+  async subscribeChannel(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { channelId?: string },
+  ): Promise<{ ok: boolean }> {
+    const userId = (client.data as { userId?: string }).userId;
+    const channelId = body?.channelId;
+    if (!userId || !channelId) return { ok: false };
+    const [member] = await this.db
+      .select({ id: chatMembers.id })
+      .from(chatMembers)
+      .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)))
+      .limit(1);
+    if (!member) return { ok: false };
+    await client.join(wsRooms.channel(channelId));
+    return { ok: true };
+  }
+
+  @SubscribeMessage('channel.unsubscribe')
+  async unsubscribeChannel(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { channelId?: string },
+  ): Promise<{ ok: boolean }> {
+    if (body?.channelId) await client.leave(wsRooms.channel(body.channelId));
     return { ok: true };
   }
 
