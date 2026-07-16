@@ -1,12 +1,15 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   messagesQuerySchema,
+  pinMessageSchema,
   sendMessageSchema,
   type MessageDto,
   type MessagesPage,
   type MessagesQuery,
+  type PinMessageInput,
+  type PinnedMessageDto,
   type SendMessageInput,
 } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -17,7 +20,7 @@ import { MessagesService } from './messages.service';
 
 const uuidPipe = new ZodValidationPipe(z.string().uuid());
 
-/** Channel message history + sending (docs/modules/13 §8, task 5.2). */
+/** Channel message history, sending and pins (docs/modules/13 §8, tasks 5.2/5.5). */
 @ApiTags('chat')
 @RequirePermission('chat.use')
 @Controller('chat/channels')
@@ -42,5 +45,34 @@ export class MessagesController {
     @CurrentUser() user: AuthUser,
   ): Promise<MessageDto> {
     return this.messages.send(id, body, user);
+  }
+
+  @Get(':id/pins')
+  @ApiOperation({ summary: 'Pinned messages (member)' })
+  pins(
+    @Param('id', uuidPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<PinnedMessageDto[]> {
+    return this.messages.listPins(id, user);
+  }
+
+  @Post(':id/pins')
+  @ApiOperation({ summary: 'Pin a message (channel admin)' })
+  pin(
+    @Param('id', uuidPipe) id: string,
+    @Body(new ZodValidationPipe(pinMessageSchema)) body: PinMessageInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    return this.messages.pin(id, body.messageId, user);
+  }
+
+  @Delete(':id/pins/:messageId')
+  @ApiOperation({ summary: 'Unpin a message (channel admin)' })
+  unpin(
+    @Param('id', uuidPipe) id: string,
+    @Param('messageId', uuidPipe) messageId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    return this.messages.unpin(id, messageId, user);
   }
 }

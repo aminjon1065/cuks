@@ -7,6 +7,7 @@ import { ChannelsService } from './channels.service';
 import { MessagesService } from './messages.service';
 import { ChannelsController } from './channels.controller';
 import { MessagesController } from './messages.controller';
+import { MessageActionsController } from './message-actions.controller';
 
 /**
  * Chat module (docs/modules/13). Task 5.1 lands the data model + auto-provisioned org-unit channels;
@@ -15,7 +16,7 @@ import { MessagesController } from './messages.controller';
  */
 @Module({
   imports: [AuthModule, EventsModule],
-  controllers: [ChannelsController, MessagesController],
+  controllers: [ChannelsController, MessagesController, MessageActionsController],
   providers: [OrgChannelsService, ChatAclService, ChannelsService, MessagesService],
   exports: [OrgChannelsService],
 })

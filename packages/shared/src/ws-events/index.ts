@@ -41,6 +41,12 @@ export interface WsEventPayloads {
   /** A chat message was posted to a channel (docs/modules/13 §5); `channel:{id}` subscribers append
    *  or refetch. `actorId` lets the sender skip echoing its own optimistic message. */
   'chat.message.created': { channelId: string; messageId: string; actorId: string };
+  /** A message was edited (docs/modules/13 §4/§5) — subscribers refetch the feed. */
+  'chat.message.updated': { channelId: string; messageId: string; actorId: string };
+  /** A message was soft-deleted — subscribers swap in the tombstone. */
+  'chat.message.deleted': { channelId: string; messageId: string; actorId: string };
+  /** A reaction was toggled on a message — subscribers refresh its reaction chips. */
+  'chat.reaction.updated': { channelId: string; messageId: string; actorId: string };
   /** A channel's metadata or membership changed; subscribers refetch the channel / list. */
   'chat.channel.updated': { channelId: string; actorId: string };
 }

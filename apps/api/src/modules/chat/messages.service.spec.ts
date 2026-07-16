@@ -12,18 +12,30 @@ const acl = { requireMember: vi.fn(async () => ({ id: CHANNEL })) } as unknown a
 const audit = { log: vi.fn() } as unknown as AuditService;
 const realtime = { emitToRoom: vi.fn() } as unknown as RealtimeService;
 
-/** A db whose select chain resolves to `rows` and whose insert/update are inert. */
+/** A db whose message-select chain resolves to `rows`; the reaction/reply side-queries the 5.5 list
+ *  issues resolve empty, and insert/update are inert. */
 function makeDb(rows: unknown[]) {
-  const chain: Record<string, unknown> = {
-    select: () => chain,
-    from: () => chain,
-    leftJoin: () => chain,
-    where: () => chain,
-    orderBy: () => chain,
-    limit: () => chain,
-    then: (resolve: (v: unknown[]) => void) => resolve(rows),
+  const makeChain = () => {
+    // The reaction/pin aggregates are recognisable by their groupBy call and resolve empty.
+    let aggregate = false;
+    const chain: Record<string, unknown> = {
+      select: () => chain,
+      from: () => chain,
+      leftJoin: () => chain,
+      innerJoin: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+      limit: () => chain,
+      groupBy: () => {
+        aggregate = true;
+        return chain;
+      },
+      then: (resolve: (v: unknown[]) => void) => resolve(aggregate ? [] : rows),
+    };
+    return chain;
   };
-  return chain as never;
+  // Each query starts a fresh chain so groupBy on one doesn't leak into the next.
+  return { select: () => makeChain().select() } as never;
 }
 
 function msgRow(id: string, createdAt: string) {
@@ -90,5 +102,155 @@ describe('MessagesService.list — cursor paging (docs/modules/13 §5)', () => {
     await expect(svc.list(CHANNEL, { limit: 2, cursor: bad }, actor)).rejects.toMatchObject({
       code: 'chat.cursor.invalid',
     });
+  });
+});
+
+const MSG = '01900000-0000-7000-8000-0000000000f0';
+const OTHER = '01900000-0000-7000-8000-00000000000b';
+
+/** A db for the message-action paths: loadMessage returns `message`; reaction inserts return
+ *  `insertReturns`; deletes are recorded. */
+function makeActionsDb(
+  message: Record<string, unknown> | null,
+  insertReturns: unknown[] = [{ id: 'r1' }],
+) {
+  const deletes: string[] = [];
+  const updates: Record<string, unknown>[] = [];
+  const selectChain = () => {
+    let aggregate = false;
+    const chain: Record<string, unknown> = {
+      select: () => chain,
+      from: () => chain,
+      leftJoin: () => chain,
+      innerJoin: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+      groupBy: () => {
+        aggregate = true;
+        return chain;
+      },
+      limit: () => chain,
+      then: (resolve: (v: unknown[]) => void) => resolve(aggregate ? [] : message ? [message] : []),
+    };
+    return chain;
+  };
+  const db = {
+    select: () => selectChain().select(),
+    update: () => ({
+      set: (v: Record<string, unknown>) => ({
+        where: () => {
+          updates.push(v);
+          return Promise.resolve(undefined);
+        },
+      }),
+    }),
+    insert: () => ({
+      values: () => ({
+        onConflictDoNothing: () => ({ returning: () => Promise.resolve(insertReturns) }),
+      }),
+    }),
+    delete: () => ({
+      where: () => {
+        deletes.push('del');
+        return Promise.resolve(undefined);
+      },
+    }),
+  };
+  return { db: db as never, deletes, updates };
+}
+
+function makeAcl(role: 'owner' | 'admin' | 'member' | null = 'member') {
+  return {
+    requireMember: vi.fn(async () => ({ id: CHANNEL })),
+    roleFor: vi.fn(async () => role),
+  } as unknown as ChatAclService;
+}
+
+const textMsg = (over: Record<string, unknown> = {}) => ({
+  id: MSG,
+  channelId: CHANNEL,
+  authorId: actor.id,
+  kind: 'text',
+  body: { type: 'doc' },
+  bodyText: 'hi',
+  replyToId: null,
+  fileIds: [],
+  createdAt: new Date('2026-07-16T10:00:00.000Z'),
+  editedAt: null,
+  deletedAt: null,
+  ...over,
+});
+
+describe('MessagesService.edit — author + 24h window (docs/modules/13 §4)', () => {
+  it('refuses a non-author', async () => {
+    const { db } = makeActionsDb(textMsg({ authorId: OTHER }));
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    await expect(svc.edit(MSG, { body: { type: 'doc' } }, actor)).rejects.toMatchObject({
+      code: 'chat.message.not_author',
+    });
+  });
+
+  it('refuses an edit past 24 hours', async () => {
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    const { db } = makeActionsDb(textMsg({ createdAt: old }));
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    await expect(svc.edit(MSG, { body: { type: 'doc' } }, actor)).rejects.toMatchObject({
+      code: 'chat.message.edit_expired',
+    });
+  });
+
+  it('edits within the window and stamps editedAt', async () => {
+    const { db, updates } = makeActionsDb(textMsg({ createdAt: new Date() }));
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    const dto = await svc.edit(
+      MSG,
+      {
+        body: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x' }] }],
+        },
+      },
+      actor,
+    );
+    expect(dto.editedAt).toBeTruthy();
+    expect(updates[0]).toHaveProperty('editedAt');
+  });
+});
+
+describe('MessagesService.remove — author or admin (docs/modules/13 §4)', () => {
+  it('lets the author soft-delete', async () => {
+    const { db, updates } = makeActionsDb(textMsg());
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    await svc.remove(MSG, actor);
+    expect(updates[0]).toHaveProperty('deletedAt');
+  });
+
+  it('refuses a non-author who is only a plain member', async () => {
+    const { db } = makeActionsDb(textMsg({ authorId: OTHER }));
+    const svc = new MessagesService(db, makeAcl('member'), audit, realtime);
+    await expect(svc.remove(MSG, actor)).rejects.toMatchObject({ code: 'chat.message.not_author' });
+  });
+
+  it('lets a channel admin delete someone else’s message', async () => {
+    const { db, updates } = makeActionsDb(textMsg({ authorId: OTHER }));
+    const svc = new MessagesService(db, makeAcl('admin'), audit, realtime);
+    await svc.remove(MSG, actor);
+    expect(updates[0]).toHaveProperty('deletedAt');
+  });
+});
+
+describe('MessagesService.toggleReaction (docs/modules/13 §4)', () => {
+  it('adds when absent (insert returns a row) — no delete', async () => {
+    const { db, deletes } = makeActionsDb(textMsg(), [{ id: 'r1' }]);
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    await svc.toggleReaction(MSG, '👍', actor);
+    expect(deletes).toHaveLength(0);
+  });
+
+  it('removes when present (insert no-ops) — deletes the row', async () => {
+    const { db, deletes } = makeActionsDb(textMsg(), []);
+    const svc = new MessagesService(db, makeAcl(), audit, realtime);
+    await svc.toggleReaction(MSG, '👍', actor);
+    expect(deletes).toHaveLength(1);
   });
 });
