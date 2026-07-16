@@ -297,6 +297,11 @@ export type DocumentLinkKind = (typeof DOCUMENT_LINK_KINDS)[number];
 export const CONTROL_SEVERITIES = ['normal', 'warning', 'overdue'] as const;
 export type ControlSeverity = (typeof CONTROL_SEVERITIES)[number];
 
+/** Substitution scope (docs/05-auth-rbac.md §6, task 3.11): `all` covers routes + resolutions;
+ *  `docflow` is the same set today (kept distinct for future non-docflow delegations). */
+export const SUBSTITUTION_SCOPES = ['all', 'docflow'] as const;
+export type SubstitutionScope = (typeof SUBSTITUTION_SCOPES)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 

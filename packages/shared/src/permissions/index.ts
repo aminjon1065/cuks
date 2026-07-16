@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   'admin.dicts.manage',
   'admin.settings.manage',
   'admin.audit.view',
+  'admin.substitutions.manage',
   // files
   'files.use',
   'files.org.manage',
@@ -128,6 +129,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'admin.dicts.manage',
       'admin.settings.manage',
       'admin.audit.view',
+      'admin.substitutions.manage',
       'files.use',
       'chat.use',
       'meet.use',

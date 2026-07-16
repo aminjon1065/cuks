@@ -221,10 +221,14 @@ export interface RouteStepDto {
   decision: RouteStepDecision | null;
   comment: string | null;
   actedByName: string | null;
+  /** When acted by a deputy «за» a principal (task 3.11): who they acted for. */
+  actedForName: string | null;
   actedAt: string | null;
   dueHours: number | null;
   /** Whether the current caller may act on this step (assignee match + active). */
   canAct: boolean;
+  /** Set when the caller may act only via a substitution: the principal they would act «за». */
+  actOnBehalfOfName: string | null;
 }
 
 export interface RouteDto {
@@ -342,6 +346,9 @@ export interface DocumentListItemDto {
   /** For an action queue (to_approve/to_sign/to_acknowledge), the route step the caller
    *  may act on directly from the row; null otherwise. */
   actionStepId: string | null;
+  /** When the row is actionable only via a substitution (task 3.11): the principal the caller
+   *  would act «за»; null when acting as themselves. */
+  actionOnBehalfOfName: string | null;
 }
 
 /** Pending-work counts for the cabinet queue badges (docs/modules/11 §7). */
@@ -581,6 +588,9 @@ export interface SignatureDto {
   id: string;
   userId: string;
   userName: string | null;
+  /** Set when a deputy signed «за» an absent principal (task 3.11): who they signed for. */
+  onBehalfOfId: string | null;
+  onBehalfOfName: string | null;
   certificateId: string;
   certificateSerial: string;
   algorithm: SignatureAlgorithm;
@@ -603,6 +613,8 @@ export interface VerifyResultDto {
   checks: VerifyCheckDto[];
   signerName: string | null;
   signerPosition: string | null;
+  /** The person signed FOR, when a deputy signed «за» (task 3.11). */
+  onBehalfOfName: string | null;
   certificateSerial: string;
   context: SignatureContext;
   signedAt: string;
