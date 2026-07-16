@@ -65,6 +65,16 @@ export function notificationHref(notification: NotificationDto): string | null {
   if (notification.entityType === 'incident' && notification.entityId) {
     return `/app/incidents/${notification.entityId}`;
   }
+  // A chat notification jumps to the message in its channel (docs/modules/13 §6).
+  if (notification.entityType === 'chat_channel' && notification.entityId) {
+    const messageId =
+      typeof notification.payload['messageId'] === 'string'
+        ? notification.payload['messageId']
+        : null;
+    return messageId
+      ? `/app/chat/${notification.entityId}?msg=${messageId}`
+      : `/app/chat/${notification.entityId}`;
+  }
   // A finished import puts its layer on the map. A finished export is downloaded
   // from there too — its link is a short-lived presigned URL fetched on demand, so
   // the notification cannot bake it in; instead it deep-links the map with

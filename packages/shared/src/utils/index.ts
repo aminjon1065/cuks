@@ -38,6 +38,27 @@ export function tiptapPlainText(doc: unknown): string {
 }
 
 /**
+ * Collect the user ids of `@`-mention nodes in a TipTap / ProseMirror JSON doc (docs/modules/13 §4) —
+ * `{ type: 'mention', attrs: { id } }` anywhere in the tree. Deduplicated, order preserved. Used to
+ * decide who a chat message personally notifies.
+ */
+export function extractMentionIds(doc: unknown): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const n = node as { type?: string; attrs?: { id?: unknown }; content?: unknown[] };
+    if (n.type === 'mention' && typeof n.attrs?.id === 'string' && !seen.has(n.attrs.id)) {
+      seen.add(n.attrs.id);
+      ids.push(n.attrs.id);
+    }
+    if (Array.isArray(n.content)) n.content.forEach(walk);
+  };
+  walk(doc);
+  return ids;
+}
+
+/**
  * Wrap plain text as a minimal TipTap / ProseMirror JSON doc (docs/modules/15 §2) — one paragraph
  * per line, empty lines becoming empty paragraphs. Lets the card description stay TipTap-shaped
  * (and keep feeding `description_text`/FTS via {@link tiptapPlainText}) until a rich editor lands.

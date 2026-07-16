@@ -27,6 +27,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { RealtimeService } from '../events/realtime.service';
 import { CHANNEL_ROLE_RANK, ChatAclService } from './chat-acl.service';
+import { ChatNotificationsService } from './chat-notifications.service';
 import { decodeCursor, encodeCursor } from './cursor';
 
 type MessageRow = typeof chatMessages.$inferSelect;
@@ -47,6 +48,7 @@ export class MessagesService {
     private readonly acl: ChatAclService,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly chatNotifications: ChatNotificationsService,
   ) {}
 
   /** A page of messages, newest first, with a cursor for the next older page. When `around` is set,
@@ -174,7 +176,7 @@ export class MessagesService {
   }
 
   async send(channelId: string, input: SendMessageInput, actor: AuthUser): Promise<MessageDto> {
-    await this.acl.requireMember(channelId, actor);
+    const channel = await this.acl.requireMember(channelId, actor);
     const body = input.body ?? null;
     if (input.kind === 'text' && !body) {
       throw AppException.badRequest('chat.message.empty', 'A text message needs a body');
@@ -224,6 +226,17 @@ export class MessagesService {
       entityType: 'chat_channel',
       entityId: channelId,
       meta: { messageId: row!.id },
+    });
+    // Fan out in-app / offline-email notifications (docs/modules/13 §6) — best-effort, off the response.
+    void this.chatNotifications.notifyForMessage({
+      channelId,
+      channelKind: channel.kind,
+      channelName: channel.name,
+      messageId: row!.id,
+      authorId: actor.id,
+      authorName: actor.shortName,
+      body,
+      bodyText,
     });
     return this.toDto({ ...row!, authorName: actor.shortName }, [], replyTo);
   }

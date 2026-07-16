@@ -6,6 +6,7 @@ import { ChatAclService } from './chat-acl.service';
 import { ChannelsService } from './channels.service';
 import { MessagesService } from './messages.service';
 import { ChatSearchService } from './chat-search.service';
+import { ChatNotificationsService } from './chat-notifications.service';
 import { IncidentChannelsService } from './incident-channels.service';
 import { ChannelsController } from './channels.controller';
 import { MessagesController } from './messages.controller';
@@ -31,6 +32,7 @@ import { ChatSearchController } from './chat-search.controller';
     ChannelsService,
     MessagesService,
     ChatSearchService,
+    ChatNotificationsService,
     IncidentChannelsService,
   ],
   exports: [OrgChannelsService],

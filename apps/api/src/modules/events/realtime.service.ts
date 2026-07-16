@@ -35,4 +35,17 @@ export class RealtimeService {
   evictUserFromRoom(userId: string, room: string): void {
     this.server?.in(wsRooms.user(userId)).socketsLeave(room);
   }
+
+  /** The user ids with a live socket in a room (docs/modules/13 §6) — lets chat skip notifying people
+   *  who are already watching the channel. Cross-instance via the Redis adapter. */
+  async userIdsInRoom(room: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    if (!this.server) return ids;
+    const sockets = await this.server.in(room).fetchSockets();
+    for (const socket of sockets) {
+      const userId = (socket.data as { userId?: string }).userId;
+      if (userId) ids.add(userId);
+    }
+    return ids;
+  }
 }
