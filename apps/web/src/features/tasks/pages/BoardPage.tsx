@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, FileQuestion, Kanban, List, Search } from 'lucide-react';
+import { ChevronLeft, FileQuestion, Kanban, LayoutTemplate, List, Search } from 'lucide-react';
 import { Button, EmptyState, Input, PageHeader, SidePanel, Skeleton, cn, toast } from '@cuks/ui';
 import type { TaskCardDto, TaskPriority } from '@cuks/shared';
 import { TASK_PRIORITIES } from '@cuks/shared';
@@ -9,6 +9,7 @@ import { useMe } from '@/features/auth/api/queries';
 import { BoardView } from '../components/BoardView';
 import { TaskListView } from '../components/TaskListView';
 import { CardPanel } from '../components/CardPanel';
+import { TemplatesDialog } from '../components/TemplatesDialog';
 import { useBoard, useCreateCard, useMoveCard, useProjectByKey } from '../api/queries';
 import { useBoardRealtime } from '../hooks/useBoardRealtime';
 
@@ -37,8 +38,11 @@ export function BoardPage(): React.JSX.Element {
   const [assignee, setAssignee] = useState<string>('');
   const [priority, setPriority] = useState<TaskPriority | ''>('');
   const [onlyMine, setOnlyMine] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
-  const readOnly = board.data?.project.myRole === 'viewer';
+  const myRole = board.data?.project.myRole;
+  const readOnly = myRole === 'viewer';
+  const canManage = myRole === 'editor' || myRole === 'owner';
 
   const cards = useMemo(() => {
     const all = board.data?.cards ?? [];
@@ -84,9 +88,16 @@ export function BoardPage(): React.JSX.Element {
         title={project.data?.name ?? t('board.title')}
         description={project.data ? `${project.data.key}` : undefined}
         actions={
-          <Button variant="ghost" size="sm" onClick={() => navigate('/app/tasks/projects')}>
-            <ChevronLeft className="size-4" /> {t('board.backToProjects')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canManage ? (
+              <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+                <LayoutTemplate className="size-4" /> {t('templates.title')}
+              </Button>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => navigate('/app/tasks/projects')}>
+              <ChevronLeft className="size-4" /> {t('board.backToProjects')}
+            </Button>
+          </div>
         }
       />
 
@@ -193,6 +204,14 @@ export function BoardPage(): React.JSX.Element {
             description={t('card.notFound.description')}
           />
         </SidePanel>
+      ) : null}
+
+      {templatesOpen && board.data ? (
+        <TemplatesDialog
+          projectId={board.data.project.id}
+          columns={board.data.columns}
+          onOpenChange={setTemplatesOpen}
+        />
       ) : null}
     </div>
   );

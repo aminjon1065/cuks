@@ -12,12 +12,19 @@ import type {
   CreateProjectInput,
   CreateTaskInput,
   LabelDto,
+  CreateEntityLinkInput,
+  CreateLinkedCardInput,
+  CreateTaskTemplateInput,
+  EntityLinkDto,
+  LinkedTaskDto,
   MoveColumnInput,
   MoveTaskInput,
   MyTaskDto,
   ProjectDto,
   TaskCardDetailDto,
   TaskCardDto,
+  TaskLinkTarget,
+  TaskTemplateDto,
   UpdateChecklistItemInput,
   UpdateTaskInput,
 } from '@cuks/shared';
@@ -30,6 +37,10 @@ export const boardKey = (projectId: string) => [...tasksKey, 'board', projectId]
 export const cardKey = (cardId: string) => [...tasksKey, 'card', cardId] as const;
 export const cardCommentsKey = (cardId: string) => [...cardKey(cardId), 'comments'] as const;
 export const cardActivityKey = (cardId: string) => [...cardKey(cardId), 'activity'] as const;
+export const cardLinksKey = (cardId: string) => [...cardKey(cardId), 'links'] as const;
+export const templatesKey = (projectId: string) => [...boardKey(projectId), 'templates'] as const;
+export const linkedTasksKey = (targetType: string, targetId: string) =>
+  [...tasksKey, 'linked', targetType, targetId] as const;
 export const myTasksBaseKey = [...tasksKey, 'my'] as const;
 export const myTasksKey = (watching: boolean) => [...myTasksBaseKey, { watching }] as const;
 export const myOverdueKey = [...myTasksBaseKey, 'overdue'] as const;
@@ -332,5 +343,96 @@ export function useQuickComplete() {
       void qc.invalidateQueries({ queryKey: myTasksBaseKey });
       void qc.invalidateQueries({ queryKey: boardKey(projectId) });
     },
+  });
+}
+
+// --- Links to ЧС / documents + templates (docs/modules/15 §4/§6, task 4.5) ---
+
+export function useCardLinks(cardId: string | undefined): UseQueryResult<EntityLinkDto[]> {
+  return useQuery({
+    queryKey: cardLinksKey(cardId ?? ''),
+    queryFn: () => api.get<EntityLinkDto[]>(`/v1/tasks/cards/${cardId}/links`),
+    enabled: !!cardId,
+  });
+}
+
+export function useAddCardLink(cardId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateEntityLinkInput) =>
+      api.post<EntityLinkDto[]>(`/v1/tasks/cards/${cardId}/links`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: cardLinksKey(cardId) }),
+  });
+}
+
+export function useRemoveCardLink(cardId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: string) =>
+      api.delete<EntityLinkDto[]>(`/v1/tasks/cards/${cardId}/links/${linkId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: cardLinksKey(cardId) }),
+  });
+}
+
+/** Tasks linked to a ЧС / document — shown on that entity's card. */
+export function useLinkedTasks(
+  targetType: TaskLinkTarget,
+  targetId: string | undefined,
+): UseQueryResult<LinkedTaskDto[]> {
+  return useQuery({
+    queryKey: linkedTasksKey(targetType, targetId ?? ''),
+    queryFn: () => api.get<LinkedTaskDto[]>(`/v1/tasks/linked/${targetType}/${targetId}`),
+    enabled: !!targetId,
+  });
+}
+
+/** Create a card already linked to a ЧС / document (from the incident / document card). */
+export function useCreateLinkedCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateLinkedCardInput) =>
+      api.post<TaskCardDto>('/v1/tasks/cards/linked', body),
+    onSuccess: (_data, body) => {
+      void qc.invalidateQueries({ queryKey: linkedTasksKey(body.targetType, body.targetId) });
+      void qc.invalidateQueries({ queryKey: boardKey(body.projectId) });
+      void qc.invalidateQueries({ queryKey: myTasksBaseKey });
+    },
+  });
+}
+
+export function useTemplates(projectId: string | undefined): UseQueryResult<TaskTemplateDto[]> {
+  return useQuery({
+    queryKey: templatesKey(projectId ?? ''),
+    queryFn: () => api.get<TaskTemplateDto[]>(`/v1/tasks/projects/${projectId}/templates`),
+    enabled: !!projectId,
+  });
+}
+
+export function useCreateTemplate(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateTaskTemplateInput) =>
+      api.post<TaskTemplateDto>(`/v1/tasks/projects/${projectId}/templates`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: templatesKey(projectId) }),
+  });
+}
+
+export function useRemoveTemplate(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (templateId: string) =>
+      api.delete(`/v1/tasks/projects/${projectId}/templates/${templateId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: templatesKey(projectId) }),
+  });
+}
+
+export function useInstantiateTemplate(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, columnId }: { templateId: string; columnId: string }) =>
+      api.post<TaskCardDto>(`/v1/tasks/projects/${projectId}/templates/${templateId}/card`, {
+        columnId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: boardKey(projectId) }),
   });
 }

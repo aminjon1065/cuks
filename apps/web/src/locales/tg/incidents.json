@@ -99,7 +99,8 @@
   "tabs": {
     "overview": "Обзор",
     "timeline": "Хронология",
-    "resources": "Силы и средства"
+    "resources": "Силы и средства",
+    "tasks": "Задачи"
   },
   "resources": {
     "personnel": "Личный состав",

@@ -30,6 +30,7 @@ import { ChecklistSection } from './ChecklistSection';
 import { CommentsTab } from './CommentsTab';
 import { HistoryTab } from './HistoryTab';
 import { DateTimeField } from './DateTimeField';
+import { TaskLinksSection } from './TaskLinksSection';
 
 const selectClass = cn(
   'h-8 rounded-sm border border-border bg-surface px-2 text-[13px] text-text',
@@ -66,7 +67,7 @@ export function CardPanel({
   const myRole = board.project.myRole;
   const canEdit = myRole === 'editor' || myRole === 'owner';
   const isMember = myRole !== null;
-  const [tab, setTab] = useState<'comments' | 'history'>('comments');
+  const [tab, setTab] = useState<'comments' | 'links' | 'history'>('comments');
 
   const fail = () => toast({ title: t('common.actionFailed'), tone: 'danger' });
   const save = (body: Parameters<typeof edit.mutate>[0]) => edit.mutate(body, { onError: fail });
@@ -231,6 +232,9 @@ export function CardPanel({
               <Tab active={tab === 'comments'} onClick={() => setTab('comments')}>
                 {t('card.tabComments')} ({card.commentCount})
               </Tab>
+              <Tab active={tab === 'links'} onClick={() => setTab('links')}>
+                {t('card.tabLinks')}
+              </Tab>
               <Tab active={tab === 'history'} onClick={() => setTab('history')}>
                 {t('card.tabHistory')}
               </Tab>
@@ -242,6 +246,8 @@ export function CardPanel({
                 members={board.members}
                 readOnly={!isMember}
               />
+            ) : tab === 'links' ? (
+              <TaskLinksSection cardId={cardId} canEdit={canEdit} />
             ) : (
               <HistoryTab cardId={cardId} />
             )}

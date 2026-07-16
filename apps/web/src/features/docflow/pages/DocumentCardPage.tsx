@@ -38,9 +38,10 @@ import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
 import { AccessSection } from '../components/AccessSection';
 import { LinksSection } from '../components/LinksSection';
+import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 import { HistorySection } from '../components/HistorySection';
 
-const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'history'] as const;
+const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'tasks', 'history'] as const;
 type CardTab = (typeof CARD_TABS)[number];
 
 const selectClass = cn(
@@ -143,6 +144,15 @@ export function DocumentCardPage(): React.JSX.Element {
           {tab === 'links' ? (
             <section className="rounded-md border border-border bg-surface p-4">
               <LinksSection doc={data} />
+            </section>
+          ) : null}
+          {tab === 'tasks' ? (
+            <section className="rounded-md border border-border bg-surface p-4">
+              <LinkedTasksSection
+                targetType="document"
+                targetId={data.id}
+                presetTitle={data.subject}
+              />
             </section>
           ) : null}
           {tab === 'history' ? (

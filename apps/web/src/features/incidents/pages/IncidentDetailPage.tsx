@@ -21,8 +21,9 @@ import { AddIncidentResourceDialog } from '../components/AddIncidentResourceDial
 import { IncidentLocationPicker } from '../components/IncidentLocationPicker';
 import { ChangeIncidentStatusDialog } from '../components/ChangeIncidentStatusDialog';
 import { IncidentStatusStepper } from '../components/IncidentStatusStepper';
+import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 
-type Tab = 'overview' | 'timeline' | 'resources';
+type Tab = 'overview' | 'timeline' | 'resources' | 'tasks';
 
 export function IncidentDetailPage(): React.JSX.Element {
   const { t } = useTranslation('incidents');
@@ -157,7 +158,7 @@ export function IncidentDetailPage(): React.JSX.Element {
         role="tablist"
         aria-label={t('card.tabsLabel')}
       >
-        {(['overview', 'timeline', 'resources'] as const).map((item) => (
+        {(['overview', 'timeline', 'resources', 'tasks'] as const).map((item) => (
           <button
             key={item}
             type="button"
@@ -306,6 +307,15 @@ export function IncidentDetailPage(): React.JSX.Element {
               description={canManage ? t('card.resourcesEmptyHint') : undefined}
             />
           )}
+        </section>
+      ) : null}
+      {tab === 'tasks' ? (
+        <section className="rounded-lg border border-border bg-surface p-4">
+          <LinkedTasksSection
+            targetType="incident"
+            targetId={data.id}
+            presetTitle={`${data.number} — ${data.typeName}`}
+          />
         </section>
       ) : null}
       <AddIncidentReportDialog
