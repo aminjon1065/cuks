@@ -313,6 +313,10 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export const PROJECT_ROLES = ['owner', 'editor', 'viewer'] as const;
 export type ProjectRole = (typeof PROJECT_ROLES)[number];
 
+/** Label palette (docs/modules/15 §2) — design-token colour names, not raw hex. */
+export const TASK_LABEL_COLORS = ['red', 'orange', 'green', 'blue', 'gray'] as const;
+export type TaskLabelColor = (typeof TASK_LABEL_COLORS)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 

@@ -37,6 +37,26 @@ export function tiptapPlainText(doc: unknown): string {
   return out.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Wrap plain text as a minimal TipTap / ProseMirror JSON doc (docs/modules/15 §2) — one paragraph
+ * per line, empty lines becoming empty paragraphs. Lets the card description stay TipTap-shaped
+ * (and keep feeding `description_text`/FTS via {@link tiptapPlainText}) until a rich editor lands.
+ */
+export function plainTextToTiptap(text: string): {
+  type: 'doc';
+  content: { type: 'paragraph'; content?: { type: 'text'; text: string }[] }[];
+} {
+  const lines = text.split('\n');
+  return {
+    type: 'doc',
+    content: lines.map((line) =>
+      line.length
+        ? { type: 'paragraph', content: [{ type: 'text', text: line }] }
+        : { type: 'paragraph' },
+    ),
+  };
+}
+
 /** Truncates a string to at most `maxLength` UTF-16 code units without splitting
  *  a surrogate pair — a plain `slice(0, n)` can cut between a high and low
  *  surrogate (e.g. an emoji straddling the boundary), producing a lone surrogate

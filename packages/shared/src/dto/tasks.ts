@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { PROJECT_ROLES, TASK_PRIORITIES, type ProjectRole, type TaskPriority } from '../enums';
+import {
+  PROJECT_ROLES,
+  TASK_LABEL_COLORS,
+  TASK_PRIORITIES,
+  type ProjectRole,
+  type TaskPriority,
+} from '../enums';
 
 // --- Projects (docs/modules/15 §1/§2, task 4.2) ---
 
@@ -75,6 +81,12 @@ export interface ColumnDto {
 
 // --- Labels (docs/modules/15 §2) ---
 
+export const createLabelSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  color: z.enum(TASK_LABEL_COLORS),
+});
+export type CreateLabelInput = z.infer<typeof createLabelSchema>;
+
 export interface LabelDto {
   id: string;
   name: string;
@@ -136,6 +148,75 @@ export interface TaskCardDto {
 export interface BoardMemberDto {
   userId: string;
   name: string | null;
+}
+
+// --- Card detail / SidePanel (docs/modules/15 §4, task 4.3) ---
+
+/** A checklist item on a card. `orderKey` is a fractional index (drag rewrites only its row). */
+export interface ChecklistItemDto {
+  id: string;
+  text: string;
+  isDone: boolean;
+  orderKey: string;
+}
+
+export const createChecklistItemSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+});
+export type CreateChecklistItemInput = z.infer<typeof createChecklistItemSchema>;
+
+/** Edit a checklist item: rename, toggle, and/or reorder after another item (null = to the top). */
+export const updateChecklistItemSchema = z
+  .object({
+    text: z.string().trim().min(1).max(500).optional(),
+    isDone: z.boolean().optional(),
+    afterItemId: z.string().uuid().nullable().optional(),
+  })
+  .refine((v) => v.text !== undefined || v.isDone !== undefined || v.afterItemId !== undefined, {
+    message: 'nothing to update',
+  });
+export type UpdateChecklistItemInput = z.infer<typeof updateChecklistItemSchema>;
+
+/** The full card behind the SidePanel — every editable field plus the checklist. */
+export interface TaskCardDetailDto extends TaskCardDto {
+  projectId: string;
+  description: unknown;
+  descriptionText: string | null;
+  watcherIds: string[];
+  authorId: string;
+  startAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  checklist: ChecklistItemDto[];
+}
+
+// --- Comments (docs/modules/15 §4) ---
+
+export const createCommentSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+  mentionIds: z.array(z.string().uuid()).max(50).default([]),
+});
+export type CreateCommentInput = z.infer<typeof createCommentSchema>;
+
+export interface CommentDto {
+  id: string;
+  authorId: string;
+  authorName: string | null;
+  body: string;
+  mentions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Activity / «История» (docs/modules/15 §2/§9) ---
+
+export interface ActivityDto {
+  id: string;
+  actorId: string | null;
+  actorName: string | null;
+  action: string;
+  meta: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 /** The whole board in one request (docs/modules/15 §8): project, columns, labels, cards, members. */
