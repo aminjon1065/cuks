@@ -1,12 +1,28 @@
-# Caddy reverse proxy / TLS terminator (docs/08 §Маршрутизация, docs/02 ADR-10).
-# The full production compose + TLS wiring is phase 7.1; this file already carries
-# the phase-2.2 contract: /tiles/* is gated by the api's signed tile token via
-# forward_auth before reaching Martin (docs/modules/10 §9). Set CUKS_DOMAIN (or
-# use `tls internal` for a fully-closed network).
+# Caddy reverse proxy / TLS terminator (docs/08 §Маршрутизация, docs/09 §1, task 7.1).
+# TLS: with a public domain Caddy gets Let's Encrypt automatically; on a fully-closed network set
+# `CUKS_TLS_INTERNAL=tls internal` (Caddy's own CA — install its root on the workstations). The SPA is
+# baked into this image at /srv/web (infra/docker/Dockerfile caddy target).
+#
+# TURN over TLS (5349) for strict-NAT clients is NOT handled here — the stock Caddy image has no layer4
+# module. Use LiveKit's embedded TURN with its own cert, or a caddy-l4 build (see docs/runbook-install.md).
+
 {$CUKS_DOMAIN:localhost} {
+	{$CUKS_TLS_INTERNAL:}
 	encode zstd gzip
 
-	# API + realtime (session-authenticated).
+	# Security headers for the SPA + API (docs/09 §1). The CSP allows same-origin only, plus the MinIO
+	# subdomain for presigned upload/download/stream. 'unsafe-inline' for styles is required by MapLibre
+	# / Radix runtime styles (tightening it is task 7.5).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		-Server
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://s3.{$CUKS_DOMAIN}; media-src 'self' blob: https://s3.{$CUKS_DOMAIN}; connect-src 'self' https://s3.{$CUKS_DOMAIN}; worker-src 'self' blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
+	}
+
+	# API (REST) + Socket.IO realtime (session-authenticated).
 	handle /api/* {
 		reverse_proxy api:3000
 	}
@@ -14,10 +30,15 @@
 		reverse_proxy api:3000
 	}
 
-	# Vector tiles: validate the short-lived signed token (docs/modules/10 §9)
-	# before proxying to Martin. Caddy sets X-Forwarded-Uri on the auth subrequest
-	# so tile-auth can read `?token=`; handle_path strips /tiles for Martin, whose
-	# source paths are /<source>/{z}/{x}/{y}.
+	# LiveKit ws signaling (docs/modules/14 §6). Media (WebRTC) goes direct to LiveKit's ICE ports, not
+	# through Caddy. Set LIVEKIT_URL=wss://<domain>/livekit; handle_path strips /livekit so LiveKit sees
+	# /rtc at its root.
+	handle_path /livekit/* {
+		reverse_proxy livekit:7880
+	}
+
+	# Vector tiles: validate the short-lived signed token (docs/modules/10 §9) via forward_auth before
+	# proxying to Martin. handle_path strips /tiles for Martin (source paths are /<source>/{z}/{x}/{y}).
 	handle_path /tiles/* {
 		forward_auth api:3000 {
 			uri /api/v1/gis/tile-auth
@@ -30,10 +51,19 @@
 		reverse_proxy geoserver:8080
 	}
 
-	# SPA (static build copied into the caddy volume).
+	# SPA (static build baked into the image).
 	handle {
 		root * /srv/web
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+# MinIO on a dedicated subdomain so presigned URLs (file downloads, recording stream/download) are
+# browser-reachable with a valid SigV4 signature (Caddy preserves the Host header, so MinIO verifies
+# against the same host the api signed with). The api reaches MinIO internally (S3_ENDPOINT=http://minio:9000)
+# but presigns against this host (S3_PUBLIC_ENDPOINT=https://s3.<domain>).
+s3.{$CUKS_DOMAIN:localhost} {
+	{$CUKS_TLS_INTERNAL:}
+	reverse_proxy minio:9000
 }

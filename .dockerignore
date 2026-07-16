@@ -1,0 +1,17 @@
+# Rebuilt inside the image; secrets and local artefacts must never enter the build context.
+**/node_modules
+**/dist
+**/.turbo
+**/*.tsbuildinfo
+.git
+.github
+.husky
+apps/web/test-results
+apps/web/playwright-report
+apps/web/e2e/.auth
+infra/basemap/*.pmtiles
+.ca
+.env
+.env.*
+!.env.example
+!.env.prod.example

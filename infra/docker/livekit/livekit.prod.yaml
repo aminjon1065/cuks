@@ -1,0 +1,33 @@
+# LiveKit SFU — PRODUCTION (docs/modules/14 §6, docs/08 §firewall, task 7.1).
+# The API key/secret are injected out of this file via the `LIVEKIT_KEYS` env var in compose.prod.yaml
+# ("cuks: <secret>") so no secret lives in git; the key NAME is `cuks`, referenced by webhook.api_key
+# and by the api's LIVEKIT_API_KEY=cuks. See docs/runbook-install.md.
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Advertise the server's public IP for ICE. On a NAT'd host also set node_ip to the public address.
+  use_external_ip: true
+
+redis:
+  address: redis:6379
+
+# Webhooks -> api (participant/room/egress lifecycle). The api verifies them with the `cuks` key.
+webhook:
+  api_key: cuks
+  urls:
+    - http://api:3000/api/meet/webhook
+
+# Embedded TURN for strict-NAT clients — OFF by default. With UDP 7882 open, direct ICE works for most
+# clients and no TURN is needed. Enable only if some participants sit behind restrictive NAT/firewalls:
+# set enabled: true and domain: <your CUKS domain>, provide a TLS cert for :5349 (external_tls terminates
+# TLS at the edge — needs a layer4 route, e.g. a caddy-l4 build), and open 5349/tcp. See docs/runbook-install.md.
+turn:
+  enabled: false
+  # tls_port: 5349
+  # external_tls: true
+  # domain: your-cuks-domain.example
+
+logging:
+  level: info
