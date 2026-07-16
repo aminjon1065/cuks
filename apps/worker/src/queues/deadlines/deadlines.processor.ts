@@ -7,15 +7,21 @@ import {
   notificationOutbox,
   positions,
   resolutions,
+  taskProjects,
+  tasks,
   userPositions,
   type Database,
 } from '@cuks/db';
 import {
   DOCFLOW_DEADLINE_TOPIC,
   QUEUE,
+  TASKS_DEADLINE_TOPIC,
   classifyDeadline,
+  classifyTaskDeadline,
   type DocflowDeadlinePayload,
   type DocflowDeadlineTier,
+  type TaskDeadlineTier,
+  type TasksDeadlinePayload,
 } from '@cuks/shared';
 import { DB } from '../../common/db.module';
 
@@ -118,7 +124,86 @@ export class DeadlinesProcessor extends WorkerHost {
         this.logger.error({ error, resolutionId: r.resolutionId }, 'deadline item failed');
       }
     }
-    this.logger.log({ jobId: job.id, scanned: rows.length, emitted }, 'deadline sweep');
+    const taskEmitted = await this.sweepTasks(now, day);
+    this.logger.log(
+      { jobId: job.id, scanned: rows.length, emitted, taskEmitted },
+      'deadline sweep',
+    );
+  }
+
+  /**
+   * Task deadline sweep (docs/modules/15 §7, task 4.4). Scans active (not done/archived) tasks with
+   * a due date: a reminder to the assignees a day out and on the due day, and — once overdue — a
+   * daily overdue reminder to the assignees and the author. Recipients are filtered to project
+   * members downstream by the API dispatcher.
+   */
+  private async sweepTasks(now: Date, day: string): Promise<number> {
+    const rows = await this.db
+      .select({
+        taskId: tasks.id,
+        projectId: tasks.projectId,
+        projectKey: taskProjects.key,
+        seq: tasks.seq,
+        title: tasks.title,
+        dueAt: tasks.dueAt,
+        assigneeIds: tasks.assigneeIds,
+        authorId: tasks.authorId,
+      })
+      .from(tasks)
+      .innerJoin(
+        taskProjects,
+        and(eq(taskProjects.id, tasks.projectId), isNull(taskProjects.deletedAt)),
+      )
+      .where(
+        and(
+          isNotNull(tasks.dueAt),
+          isNull(tasks.deletedAt),
+          isNull(tasks.archivedAt),
+          isNull(tasks.completedAt),
+        ),
+      );
+
+    let emitted = 0;
+    for (const r of rows) {
+      try {
+        const c = classifyTaskDeadline(r.dueAt!.toISOString(), now);
+        const base = {
+          taskId: r.taskId,
+          projectId: r.projectId,
+          projectKey: r.projectKey,
+          seq: r.seq,
+          title: r.title,
+        };
+        if (c.reminder) {
+          emitted += await this.emitTask(day, c.reminder, r.assigneeIds, base);
+        }
+        if (c.overdue) {
+          emitted += await this.emitTask(day, 'overdue', [...r.assigneeIds, r.authorId], base);
+        }
+      } catch (error) {
+        this.logger.error({ error, taskId: r.taskId }, 'task deadline item failed');
+      }
+    }
+    return emitted;
+  }
+
+  /** Insert one outbox row for a (task, tier, day); idempotent via the dedupe key. */
+  private async emitTask(
+    day: string,
+    tier: TaskDeadlineTier,
+    recipientUserIds: string[],
+    base: { taskId: string; projectId: string; projectKey: string; seq: number; title: string },
+  ): Promise<number> {
+    const recipients = [...new Set(recipientUserIds)];
+    if (recipients.length === 0) return 0;
+    const payload: TasksDeadlinePayload = { ...base, tier, recipientUserIds: recipients };
+    const dedupeKey = `${TASKS_DEADLINE_TOPIC}:${base.taskId}:${tier}:${day}`;
+    const inserted = await this.db
+      .insert(notificationOutbox)
+      .values({ topic: TASKS_DEADLINE_TOPIC, payload, dedupeKey })
+      .onConflictDoNothing({ target: notificationOutbox.dedupeKey })
+      .returning({ id: notificationOutbox.id });
+    return inserted.length;
   }
 
   /** Insert one outbox row for a (resolution, tier, day); idempotent via the dedupe key. */

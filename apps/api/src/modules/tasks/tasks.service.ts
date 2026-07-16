@@ -1,5 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { aliasedTable, and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  aliasedTable,
+  and,
+  arrayContains,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  sql,
+} from 'drizzle-orm';
 import {
   comments,
   taskActivity,
@@ -23,6 +36,7 @@ import {
   type CreateTaskInput,
   type LabelDto,
   type MoveTaskInput,
+  type MyTaskDto,
   type ProjectRole,
   type TaskCardDetailDto,
   type TaskCardDto,
@@ -504,6 +518,84 @@ export class TasksService {
     }));
   }
 
+  // --- «Мои задачи» (docs/modules/15 §5) ---
+
+  /** Active tasks across all the caller's projects that they are assigned to (or, when `watching`,
+   *  watch), earliest due first (no-due last). Scoped to projects they are a member of. */
+  async myTasks(actor: AuthUser, watching: boolean): Promise<MyTaskDto[]> {
+    const idColumn = watching ? tasks.watcherIds : tasks.assigneeIds;
+    const rows = await this.db
+      .select({
+        id: tasks.id,
+        projectId: tasks.projectId,
+        projectKey: taskProjects.key,
+        projectName: taskProjects.name,
+        seq: tasks.seq,
+        title: tasks.title,
+        priority: tasks.priority,
+        dueAt: tasks.dueAt,
+        completedAt: tasks.completedAt,
+      })
+      .from(tasks)
+      .innerJoin(
+        taskProjects,
+        and(eq(taskProjects.id, tasks.projectId), isNull(taskProjects.deletedAt)),
+      )
+      // Only tasks in projects the caller belongs to — so every listed card is openable.
+      .innerJoin(
+        taskProjectMembers,
+        and(
+          eq(taskProjectMembers.projectId, tasks.projectId),
+          eq(taskProjectMembers.userId, actor.id),
+        ),
+      )
+      .where(
+        and(
+          arrayContains(idColumn, [actor.id]),
+          isNull(tasks.deletedAt),
+          isNull(tasks.archivedAt),
+          isNull(tasks.completedAt),
+        ),
+      )
+      .orderBy(asc(tasks.dueAt));
+    return rows.map((r) => ({
+      id: r.id,
+      projectId: r.projectId,
+      projectKey: r.projectKey,
+      projectName: r.projectName,
+      seq: r.seq,
+      title: r.title,
+      priority: r.priority,
+      dueAt: r.dueAt?.toISOString() ?? null,
+      completedAt: r.completedAt?.toISOString() ?? null,
+    }));
+  }
+
+  /** Count of the caller's assigned active tasks whose due day has already passed (sidebar badge). */
+  async overdueCount(actor: AuthUser): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(tasks)
+      .innerJoin(
+        taskProjectMembers,
+        and(
+          eq(taskProjectMembers.projectId, tasks.projectId),
+          eq(taskProjectMembers.userId, actor.id),
+        ),
+      )
+      .where(
+        and(
+          arrayContains(tasks.assigneeIds, [actor.id]),
+          isNull(tasks.deletedAt),
+          isNull(tasks.archivedAt),
+          isNull(tasks.completedAt),
+          isNotNull(tasks.dueAt),
+          lt(tasks.dueAt, dushanbeTodayStart()),
+        ),
+      );
+    return Number(row?.n ?? 0);
+  }
+
   private async notifyAssigned(card: TaskRow, userIds: string[], actor: AuthUser): Promise<void> {
     const recipients = await this.membersAmong(
       card.projectId,
@@ -707,4 +799,13 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
   const set = new Set(b);
   return a.every((x) => set.has(x));
+}
+
+const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+/** The UTC instant of the current Asia/Dushanbe calendar day's 00:00 — anything due before it is
+ *  overdue by whole local days (matches shared `taskDueBucket`). */
+function dushanbeTodayStart(): Date {
+  const day = Math.floor((Date.now() + DUSHANBE_OFFSET_MS) / 86_400_000);
+  return new Date(day * 86_400_000 - DUSHANBE_OFFSET_MS);
 }

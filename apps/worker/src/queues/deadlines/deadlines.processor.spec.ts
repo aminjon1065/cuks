@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolutions, userPositions } from '@cuks/db';
+import { resolutions, tasks, userPositions } from '@cuks/db';
 import { DeadlinesProcessor } from './deadlines.processor';
 
 /**
@@ -7,7 +7,7 @@ import { DeadlinesProcessor } from './deadlines.processor';
  * resolve to a result keyed on the `from` table; writes (insert → values → onConflict →
  * returning) record the row and resolve to one inserted id.
  */
-function makeDb(scanRows: unknown[], headRows: { userId: string }[]) {
+function makeDb(scanRows: unknown[], headRows: { userId: string }[], taskRows: unknown[] = []) {
   const inserted: Array<{ topic: string; payload: unknown; dedupeKey: string }> = [];
 
   const reader = () => {
@@ -21,7 +21,9 @@ function makeDb(scanRows: unknown[], headRows: { userId: string }[]) {
         return chain;
       },
       where() {
-        return Promise.resolve(table === userPositions ? headRows : scanRows);
+        return Promise.resolve(
+          table === userPositions ? headRows : table === tasks ? taskRows : scanRows,
+        );
       },
     };
     return chain;
@@ -65,8 +67,12 @@ const resolutionRow = (over: Partial<Record<string, unknown>>) => ({
 
 const NOW = new Date('2026-07-15T06:00:00.000Z'); // due today for the base row
 
-async function run(scanRows: unknown[], headRows: { userId: string }[] = []) {
-  const { db, inserted } = makeDb(scanRows, headRows);
+async function run(
+  scanRows: unknown[],
+  headRows: { userId: string }[] = [],
+  taskRows: unknown[] = [],
+) {
+  const { db, inserted } = makeDb(scanRows, headRows, taskRows);
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   const proc = new DeadlinesProcessor(db as never);
@@ -74,6 +80,20 @@ async function run(scanRows: unknown[], headRows: { userId: string }[] = []) {
   vi.useRealTimers();
   return inserted;
 }
+
+const taskRow = (over: Partial<Record<string, unknown>>) => ({
+  taskId: 't1',
+  projectId: 'p1',
+  projectKey: 'ОПЕР',
+  seq: 42,
+  title: 'Задача',
+  dueAt: new Date('2026-07-15T06:00:00.000Z'), // due today for the base row
+  assigneeIds: ['exec'] as string[],
+  authorId: 'author',
+  ...over,
+});
+const taskInserts = (rows: Array<{ topic: string; payload: unknown; dedupeKey: string }>) =>
+  rows.filter((r) => r.topic === 'tasks.deadline');
 
 describe('DeadlinesProcessor', () => {
   it('reminds only the executor when the deadline is today', async () => {
@@ -142,8 +162,42 @@ describe('DeadlinesProcessor', () => {
     expect(esc, 'a cleared head is still escalated to').toBeTruthy();
     expect((esc!.payload as { recipientUserIds: string[] }).recipientUserIds).toEqual(['head']);
   });
+
+  it('reminds the assignees a day before and on the due day', async () => {
+    const soon = taskInserts(
+      await run([], [], [taskRow({ dueAt: new Date('2026-07-16T06:00:00.000Z') })]),
+    );
+    expect(soon).toHaveLength(1);
+    expect(soon[0]!.payload as { tier: string; recipientUserIds: string[] }).toMatchObject({
+      tier: 'due_soon',
+      recipientUserIds: ['exec'],
+    });
+    expect(soon[0]!.dedupeKey).toContain('tasks.deadline:t1:due_soon:');
+
+    const today = taskInserts(await run([], [], [taskRow({})]));
+    expect((today[0]!.payload as { tier: string }).tier).toBe('due_today');
+  });
+
+  it('reminds assignees and author once a task is overdue', async () => {
+    const inserted = taskInserts(
+      await run([], [], [taskRow({ dueAt: new Date('2026-07-13T06:00:00.000Z') })]),
+    );
+    expect(inserted).toHaveLength(1);
+    const payload = inserted[0]!.payload as { tier: string; recipientUserIds: string[] };
+    expect(payload.tier).toBe('overdue');
+    expect(payload.recipientUserIds.sort()).toEqual(['author', 'exec']);
+  });
+
+  it('emits no task reminder two days out, and skips a reminder with no assignees', async () => {
+    expect(
+      taskInserts(await run([], [], [taskRow({ dueAt: new Date('2026-07-17T06:00:00.000Z') })])),
+    ).toHaveLength(0);
+    // Due today but unassigned → nothing to remind.
+    expect(taskInserts(await run([], [], [taskRow({ assigneeIds: [] })]))).toHaveLength(0);
+  });
 });
 
 // Touch the imports so the stub table identities line up with the processor's queries.
 void resolutions;
+void tasks;
 void userPositions;
