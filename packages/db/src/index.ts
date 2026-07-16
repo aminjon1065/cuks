@@ -5,3 +5,5 @@ export * as schema from './schema/index';
 export * from './unmanaged/audit-log';
 // ДСП read log — mirror only, DDL is a hand-written migration (audit schema, unmanaged).
 export * from './unmanaged/read-log';
+// Chat messages — mirror only, DDL is a hand-written migration (month-partitioned).
+export * from './unmanaged/chat-messages';

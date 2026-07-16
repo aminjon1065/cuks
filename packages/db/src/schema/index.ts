@@ -18,3 +18,4 @@ export * from './docflow';
 export * from './tasks';
 export * from './comments';
 export * from './entity-links';
+export * from './chat';
