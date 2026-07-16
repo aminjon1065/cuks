@@ -21,11 +21,13 @@ function makeGateway() {
   };
   const realtime = { bind: vi.fn() };
   const presence = { connect: vi.fn().mockResolvedValue(undefined), disconnect: vi.fn() };
+  const db = {};
   const gateway = new EventsGateway(
     sessions as never,
     users as never,
     realtime as never,
     presence as never,
+    db as never,
   );
   return { gateway, sessions, users, presence };
 }

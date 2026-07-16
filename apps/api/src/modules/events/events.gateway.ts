@@ -1,12 +1,18 @@
-import { Logger } from '@nestjs/common';
+import { Inject, Logger } from '@nestjs/common';
 import {
+  ConnectedSocket,
+  MessageBody,
+  SubscribeMessage,
   type OnGatewayConnection,
   type OnGatewayDisconnect,
   type OnGatewayInit,
   WebSocketGateway,
 } from '@nestjs/websockets';
+import { and, eq } from 'drizzle-orm';
 import type { Server, Socket } from 'socket.io';
 import { SESSION_COOKIE, WS_NAMESPACE, wsRooms } from '@cuks/shared';
+import { taskProjectMembers, type Database } from '@cuks/db';
+import { DB } from '../../common/db/db.module';
 import { SessionService } from '../auth/session.service';
 import { UsersService } from '../users/users.service';
 import { RealtimeService } from './realtime.service';
@@ -40,7 +46,41 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     private readonly users: UsersService,
     private readonly realtime: RealtimeService,
     private readonly presence: PresenceService,
+    @Inject(DB) private readonly db: Database,
   ) {}
+
+  /** Join a task board's room to receive its live updates (docs/modules/15 §3) — allowed to a
+   *  project member or a superadmin. The HTTP board fetch enforces the full ACL; this only gates
+   *  the realtime stream. */
+  @SubscribeMessage('board.subscribe')
+  async subscribeBoard(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { projectId?: string },
+  ): Promise<{ ok: boolean }> {
+    const userId = (client.data as { userId?: string }).userId;
+    const projectId = body?.projectId;
+    if (!userId || !projectId) return { ok: false };
+    const [member] = await this.db
+      .select({ id: taskProjectMembers.id })
+      .from(taskProjectMembers)
+      .where(
+        and(eq(taskProjectMembers.projectId, projectId), eq(taskProjectMembers.userId, userId)),
+      )
+      .limit(1);
+    const perms = await this.users.getPermissions(userId);
+    if (!member && !perms.isSuperadmin) return { ok: false };
+    await client.join(wsRooms.board(projectId));
+    return { ok: true };
+  }
+
+  @SubscribeMessage('board.unsubscribe')
+  async unsubscribeBoard(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { projectId?: string },
+  ): Promise<{ ok: boolean }> {
+    if (body?.projectId) await client.leave(wsRooms.board(body.projectId));
+    return { ok: true };
+  }
 
   afterInit(server: Server): void {
     this.realtime.bind(server);
