@@ -26,6 +26,7 @@ import { DirectoryModule } from './modules/directory/directory.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { DocflowModule } from './modules/docflow/docflow.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { FilesModule } from './modules/files/files.module';
 import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
@@ -90,6 +91,7 @@ import { UsersModule } from './modules/users/users.module';
     AnalyticsModule,
     DocflowModule,
     TasksModule,
+    ChatModule,
     DirectoryModule,
     HealthModule,
   ],

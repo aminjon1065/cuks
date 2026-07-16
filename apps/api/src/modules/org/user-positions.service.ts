@@ -5,6 +5,7 @@ import type { AssignPositionInput, UserPositionDto } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
+import { OrgChannelsService } from '../chat/org-channels.service';
 
 /** True for a Postgres unique-violation error (SQLSTATE 23505). */
 function isUniqueViolation(err: unknown): boolean {
@@ -22,6 +23,7 @@ export class UserPositionsService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly orgChannels: OrgChannelsService,
   ) {}
 
   async listByUser(userId: string): Promise<UserPositionDto[]> {
@@ -50,7 +52,7 @@ export class UserPositionsService {
     if (!user) throw AppException.notFound('admin.user.not_found', 'User not found');
 
     const [position] = await this.db
-      .select({ id: positions.id })
+      .select({ id: positions.id, orgUnitId: positions.orgUnitId })
       .from(positions)
       .where(and(eq(positions.id, input.positionId), isNull(positions.deletedAt)))
       .limit(1);
@@ -108,6 +110,8 @@ export class UserPositionsService {
       entityId: input.userId,
       meta: { positionId: input.positionId, isPrimary: result.makePrimary },
     });
+    // The new hire joins their unit's channel (docs/modules/13 §2) — best-effort.
+    void this.orgChannels.syncOrgUnit(position.orgUnitId);
     return this.getOne(result.id);
   }
 
@@ -137,8 +141,13 @@ export class UserPositionsService {
 
   async unassign(id: string, actorId: string): Promise<void> {
     const [row] = await this.db
-      .select({ userId: userPositions.userId, isPrimary: userPositions.isPrimary })
+      .select({
+        userId: userPositions.userId,
+        isPrimary: userPositions.isPrimary,
+        orgUnitId: positions.orgUnitId,
+      })
       .from(userPositions)
+      .innerJoin(positions, eq(positions.id, userPositions.positionId))
       .where(eq(userPositions.id, id))
       .limit(1);
     if (!row) throw AppException.notFound('admin.user_position.not_found', 'Assignment not found');
@@ -166,6 +175,8 @@ export class UserPositionsService {
       entityType: 'user',
       entityId: row.userId,
     });
+    // Leaving the last position in a unit drops the user from that unit's channel — best-effort.
+    void this.orgChannels.syncOrgUnit(row.orgUnitId);
   }
 
   private async getOne(id: string): Promise<UserPositionDto> {

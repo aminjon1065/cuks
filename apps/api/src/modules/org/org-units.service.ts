@@ -11,6 +11,7 @@ import { uuidv7 } from 'uuidv7';
 import { AuditService } from '../../common/audit/audit.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
+import { OrgChannelsService } from '../chat/org-channels.service';
 
 // Transaction-level advisory lock key that serializes concurrent moves so the
 // cycle guard cannot be invalidated by a simultaneous move.
@@ -22,6 +23,7 @@ export class OrgUnitsService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly orgChannels: OrgChannelsService,
   ) {}
 
   async tree(): Promise<OrgUnitTreeNode[]> {
@@ -76,6 +78,8 @@ export class OrgUnitsService {
       entityType: 'org_unit',
       entityId: id,
     });
+    // Every org unit gets its channel (docs/modules/13 §2) — best-effort.
+    void this.orgChannels.ensureChannel(id);
     return this.getOne(id);
   }
 

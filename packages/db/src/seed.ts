@@ -11,6 +11,8 @@ import { ARGON2_OPTIONS, ROLE_TEMPLATES, keysBetween, type OrgUnitType } from '@
 import { createDb, type Database } from './client';
 import {
   adminUnits,
+  chatChannels,
+  chatMembers,
   dictionaries,
   incidents,
   journals,
@@ -27,6 +29,7 @@ import {
   userRoles,
   users,
 } from './schema/index';
+import { and, inArray, isNull } from 'drizzle-orm';
 
 const SUPERADMIN_ROLE_CODE = 'superadmin';
 const ADMIN_USERNAME = 'admin';
@@ -1220,6 +1223,75 @@ async function seedDefaultTaskProject(db: Database, adminId: string): Promise<vo
   console.log('Default task project «Оперативные поручения» seeded (idempotent).');
 }
 
+/**
+ * Provision the auto org-unit channels (docs/modules/13 §2, task 5.1) and sync each to its current
+ * staff. Idempotent (the partial unique index makes a re-insert a no-op); re-run after demo users
+ * exist so their memberships attach.
+ */
+async function seedOrgChannels(db: Database): Promise<void> {
+  const units = await db
+    .select({ id: orgUnits.id, name: orgUnits.name })
+    .from(orgUnits)
+    .where(isNull(orgUnits.deletedAt));
+  let members = 0;
+  for (const unit of units) {
+    await db
+      .insert(chatChannels)
+      .values({ kind: 'org', name: unit.name, orgUnitId: unit.id })
+      .onConflictDoNothing();
+    const [channel] = await db
+      .select({ id: chatChannels.id })
+      .from(chatChannels)
+      .where(
+        and(
+          eq(chatChannels.orgUnitId, unit.id),
+          eq(chatChannels.kind, 'org'),
+          isNull(chatChannels.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!channel) continue;
+
+    const staff = await db
+      .selectDistinct({ userId: userPositions.userId })
+      .from(userPositions)
+      .innerJoin(
+        positions,
+        and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
+      )
+      .innerJoin(users, and(eq(users.id, userPositions.userId), isNull(users.deletedAt)))
+      .where(eq(positions.orgUnitId, unit.id));
+    const target = new Set(staff.map((s) => s.userId));
+    const current = new Set(
+      (
+        await db
+          .select({ userId: chatMembers.userId })
+          .from(chatMembers)
+          .where(eq(chatMembers.channelId, channel.id))
+      ).map((m) => m.userId),
+    );
+    const toAdd = [...target].filter((id) => !current.has(id));
+    const toRemove = [...current].filter((id) => !target.has(id));
+    if (toAdd.length) {
+      await db
+        .insert(chatMembers)
+        .values(
+          toAdd.map((userId) => ({ channelId: channel.id, userId, memberRole: 'member' as const })),
+        )
+        .onConflictDoNothing();
+      members += toAdd.length;
+    }
+    if (toRemove.length) {
+      await db
+        .delete(chatMembers)
+        .where(and(eq(chatMembers.channelId, channel.id), inArray(chatMembers.userId, toRemove)));
+    }
+  }
+  console.log(
+    `Org-unit channels seeded: ${units.length} channels, +${members} members (idempotent).`,
+  );
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   const isDemo = process.argv.includes('--demo');
@@ -1240,6 +1312,7 @@ async function main(): Promise<void> {
     await bindOrgTerritory(db);
     await seedDemoNotifications(db, adminId);
     await seedDefaultTaskProject(db, adminId);
+    await seedOrgChannels(db);
     console.log(
       `Seed complete: ${ROLE_TEMPLATES.length} roles, ${ORG_SKELETON.length} org units, ` +
         `admin user "${ADMIN_USERNAME}", ${DICTIONARIES.length} dictionary entries, ` +
@@ -1248,8 +1321,9 @@ async function main(): Promise<void> {
     if (isDemo) {
       await seedDemoUsers(db);
       await seedDemoIncidents(db, adminId);
-      // Re-run now that the demo roster exists, so duty officers attach as editors.
+      // Re-run now that the demo roster exists, so duty officers attach as editors / channel members.
       await seedDefaultTaskProject(db, adminId);
+      await seedOrgChannels(db);
     }
   } finally {
     await pool.end();
