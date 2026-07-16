@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Kanban, List, Search } from 'lucide-react';
 import { Button, EmptyState, Input, PageHeader, Skeleton, cn, toast } from '@cuks/ui';
 import type { TaskCardDto, TaskPriority } from '@cuks/shared';
@@ -8,6 +8,7 @@ import { TASK_PRIORITIES } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
 import { BoardView } from '../components/BoardView';
 import { TaskListView } from '../components/TaskListView';
+import { CardPanel } from '../components/CardPanel';
 import { useBoard, useCreateCard, useMoveCard, useProjectByKey } from '../api/queries';
 import { useBoardRealtime } from '../hooks/useBoardRealtime';
 
@@ -20,7 +21,8 @@ const inputClass = cn(
  *  a list view, WIP limits and realtime updates. */
 export function BoardPage(): React.JSX.Element {
   const { t } = useTranslation('tasks');
-  const { projectKey = '' } = useParams();
+  const { projectKey = '', seq } = useParams();
+  const navigate = useNavigate();
   const me = useMe();
   const project = useProjectByKey(projectKey);
   const projectId = project.data?.id;
@@ -66,6 +68,9 @@ export function BoardPage(): React.JSX.Element {
       { columnId, title, assigneeIds: [], priority: 'p3', labels: [] },
       { onError: () => toast({ title: t('common.actionFailed'), tone: 'danger' }) },
     );
+
+  const openCard = (card: TaskCardDto) => navigate(`/app/tasks/${projectKey}/${card.seq}`);
+  const panelCard = seq ? board.data?.cards.find((c) => String(c.seq) === seq) : undefined;
 
   if (project.isError) {
     return (
@@ -155,17 +160,21 @@ export function BoardPage(): React.JSX.Element {
             cards={cards}
             allCards={board.data.cards}
             onMoveCard={onMoveCard}
-            onCardClick={noop}
+            onCardClick={openCard}
             onQuickAdd={onQuickAdd}
           />
         </div>
       ) : (
-        <TaskListView board={board.data} cards={cards} onCardClick={noop} />
+        <TaskListView board={board.data} cards={cards} onCardClick={openCard} />
       )}
+
+      {board.data && panelCard ? (
+        <CardPanel
+          board={board.data}
+          cardId={panelCard.id}
+          onClose={() => navigate(`/app/tasks/${projectKey}`)}
+        />
+      ) : null}
     </div>
   );
-}
-
-function noop(_card: TaskCardDto): void {
-  // The card SidePanel arrives in task 4.3; a click is a no-op for now.
 }

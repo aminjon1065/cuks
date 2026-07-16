@@ -34,7 +34,51 @@
     }
   },
   "card": {
-    "unassigned": "Без исполнителя"
+    "unassigned": "Без исполнителя",
+    "complete": "Завершить",
+    "watch": "Наблюдать",
+    "unwatch": "Не наблюдать",
+    "copy": "Копировать",
+    "copied": "Карточка скопирована",
+    "archive": "В архив",
+    "clearDate": "Очистить дату",
+    "addAssignee": "Исполнитель",
+    "searchMember": "Поиск участника…",
+    "noMembers": "Нет участников",
+    "labels": "Метки",
+    "noLabels": "Меток пока нет",
+    "newLabel": "Новая метка",
+    "checklist": "Чеклист",
+    "addChecklistItem": "Добавить пункт…",
+    "noDescription": "Описания нет",
+    "descriptionPlaceholder": "Добавьте описание…",
+    "tabComments": "Комментарии",
+    "tabHistory": "История",
+    "noComments": "Пока нет комментариев",
+    "commentPlaceholder": "Оставьте комментарий… (@ — упомянуть)",
+    "commentHint": "@ — упомянуть · Ctrl+Enter — отправить",
+    "send": "Отправить",
+    "noHistory": "Событий пока нет",
+    "system": "Система",
+    "field": {
+      "status": "Статус",
+      "priority": "Приоритет",
+      "dueAt": "Срок",
+      "startAt": "Начало",
+      "assignees": "Исполнители",
+      "labels": "Метки",
+      "description": "Описание",
+      "title": "Заголовок",
+      "watchers": "Наблюдатели"
+    },
+    "activity": {
+      "created": "создал(а) карточку",
+      "moved": "переместил(а) карточку",
+      "completed": "завершил(а) карточку",
+      "commented": "оставил(а) комментарий",
+      "assigned": "изменил(а) исполнителей",
+      "updated": "изменил(а): {{fields}}"
+    }
   },
   "list": {
     "title": "Заголовок",
@@ -52,6 +96,7 @@
   "common": {
     "cancel": "Отмена",
     "save": "Сохранить",
+    "delete": "Удалить",
     "actionFailed": "Не удалось выполнить действие"
   }
 }

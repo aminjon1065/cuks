@@ -134,6 +134,7 @@ export const router = createBrowserRouter([
       { path: 'verify/:signatureId', element: <VerifyPage /> },
       { path: 'tasks', element: <TasksProjectsPage /> },
       { path: 'tasks/:projectKey', element: <BoardPage /> },
+      { path: 'tasks/:projectKey/:seq', element: <BoardPage /> },
       {
         path: 'analytics',
         element: (
