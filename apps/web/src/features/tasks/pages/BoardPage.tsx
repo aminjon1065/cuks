@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileQuestion, Kanban, List, Search } from 'lucide-react';
+import { ChevronLeft, FileQuestion, Kanban, List, Search } from 'lucide-react';
 import { Button, EmptyState, Input, PageHeader, SidePanel, Skeleton, cn, toast } from '@cuks/ui';
 import type { TaskCardDto, TaskPriority } from '@cuks/shared';
 import { TASK_PRIORITIES } from '@cuks/shared';
@@ -69,7 +69,7 @@ export function BoardPage(): React.JSX.Element {
       { onError: () => toast({ title: t('common.actionFailed'), tone: 'danger' }) },
     );
 
-  const openCard = (card: TaskCardDto) => navigate(`/app/tasks/${projectKey}/${card.seq}`);
+  const openCard = (card: TaskCardDto) => navigate(`/app/tasks/projects/${projectKey}/${card.seq}`);
   const panelCard = seq ? board.data?.cards.find((c) => String(c.seq) === seq) : undefined;
 
   if (project.isError) {
@@ -83,6 +83,11 @@ export function BoardPage(): React.JSX.Element {
       <PageHeader
         title={project.data?.name ?? t('board.title')}
         description={project.data ? `${project.data.key}` : undefined}
+        actions={
+          <Button variant="ghost" size="sm" onClick={() => navigate('/app/tasks/projects')}>
+            <ChevronLeft className="size-4" /> {t('board.backToProjects')}
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -172,14 +177,14 @@ export function BoardPage(): React.JSX.Element {
         <CardPanel
           board={board.data}
           cardId={panelCard.id}
-          onClose={() => navigate(`/app/tasks/${projectKey}`)}
+          onClose={() => navigate(`/app/tasks/projects/${projectKey}`)}
         />
       ) : null}
 
       {board.data && seq && !panelCard ? (
         <SidePanel
           open
-          onOpenChange={(o) => !o && navigate(`/app/tasks/${projectKey}`)}
+          onOpenChange={(o) => !o && navigate(`/app/tasks/projects/${projectKey}`)}
           title={t('card.notFound.title')}
         >
           <EmptyState

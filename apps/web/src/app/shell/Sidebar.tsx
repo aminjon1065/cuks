@@ -6,10 +6,20 @@ import type { MeResponse } from '@cuks/shared';
 import { Avatar, AvatarFallback, Tooltip, TooltipContent, TooltipTrigger, cn } from '@cuks/ui';
 import { useVisibleByPermission } from '@/lib/ability';
 import { useUiStore } from '@/lib/ui-store';
+import { useMyOverdueCount } from '@/features/tasks/api/queries';
 import { ADMIN_NAV, MAIN_NAV, type NavItem } from './nav-items';
 import { ThemeToggle } from './ThemeToggle';
 
-function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }): React.JSX.Element {
+function NavRow({
+  item,
+  collapsed,
+  badge = 0,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  /** A count rendered as an attention pill (e.g. overdue tasks); 0 hides it. */
+  badge?: number;
+}): React.JSX.Element {
   const { t } = useTranslation('nav');
   const label = t(`items.${item.key}`);
   const Icon = item.icon;
@@ -19,7 +29,7 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }): Rea
       end={item.path === '/app'}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
+          'relative flex items-center gap-3 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors',
           collapsed && 'justify-center',
           isActive
             ? 'bg-primary/10 text-primary'
@@ -29,6 +39,15 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }): Rea
     >
       <Icon className="size-[18px] shrink-0" />
       {collapsed ? null : <span className="truncate">{label}</span>}
+      {badge > 0 ? (
+        collapsed ? (
+          <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger" />
+        ) : (
+          <span className="ml-auto min-w-5 rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold leading-5 text-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )
+      ) : null}
     </NavLink>
   );
 
@@ -51,6 +70,7 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
   );
   const collapsed = storedCollapsed || compactViewport;
   const adminItems = useVisibleByPermission(ADMIN_NAV);
+  const overdue = useMyOverdueCount();
 
   const primaryOrg = me.orgContext.find((o) => o.isPrimary) ?? me.orgContext[0];
 
@@ -85,7 +105,12 @@ export function Sidebar({ me }: { me: MeResponse }): React.JSX.Element {
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {MAIN_NAV.map((item) => (
-          <NavRow key={item.key} item={item} collapsed={collapsed} />
+          <NavRow
+            key={item.key}
+            item={item}
+            collapsed={collapsed}
+            badge={item.key === 'tasks' ? (overdue.data ?? 0) : 0}
+          />
         ))}
 
         {adminItems.length > 0 ? (

@@ -27,6 +27,7 @@ import { ReportsPage as DocflowReportsPage } from '@/features/docflow/pages/Repo
 import { SubstitutionsPage } from '@/features/docflow/pages/SubstitutionsPage';
 import { ProjectsPage as TasksProjectsPage } from '@/features/tasks/pages/ProjectsPage';
 import { BoardPage } from '@/features/tasks/pages/BoardPage';
+import { MyTasksPage } from '@/features/tasks/pages/MyTasksPage';
 import { FilesPage } from '@/features/files/pages/FilesPage';
 
 // The map pulls in MapLibre + basemap themes (~800 kB); lazy-load it so that
@@ -132,9 +133,10 @@ export const router = createBrowserRouter([
       { path: 'docs/settings', element: <DocflowSettingsPage /> },
       { path: 'docs/:id', element: <DocumentCardPage /> },
       { path: 'verify/:signatureId', element: <VerifyPage /> },
-      { path: 'tasks', element: <TasksProjectsPage /> },
-      { path: 'tasks/:projectKey', element: <BoardPage /> },
-      { path: 'tasks/:projectKey/:seq', element: <BoardPage /> },
+      { path: 'tasks', element: <MyTasksPage /> },
+      { path: 'tasks/projects', element: <TasksProjectsPage /> },
+      { path: 'tasks/projects/:projectKey', element: <BoardPage /> },
+      { path: 'tasks/projects/:projectKey/:seq', element: <BoardPage /> },
       {
         path: 'analytics',
         element: (

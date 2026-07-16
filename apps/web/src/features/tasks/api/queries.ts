@@ -14,6 +14,7 @@ import type {
   LabelDto,
   MoveColumnInput,
   MoveTaskInput,
+  MyTaskDto,
   ProjectDto,
   TaskCardDetailDto,
   TaskCardDto,
@@ -29,6 +30,9 @@ export const boardKey = (projectId: string) => [...tasksKey, 'board', projectId]
 export const cardKey = (cardId: string) => [...tasksKey, 'card', cardId] as const;
 export const cardCommentsKey = (cardId: string) => [...cardKey(cardId), 'comments'] as const;
 export const cardActivityKey = (cardId: string) => [...cardKey(cardId), 'activity'] as const;
+export const myTasksBaseKey = [...tasksKey, 'my'] as const;
+export const myTasksKey = (watching: boolean) => [...myTasksBaseKey, { watching }] as const;
+export const myOverdueKey = [...myTasksBaseKey, 'overdue'] as const;
 
 export function useProjects(): UseQueryResult<ProjectDto[]> {
   return useQuery({
@@ -274,5 +278,37 @@ export function useCreateLabel(projectId: string) {
     mutationFn: (body: CreateLabelInput) =>
       api.post<LabelDto>(`/v1/tasks/projects/${projectId}/labels`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: boardKey(projectId) }),
+  });
+}
+
+// --- «Мои задачи» (docs/modules/15 §5, task 4.4) ---
+
+export function useMyTasks(watching: boolean): UseQueryResult<MyTaskDto[]> {
+  return useQuery({
+    queryKey: myTasksKey(watching),
+    queryFn: () => api.get<MyTaskDto[]>(`/v1/tasks/my?watching=${watching}`),
+  });
+}
+
+/** The overdue count behind the sidebar badge — refetched periodically and on task mutations. */
+export function useMyOverdueCount(): UseQueryResult<number> {
+  return useQuery({
+    queryKey: myOverdueKey,
+    queryFn: () => api.get<{ count: number }>('/v1/tasks/my/overdue-count').then((r) => r.count),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+/** Complete a card straight from the personal queue (checkbox), refreshing the queue and its board. */
+export function useQuickComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; projectId: string }) =>
+      api.post<TaskCardDto>(`/v1/tasks/cards/${id}/complete`),
+    onSuccess: (_data, { projectId }) => {
+      void qc.invalidateQueries({ queryKey: myTasksBaseKey });
+      void qc.invalidateQueries({ queryKey: boardKey(projectId) });
+    },
   });
 }

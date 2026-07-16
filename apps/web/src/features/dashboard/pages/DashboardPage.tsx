@@ -8,6 +8,7 @@ import { AttentionWidget } from '../components/AttentionWidget';
 import { KpiCards } from '../components/KpiCards';
 import { PeriodPicker } from '../components/PeriodPicker';
 import { ReportsFeed } from '../components/ReportsFeed';
+import { MyTasksWidget } from '@/features/tasks/components/MyTasksWidget';
 import { useOperationalSummary } from '../api/queries';
 import { DEFAULT_PERIOD, periodWindow, type DashboardPeriod } from '../lib/period';
 
@@ -18,6 +19,7 @@ import { DEFAULT_PERIOD, periodWindow, type DashboardPeriod } from '../lib/perio
  */
 export function DashboardPage(): React.JSX.Element {
   const { t } = useTranslation('dashboard');
+  const { t: tt } = useTranslation('tasks');
   const canView = useCan('analytics.view');
   const [period, setPeriod] = useState<DashboardPeriod>(DEFAULT_PERIOD);
   // Capture the window once per period selection so the query key stays stable.
@@ -73,9 +75,14 @@ export function DashboardPage(): React.JSX.Element {
                 <ReportsFeed reports={data?.latestReports} loading={loading} />
               </DashboardCard>
             </div>
-            <DashboardCard title={t('attention.title')}>
-              <AttentionWidget />
-            </DashboardCard>
+            <div className="space-y-4">
+              <DashboardCard title={t('attention.title')}>
+                <AttentionWidget />
+              </DashboardCard>
+              <DashboardCard title={tt('my.widgetTitle')}>
+                <MyTasksWidget />
+              </DashboardCard>
+            </div>
           </div>
         </>
       )}

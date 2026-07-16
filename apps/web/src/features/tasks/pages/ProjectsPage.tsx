@@ -60,7 +60,7 @@ export function ProjectsPage(): React.JSX.Element {
             <button
               key={p.id}
               type="button"
-              onClick={() => navigate(`/app/tasks/${p.key}`)}
+              onClick={() => navigate(`/app/tasks/projects/${p.key}`)}
               className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left hover:border-primary/40"
             >
               <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ function CreateDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
         onSuccess: (p) => {
           toast({ title: t('projects.createdToast'), tone: 'success' });
           onClose();
-          navigate(`/app/tasks/${p.key}`);
+          navigate(`/app/tasks/projects/${p.key}`);
         },
         onError: () => toast({ title: t('projects.createFailed'), tone: 'danger' }),
       },
