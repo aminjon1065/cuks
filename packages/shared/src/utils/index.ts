@@ -57,6 +57,18 @@ export function plainTextToTiptap(text: string): {
   };
 }
 
+/**
+ * Reconstruct editable plain text from a TipTap doc, preserving paragraph breaks as newlines —
+ * the inverse of {@link plainTextToTiptap}. (`tiptapPlainText` flattens everything to one line for
+ * FTS; this keeps line structure for the description editor.)
+ */
+export function tiptapToText(doc: unknown): string {
+  if (!doc || typeof doc !== 'object') return '';
+  const d = doc as { content?: unknown[] };
+  if (!Array.isArray(d.content)) return tiptapPlainText(doc);
+  return d.content.map((block) => tiptapPlainText(block)).join('\n');
+}
+
 /** Truncates a string to at most `maxLength` UTF-16 code units without splitting
  *  a surrogate pair — a plain `slice(0, n)` can cut between a high and low
  *  surrogate (e.g. an emoji straddling the boundary), producing a lone surrogate

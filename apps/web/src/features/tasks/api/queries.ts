@@ -20,6 +20,7 @@ import type {
   UpdateChecklistItemInput,
   UpdateTaskInput,
 } from '@cuks/shared';
+import { tiptapPlainText } from '@cuks/shared';
 import { api } from '@/lib/api-client';
 
 export const tasksKey = ['tasks'] as const;
@@ -134,12 +135,41 @@ export function useCardDetail(cardId: string | undefined): UseQueryResult<TaskCa
 }
 
 export function useEditCard(projectId: string, cardId: string) {
+  const qc = useQueryClient();
   const invalidate = useCardInvalidator(projectId, cardId);
   return useMutation({
     mutationFn: (body: UpdateTaskInput) =>
       api.patch<TaskCardDto>(`/v1/tasks/cards/${cardId}`, body),
-    onSuccess: invalidate,
+    // Optimistically merge the patch so back-to-back edits (e.g. label toggles) read fresh state
+    // instead of a stale array and clobber each other.
+    onMutate: async (body) => {
+      await qc.cancelQueries({ queryKey: cardKey(cardId) });
+      const prev = qc.getQueryData<TaskCardDetailDto>(cardKey(cardId));
+      if (prev) qc.setQueryData(cardKey(cardId), { ...prev, ...cardPatch(body) });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(cardKey(cardId), ctx.prev);
+    },
+    onSettled: invalidate,
   });
+}
+
+/** The subset of an edit that maps onto the cached card detail (for optimistic updates). */
+function cardPatch(body: UpdateTaskInput): Partial<TaskCardDetailDto> {
+  const p: Partial<TaskCardDetailDto> = {};
+  if (body.title !== undefined) p.title = body.title;
+  if (body.priority !== undefined) p.priority = body.priority;
+  if (body.dueAt !== undefined) p.dueAt = body.dueAt ?? null;
+  if (body.startAt !== undefined) p.startAt = body.startAt ?? null;
+  if (body.assigneeIds !== undefined) p.assigneeIds = body.assigneeIds;
+  if (body.watcherIds !== undefined) p.watcherIds = body.watcherIds;
+  if (body.labels !== undefined) p.labels = body.labels;
+  if (body.description !== undefined) {
+    p.description = body.description ?? null;
+    p.descriptionText = body.description ? tiptapPlainText(body.description) : null;
+  }
+  return p;
 }
 
 export function useCompleteCard(projectId: string, cardId: string) {

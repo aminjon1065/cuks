@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { Archive, Check, Copy, Eye, EyeOff } from 'lucide-react';
 import { Button, SidePanel, Skeleton, cn, toast } from '@cuks/ui';
 import {
   TASK_PRIORITIES,
   plainTextToTiptap,
+  tiptapToText,
   type BoardDto,
+  type TaskCardDetailDto,
   type TaskLabelColor,
 } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
 import {
+  cardKey,
   useArchiveCard,
   useCardDetail,
   useCompleteCard,
@@ -19,6 +23,7 @@ import {
   useMoveCard,
   useSetWatching,
 } from '../api/queries';
+import { useCardRealtime } from '../hooks/useCardRealtime';
 import { AssigneePicker } from './AssigneePicker';
 import { LabelEditor } from './LabelEditor';
 import { ChecklistSection } from './ChecklistSection';
@@ -44,9 +49,11 @@ export function CardPanel({
 }): React.JSX.Element {
   const { t } = useTranslation('tasks');
   const me = useMe();
+  const qc = useQueryClient();
   const projectId = board.project.id;
   const detail = useCardDetail(cardId);
   const card = detail.data;
+  useCardRealtime(cardId);
 
   const edit = useEditCard(projectId, cardId);
   const move = useMoveCard(projectId);
@@ -70,7 +77,11 @@ export function CardPanel({
     createLabel.mutate(
       { name, color },
       {
-        onSuccess: (label) => save({ labels: [...(card?.labels ?? []), label.id] }),
+        onSuccess: (label) => {
+          // Read the freshest labels from the cache (not a stale render closure) before appending.
+          const current = qc.getQueryData<TaskCardDetailDto>(cardKey(cardId))?.labels ?? [];
+          save({ labels: [...current, label.id] });
+        },
         onError: fail,
       },
     );
@@ -203,7 +214,7 @@ export function CardPanel({
           </div>
 
           <DescriptionField
-            value={card.descriptionText ?? ''}
+            value={tiptapToText(card.description)}
             disabled={!canEdit}
             onSave={(text) => save({ description: text.trim() ? plainTextToTiptap(text) : null })}
           />

@@ -175,9 +175,11 @@ export class TasksService {
     }
     if (input.description !== undefined) {
       const description = input.description ?? null;
-      set.description = description;
-      set.descriptionText = description ? tiptapPlainText(description) : null;
-      fields.push('description');
+      if (JSON.stringify(description) !== JSON.stringify(card.description ?? null)) {
+        set.description = description;
+        set.descriptionText = description ? tiptapPlainText(description) : null;
+        fields.push('description');
+      }
     }
     if (input.priority !== undefined && input.priority !== card.priority) {
       set.priority = input.priority;
@@ -386,6 +388,7 @@ export class TasksService {
   /** «Копировать» — duplicate a card (fresh number, same fields, copied checklist). */
   async copyCard(taskId: string, actor: AuthUser): Promise<TaskCardDto> {
     const card = await this.requireCardWithRole(taskId, actor, 'editor');
+    const column = await this.requireColumn(card.projectId, card.columnId);
     const items = await this.db
       .select()
       .from(taskChecklistItems)
@@ -419,20 +422,20 @@ export class TasksService {
           startAt: card.startAt,
           labels: card.labels,
           orderInColumn: keyBetween(last?.orderKey ?? null, null),
+          // Keep the invariant «card in a done column has completedAt set».
+          completedAt: column.isDoneColumn ? new Date() : null,
         })
         .returning();
       const newId = t!.id;
       if (items.length) {
-        await tx
-          .insert(taskChecklistItems)
-          .values(
-            items.map((i) => ({
-              taskId: newId,
-              text: i.text,
-              isDone: false,
-              orderKey: i.orderKey,
-            })),
-          );
+        await tx.insert(taskChecklistItems).values(
+          items.map((i) => ({
+            taskId: newId,
+            text: i.text,
+            isDone: false,
+            orderKey: i.orderKey,
+          })),
+        );
       }
       await tx.insert(taskActivity).values({
         taskId: newId,
@@ -525,7 +528,12 @@ export class TasksService {
     column: ColumnRow,
     actor: AuthUser,
   ): Promise<void> {
-    const watchers = card.watcherIds.filter((id) => id !== actor.id);
+    // Watchers may include non-members (an editor can set watcherIds, or a removed member's id
+    // lingers) — filter to current members so a private card's title never leaks.
+    const watchers = await this.membersAmong(
+      card.projectId,
+      card.watcherIds.filter((id) => id !== actor.id),
+    );
     if (!watchers.length) return;
     const cardNo = await this.cardNumber(card);
     void this.notifications.notifyMany({

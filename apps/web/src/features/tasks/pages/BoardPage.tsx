@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Kanban, List, Search } from 'lucide-react';
-import { Button, EmptyState, Input, PageHeader, Skeleton, cn, toast } from '@cuks/ui';
+import { FileQuestion, Kanban, List, Search } from 'lucide-react';
+import { Button, EmptyState, Input, PageHeader, SidePanel, Skeleton, cn, toast } from '@cuks/ui';
 import type { TaskCardDto, TaskPriority } from '@cuks/shared';
 import { TASK_PRIORITIES } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
@@ -174,6 +174,20 @@ export function BoardPage(): React.JSX.Element {
           cardId={panelCard.id}
           onClose={() => navigate(`/app/tasks/${projectKey}`)}
         />
+      ) : null}
+
+      {board.data && seq && !panelCard ? (
+        <SidePanel
+          open
+          onOpenChange={(o) => !o && navigate(`/app/tasks/${projectKey}`)}
+          title={t('card.notFound.title')}
+        >
+          <EmptyState
+            icon={FileQuestion}
+            title={t('card.notFound.title')}
+            description={t('card.notFound.description')}
+          />
+        </SidePanel>
       ) : null}
     </div>
   );

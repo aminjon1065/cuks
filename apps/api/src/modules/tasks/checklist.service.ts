@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq } from 'drizzle-orm';
-import { taskChecklistItems, type Database } from '@cuks/db';
+import { taskChecklistItems, tasks, type Database } from '@cuks/db';
 import {
   keyBetween,
   wsRooms,
@@ -15,6 +15,8 @@ import { RealtimeService } from '../events/realtime.service';
 import { TasksAclService } from './tasks-acl.service';
 
 type ChecklistRow = typeof taskChecklistItems.$inferSelect;
+/** A Drizzle transaction handle — the same query surface as `Database`. */
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /** A card's checklist (docs/modules/15 §4, task 4.3). Items are fractionally ordered so a reorder
  *  rewrites only the moved row; editing needs `editor`. Every change refreshes the card. */
@@ -67,11 +69,21 @@ export class ChecklistService {
     const set: Partial<ChecklistRow> = {};
     if (input.text !== undefined) set.text = input.text;
     if (input.isDone !== undefined) set.isDone = input.isDone;
+
     if (input.afterItemId !== undefined) {
-      const [before, after] = await this.neighbourKeys(taskId, input.afterItemId, itemId);
-      set.orderKey = keyBetween(before, after);
+      // Serialize the reorder behind a card row lock so concurrent placements can't read the same
+      // neighbours and mint a duplicate order key (as moveCard does for card ordering).
+      await this.db.transaction(async (tx) => {
+        await tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).for('update');
+        const [before, after] = await this.neighbourKeys(tx, taskId, input.afterItemId!, itemId);
+        await tx
+          .update(taskChecklistItems)
+          .set({ ...set, orderKey: keyBetween(before, after) })
+          .where(eq(taskChecklistItems.id, itemId));
+      });
+    } else if (Object.keys(set).length) {
+      await this.db.update(taskChecklistItems).set(set).where(eq(taskChecklistItems.id, itemId));
     }
-    await this.db.update(taskChecklistItems).set(set).where(eq(taskChecklistItems.id, itemId));
     this.emitUpdated(card.projectId, taskId, actor.id);
     return this.list(taskId);
   }
@@ -95,12 +107,13 @@ export class ChecklistService {
 
   /** Order keys bracketing the slot after `afterItemId` (null = top), excluding the moved item. */
   private async neighbourKeys(
+    exec: Database | Tx,
     taskId: string,
     afterItemId: string | null,
     excludeId: string,
   ): Promise<[string | null, string | null]> {
     const items = (
-      await this.db
+      await exec
         .select({ id: taskChecklistItems.id, orderKey: taskChecklistItems.orderKey })
         .from(taskChecklistItems)
         .where(eq(taskChecklistItems.taskId, taskId))

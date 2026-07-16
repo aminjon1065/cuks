@@ -137,11 +137,23 @@ function Composer({
   const submit = () => {
     const text = body.trim();
     if (!text) return;
-    // Keep only mentions whose display name still appears in the text.
-    const ids = [...mentioned].filter((id) => {
-      const name = members.find((m) => m.userId === id)?.name;
-      return name && text.includes(name);
-    });
+    // Resolve mentions longest-name-first, consuming each `@Name` match so a shorter name that is a
+    // prefix of a longer one (e.g. "Иван" ⊂ "Иван Каримов") isn't falsely retained.
+    const picked = [...mentioned]
+      .map((id) => ({ id, name: members.find((m) => m.userId === id)?.name ?? '' }))
+      .filter((m) => m.name)
+      .sort((a, b) => b.name.length - a.name.length);
+    let working = text;
+    const ids: string[] = [];
+    for (const m of picked) {
+      const token = `@${m.name}`;
+      const at = working.indexOf(token);
+      if (at !== -1) {
+        ids.push(m.id);
+        working =
+          working.slice(0, at) + ' '.repeat(token.length) + working.slice(at + token.length);
+      }
+    }
     onSubmit(text, ids);
     setBody('');
     setMentioned(new Set());
