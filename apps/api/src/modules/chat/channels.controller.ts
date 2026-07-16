@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   addChannelMemberSchema,
+  channelFromIncidentSchema,
   createChannelSchema,
   createDmSchema,
   markReadSchema,
@@ -10,6 +11,7 @@ import {
   updateMembershipSchema,
   type AddChannelMemberInput,
   type ChannelDto,
+  type ChannelFromIncidentInput,
   type ChannelListItemDto,
   type ChatUnreadTotalsDto,
   type CreateChannelInput,
@@ -23,15 +25,19 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { ChannelsService } from './channels.service';
+import { IncidentChannelsService } from './incident-channels.service';
 
 const uuidPipe = new ZodValidationPipe(z.string().uuid());
 
-/** Channels, DMs and membership (docs/modules/13 §8, task 5.2). */
+/** Channels, DMs and membership (docs/modules/13 §8, tasks 5.2/5.6). */
 @ApiTags('chat')
 @RequirePermission('chat.use')
 @Controller('chat/channels')
 export class ChannelsController {
-  constructor(private readonly channels: ChannelsService) {}
+  constructor(
+    private readonly channels: ChannelsService,
+    private readonly incidentChannels: IncidentChannelsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'My conversations (pinned first, then recent)' })
@@ -68,6 +74,15 @@ export class ChannelsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ChannelDto> {
     return this.channels.createDm(body, user);
+  }
+
+  @Post('from-incident')
+  @ApiOperation({ summary: 'Open (or create) the chat channel for an incident' })
+  fromIncident(
+    @Body(new ZodValidationPipe(channelFromIncidentSchema)) body: ChannelFromIncidentInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ChannelDto> {
+    return this.incidentChannels.openForIncident(body.incidentId, user);
   }
 
   @Get(':id')

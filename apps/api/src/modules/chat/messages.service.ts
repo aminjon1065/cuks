@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { aliasedTable, and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { aliasedTable, and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   chatChannels,
   chatMessages,
@@ -27,6 +27,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { RealtimeService } from '../events/realtime.service';
 import { CHANNEL_ROLE_RANK, ChatAclService } from './chat-acl.service';
+import { decodeCursor, encodeCursor } from './cursor';
 
 type MessageRow = typeof chatMessages.$inferSelect;
 type MessageSelect = MessageRow & { authorName: string | null };
@@ -48,9 +49,11 @@ export class MessagesService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  /** A page of messages, newest first, with a cursor for the next older page. */
+  /** A page of messages, newest first, with a cursor for the next older page. When `around` is set,
+   *  returns a window centered on that message instead (jump-to-message context). */
   async list(channelId: string, query: MessagesQuery, actor: AuthUser): Promise<MessagesPage> {
     await this.acl.requireMember(channelId, actor);
+    if (query.around) return this.listAround(channelId, query.around, query.limit, actor);
     const author = aliasedTable(users, 'chat_msg_author');
     const before = query.cursor ? decodeCursor(query.cursor) : null;
     const rows = await this.db
@@ -91,6 +94,83 @@ export class MessagesService {
       items: page,
       nextCursor: hasMore && oldest ? encodeCursor(oldest.createdAt, oldest.id) : null,
     };
+  }
+
+  /** A window centered on `targetId` (docs/modules/13 §4 jump-to-message): the target plus roughly
+   *  half a page of newer and half of older messages, newest first, with an older cursor. */
+  private async listAround(
+    channelId: string,
+    targetId: string,
+    limit: number,
+    actor: AuthUser,
+  ): Promise<MessagesPage> {
+    const author = aliasedTable(users, 'chat_msg_author');
+    const [target] = await this.db
+      .select({ createdAt: chatMessages.createdAt, id: chatMessages.id })
+      .from(chatMessages)
+      .where(and(eq(chatMessages.id, targetId), eq(chatMessages.channelId, channelId)))
+      .limit(1);
+    if (!target) throw AppException.notFound('chat.message.not_found', 'Message not found');
+    const half = Math.max(1, Math.floor(limit / 2));
+
+    const select = () =>
+      this.db.select({ msg: chatMessages, authorName: author.shortName }).from(chatMessages);
+    const [olderOrEqual, newer] = await Promise.all([
+      // The target and everything older, newest first — one extra to detect a further older page.
+      select()
+        .leftJoin(author, eq(author.id, chatMessages.authorId))
+        .where(
+          and(
+            eq(chatMessages.channelId, channelId),
+            sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (${target.createdAt}, ${target.id})`,
+          ),
+        )
+        .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+        .limit(half + 2),
+      // Strictly newer than the target, oldest first (so it abuts the target).
+      select()
+        .leftJoin(author, eq(author.id, chatMessages.authorId))
+        .where(
+          and(
+            eq(chatMessages.channelId, channelId),
+            sql`(${chatMessages.createdAt}, ${chatMessages.id}) > (${target.createdAt}, ${target.id})`,
+          ),
+        )
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+        .limit(half),
+    ]);
+
+    const hasMoreOlder = olderOrEqual.length > half + 1;
+    const olderRows = hasMoreOlder ? olderOrEqual.slice(0, half + 1) : olderOrEqual;
+    // Newest first overall: newer (desc) then the target+older run.
+    const windowRows = [...newer.reverse(), ...olderRows];
+    const items = await this.enrich(channelId, windowRows, actor.id);
+    const oldest = items[items.length - 1];
+    return {
+      items,
+      nextCursor: hasMoreOlder && oldest ? encodeCursor(oldest.createdAt, oldest.id) : null,
+    };
+  }
+
+  /** Attach reaction summaries + reply snippets to a set of message rows, preserving order. */
+  private async enrich(
+    channelId: string,
+    rows: { msg: MessageRow; authorName: string | null }[],
+    userId: string,
+  ): Promise<MessageDto[]> {
+    const ids = rows.map((r) => r.msg.id);
+    const replyIds = [...new Set(rows.map((r) => r.msg.replyToId).filter((v): v is string => !!v))];
+    const [reactions, replies] = await Promise.all([
+      this.reactionSummaries(ids, userId),
+      this.replySnippets(channelId, replyIds),
+    ]);
+    return rows.map((r) =>
+      this.toDto(
+        { ...r.msg, authorName: r.authorName },
+        reactions.get(r.msg.id) ?? [],
+        r.msg.replyToId ? (replies.get(r.msg.replyToId) ?? null) : null,
+      ),
+    );
   }
 
   async send(channelId: string, input: SendMessageInput, actor: AuthUser): Promise<MessageDto> {
@@ -426,14 +506,4 @@ export class MessagesService {
       deletedAt: r.deletedAt?.toISOString() ?? null,
     };
   }
-}
-
-/** Cursor = base64 of `<createdAt ISO>|<id>` — a stable (created_at, id) anchor for keyset paging. */
-function encodeCursor(createdAtIso: string, id: string): string {
-  return Buffer.from(`${createdAtIso}|${id}`).toString('base64url');
-}
-function decodeCursor(cursor: string): { createdAt: Date; id: string } {
-  const [iso, id] = Buffer.from(cursor, 'base64url').toString().split('|');
-  if (!iso || !id) throw AppException.badRequest('chat.cursor.invalid', 'Invalid cursor');
-  return { createdAt: new Date(iso), id };
 }

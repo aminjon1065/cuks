@@ -47,7 +47,13 @@ export interface ChannelDto extends ChannelListItemDto {
   myNotifyLevel: ChatNotifyLevel;
   /** The caller's read anchor at fetch time — the «Новые» divider goes after it (docs/modules/13 §4). */
   myLastReadMessageId: string | null;
+  /** The linked incident (for an incident channel), shown in the info panel (docs/modules/13 §7). */
+  linkedIncident: { id: string; number: string } | null;
 }
+
+/** Open (or create) the chat channel for an incident (docs/modules/13 §2). */
+export const channelFromIncidentSchema = z.object({ incidentId: z.string().uuid() });
+export type ChannelFromIncidentInput = z.infer<typeof channelFromIncidentSchema>;
 
 /** Sidebar totals across all the caller's conversations (docs/modules/13 §4). */
 export interface ChatUnreadTotalsDto {
@@ -186,8 +192,45 @@ export interface MessagesPage {
 export const messagesQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  /** Center the page on this message (docs/modules/13 §4 jump-to-message): a window of newer + older
+   *  messages around it, so a search hit can be shown in context. Mutually exclusive with `cursor`. */
+  around: z.string().uuid().optional(),
 });
 export type MessagesQuery = z.infer<typeof messagesQuerySchema>;
+
+// --- Search (docs/modules/13 §4/§8) ---
+
+export const CHAT_SEARCH_PERIODS = ['all', 'today', 'week', 'month'] as const;
+export type ChatSearchPeriod = (typeof CHAT_SEARCH_PERIODS)[number];
+
+export const chatSearchSchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  /** Restrict to one channel (в:#канал); omitted = across all my conversations. */
+  channelId: z.string().uuid().optional(),
+  /** Restrict to one author (от:@user). */
+  fromUserId: z.string().uuid().optional(),
+  period: z.enum(CHAT_SEARCH_PERIODS).default('all'),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ChatSearchQuery = z.infer<typeof chatSearchSchema>;
+
+export interface ChatSearchResultDto {
+  messageId: string;
+  channelId: string;
+  channelKind: ChannelKind;
+  channelName: string | null;
+  /** The other members' names for a DM/group hit, so the client can label the conversation. */
+  otherMembers: { userId: string; name: string | null }[];
+  authorName: string | null;
+  bodyText: string | null;
+  createdAt: string;
+}
+
+export interface ChatSearchPage {
+  items: ChatSearchResultDto[];
+  nextCursor: string | null;
+}
 
 export const sendMessageSchema = z.object({
   kind: z.enum(['text', 'file']).default('text'),

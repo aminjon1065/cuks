@@ -1,6 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { aliasedTable, and, count, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
-import { chatChannels, chatMembers, chatMessages, users, type Database } from '@cuks/db';
+import {
+  chatChannels,
+  chatMembers,
+  chatMessages,
+  entityLinks,
+  incidents,
+  users,
+  type Database,
+} from '@cuks/db';
 import {
   wsRooms,
   type AddChannelMemberInput,
@@ -100,12 +108,13 @@ export class ChannelsService {
 
   async get(channelId: string, actor: AuthUser): Promise<ChannelDto> {
     const channel = await this.acl.requireMember(channelId, actor);
-    const [members, memberCounts, unread, others, mine] = await Promise.all([
+    const [members, memberCounts, unread, others, mine, linkedIncident] = await Promise.all([
       this.channelMembers(channelId),
       this.memberCounts([channelId]),
       this.unreadCounts(actor.id, [channelId]),
       this.otherMembers(actor.id, [channelId]),
       this.myMembership(channelId, actor.id),
+      this.linkedIncident(channelId),
     ]);
     const role = members.find((m) => m.userId === actor.id)?.role ?? null;
     const base = this.toListItem(
@@ -121,7 +130,28 @@ export class ChannelsService {
       members,
       myNotifyLevel: mine?.notifyLevel ?? 'all',
       myLastReadMessageId: mine?.lastReadMessageId ?? null,
+      linkedIncident,
     };
+  }
+
+  /** The incident this channel was opened from, if any (entity_links, docs/modules/13 §7). */
+  private async linkedIncident(channelId: string): Promise<{ id: string; number: string } | null> {
+    const [row] = await this.db
+      .select({ id: incidents.id, number: incidents.number })
+      .from(entityLinks)
+      .innerJoin(
+        incidents,
+        and(eq(incidents.id, entityLinks.sourceId), isNull(incidents.deletedAt)),
+      )
+      .where(
+        and(
+          eq(entityLinks.sourceType, 'incident'),
+          eq(entityLinks.targetType, 'chat_channel'),
+          eq(entityLinks.targetId, channelId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
   }
 
   async createChannel(input: CreateChannelInput, actor: AuthUser): Promise<ChannelDto> {
