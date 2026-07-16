@@ -3,8 +3,10 @@ import {
   PROJECT_ROLES,
   TASK_DEADLINE_TIERS,
   TASK_LABEL_COLORS,
+  TASK_LINK_TARGETS,
   TASK_PRIORITIES,
   type ProjectRole,
+  type TaskLinkTarget,
   type TaskPriority,
 } from '../enums';
 
@@ -260,6 +262,75 @@ export const tasksDeadlinePayloadSchema = z.object({
   recipientUserIds: z.array(z.string().uuid()).min(1),
 });
 export type TasksDeadlinePayload = z.infer<typeof tasksDeadlinePayloadSchema>;
+
+// --- Links to other modules (docs/modules/15 §4/§6, task 4.5) ---
+
+/** Link a card to a ЧС or a document. */
+export const createEntityLinkSchema = z.object({
+  targetType: z.enum(TASK_LINK_TARGETS),
+  targetId: z.string().uuid(),
+});
+export type CreateEntityLinkInput = z.infer<typeof createEntityLinkSchema>;
+
+/** A card's link to another entity, resolved for display (title = ЧС number / document reg-number —
+ *  never a ДСП subject) with the SPA route to open it. */
+export interface EntityLinkDto {
+  id: string;
+  targetType: TaskLinkTarget;
+  targetId: string;
+  title: string;
+  subtitle: string | null;
+  route: string;
+}
+
+/** A task linked to a given entity — shown on the ЧС / document card («связь видна с обеих сторон»). */
+export interface LinkedTaskDto {
+  id: string;
+  projectKey: string;
+  seq: number;
+  title: string;
+  priority: TaskPriority;
+  completedAt: string | null;
+  route: string;
+}
+
+/** Create a card in a project and link it to a ЧС/document in one step (docs/modules/15 §6). */
+export const createLinkedCardSchema = z.object({
+  projectId: z.string().uuid(),
+  columnId: z.string().uuid(),
+  title: z.string().trim().min(1).max(500),
+  description: z.unknown().nullish(),
+  assigneeIds: z.array(z.string().uuid()).max(20).default([]),
+  dueAt: z.string().datetime({ offset: true }).nullish(),
+  targetType: z.enum(TASK_LINK_TARGETS),
+  targetId: z.string().uuid(),
+});
+export type CreateLinkedCardInput = z.infer<typeof createLinkedCardSchema>;
+
+// --- Card templates (docs/modules/15 §4) ---
+
+export const createTaskTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  title: z.string().trim().min(1).max(500),
+  description: z.unknown().nullish(),
+  priority: z.enum(TASK_PRIORITIES).default('p3'),
+  checklist: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+});
+export type CreateTaskTemplateInput = z.infer<typeof createTaskTemplateSchema>;
+
+/** Instantiate a template into a column. */
+export const instantiateTemplateSchema = z.object({ columnId: z.string().uuid() });
+export type InstantiateTemplateInput = z.infer<typeof instantiateTemplateSchema>;
+
+export interface TaskTemplateDto {
+  id: string;
+  name: string;
+  title: string;
+  description: unknown;
+  descriptionText: string | null;
+  priority: TaskPriority;
+  checklist: string[];
+}
 
 /** The whole board in one request (docs/modules/15 §8): project, columns, labels, cards, members. */
 export interface BoardDto {

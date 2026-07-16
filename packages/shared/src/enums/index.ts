@@ -317,6 +317,15 @@ export type ProjectRole = (typeof PROJECT_ROLES)[number];
 export const TASK_LABEL_COLORS = ['red', 'orange', 'green', 'blue', 'gray'] as const;
 export type TaskLabelColor = (typeof TASK_LABEL_COLORS)[number];
 
+/** Entities a task can be linked to / from (docs/modules/15 §2/§6, task 4.5). `channel` lands with
+ *  chat (phase 5). */
+export const LINK_ENTITY_TYPES = ['task', 'incident', 'document', 'channel'] as const;
+export type LinkEntityType = (typeof LINK_ENTITY_TYPES)[number];
+
+/** The entities a task card may currently be linked to (a ЧС or a document). */
+export const TASK_LINK_TARGETS = ['incident', 'document'] as const;
+export type TaskLinkTarget = (typeof TASK_LINK_TARGETS)[number];
+
 /** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
