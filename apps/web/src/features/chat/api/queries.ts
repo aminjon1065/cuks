@@ -72,7 +72,6 @@ export function useSendMessage(channelId: string, me: { id: string; name: string
       api.post<MessageDto>(`/v1/chat/channels/${channelId}/messages`, body),
     onMutate: async (body) => {
       await qc.cancelQueries({ queryKey: messagesKey(channelId) });
-      const prev = qc.getQueryData<InfiniteData<MessagesPage>>(messagesKey(channelId));
       const tempId = `temp-${crypto.randomUUID()}`;
       const optimistic: MessageDto = {
         id: tempId,
@@ -91,7 +90,7 @@ export function useSendMessage(channelId: string, me: { id: string; name: string
       qc.setQueryData<InfiniteData<MessagesPage>>(messagesKey(channelId), (old) =>
         prependMessage(old, optimistic),
       );
-      return { prev, tempId };
+      return { tempId };
     },
     onSuccess: (message, _body, ctx) => {
       // Swap the temp message for the server row (reconcile by temp id).
@@ -101,7 +100,13 @@ export function useSendMessage(channelId: string, me: { id: string; name: string
       void qc.invalidateQueries({ queryKey: channelsKey });
     },
     onError: (_e, _body, ctx) => {
-      if (ctx?.prev) qc.setQueryData(messagesKey(channelId), ctx.prev);
+      // Drop only the failed optimistic row — never restore a pre-send snapshot, which would also wipe
+      // any peer messages that arrived (via realtime refetch) while this send was in flight — then
+      // reconcile with the server.
+      qc.setQueryData<InfiniteData<MessagesPage>>(messagesKey(channelId), (old) =>
+        removeMessage(old, ctx?.tempId),
+      );
+      void qc.invalidateQueries({ queryKey: messagesKey(channelId) });
     },
   });
 }
@@ -197,6 +202,20 @@ function replaceMessage(
     pages: data.pages.map((page) => ({
       ...page,
       items: page.items.map((m) => (m.id === tempId ? message : m)),
+    })),
+  };
+}
+
+function removeMessage(
+  data: InfiniteData<MessagesPage> | undefined,
+  tempId: string | undefined,
+): InfiniteData<MessagesPage> | undefined {
+  if (!data || !tempId) return data;
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      items: page.items.filter((m) => m.id !== tempId),
     })),
   };
 }

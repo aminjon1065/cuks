@@ -9,7 +9,11 @@ import { DB } from '../../common/db/db.module';
 type ChannelRow = typeof chatChannels.$inferSelect;
 
 /** owner > admin > member — a higher rank includes the lower ones' abilities. */
-const RANK: Record<ChannelMemberRole, number> = { member: 1, admin: 2, owner: 3 };
+export const CHANNEL_ROLE_RANK: Record<ChannelMemberRole, number> = {
+  member: 1,
+  admin: 2,
+  owner: 3,
+};
 
 /**
  * Channel access control (docs/modules/13 §1, task 5.2). Reading and posting require an explicit
@@ -48,7 +52,7 @@ export class ChatAclService {
   ): Promise<ChannelRow> {
     const channel = await this.loadChannel(channelId);
     const role = await this.roleFor(channelId, actor.id);
-    if (!role || RANK[role] < RANK[min]) {
+    if (!role || CHANNEL_ROLE_RANK[role] < CHANNEL_ROLE_RANK[min]) {
       throw AppException.forbidden('chat.channel.forbidden', 'Not a channel member');
     }
     return channel;

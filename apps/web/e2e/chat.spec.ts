@@ -1,7 +1,7 @@
 import { expect, request, test, type APIRequestContext } from '@playwright/test';
 import { io, type Socket } from 'socket.io-client';
 import { apiLogin, csrfHeaders } from './support/api';
-import { E2E_USER, STORAGE_STATE } from './support/fixtures';
+import { E2E_USER, E2E_USER2, STORAGE_STATE } from './support/fixtures';
 
 /**
  * Chat protocol e2e (docs/modules/13 §2/§5, task 5.2): channel creation, cursor-paged message
@@ -137,6 +137,56 @@ test('chat: a non-member is refused reads, posts and the channel room', async ()
   } finally {
     socket?.disconnect();
     await outsider.dispose();
+    await admin.dispose();
+  }
+});
+
+test('chat: a channel admin cannot evict the owner or grant a role above their own', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const h = await headers(admin);
+  const chanAdmin = await apiLogin(E2E_USER.username, E2E_USER.password); // becomes a channel admin
+  const bystander = await apiLogin(E2E_USER2.username, E2E_USER2.password);
+  try {
+    const ownerId = (await j<{ id: string }>(await admin.get('/api/auth/me'))).id;
+    const chanAdminId = (await j<{ id: string }>(await chanAdmin.get('/api/auth/me'))).id;
+    const bystanderId = (await j<{ id: string }>(await bystander.get('/api/auth/me'))).id;
+
+    const channel = await j<{ id: string }>(
+      await admin.post('/api/v1/chat/channels', {
+        headers: h,
+        data: { kind: 'private', name: `Guarded ${Date.now()}` },
+      }),
+    );
+    // The owner promotes E2E_USER to admin — allowed (admin <= owner).
+    const promote = await admin.post(`/api/v1/chat/channels/${channel.id}/members`, {
+      headers: h,
+      data: { userId: chanAdminId, role: 'admin' },
+    });
+    expect(promote.ok(), 'owner may grant admin').toBeTruthy();
+
+    const ah = await headers(chanAdmin);
+    // The admin cannot delete the owner (equal-or-higher rank). A bodyless DELETE must not carry a JSON
+    // content-type (Fastify would 400 on the empty body) — send the csrf header only.
+    const evict = await chanAdmin.delete(`/api/v1/chat/channels/${channel.id}/members/${ownerId}`, {
+      headers: await csrfHeaders(chanAdmin),
+    });
+    expect(evict.status()).toBe(403);
+    expect((await j<{ error: { code: string } }>(evict)).error.code).toBe(
+      'chat.channel.cannot_remove_peer',
+    );
+
+    // The admin cannot mint an owner (a role above their own).
+    const escalate = await chanAdmin.post(`/api/v1/chat/channels/${channel.id}/members`, {
+      headers: ah,
+      data: { userId: bystanderId, role: 'owner' },
+    });
+    expect(escalate.status()).toBe(403);
+    expect((await j<{ error: { code: string } }>(escalate)).error.code).toBe(
+      'chat.channel.role_too_high',
+    );
+  } finally {
+    await bystander.dispose();
+    await chanAdmin.dispose();
     await admin.dispose();
   }
 });

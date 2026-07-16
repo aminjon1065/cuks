@@ -6,6 +6,7 @@ import {
   type AddChannelMemberInput,
   type ChannelDto,
   type ChannelListItemDto,
+  type ChannelMemberRole,
   type ChatMemberDto,
   type CreateChannelInput,
   type CreateDmInput,
@@ -18,7 +19,7 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { RealtimeService } from '../events/realtime.service';
-import { ChatAclService } from './chat-acl.service';
+import { CHANNEL_ROLE_RANK, ChatAclService } from './chat-acl.service';
 
 type ChannelRow = typeof chatChannels.$inferSelect;
 
@@ -156,35 +157,67 @@ export class ChannelsService {
     return this.get(channelId, actor);
   }
 
-  /** Join a public channel (self) or add another user (admin+ of a private channel). */
+  /** Join a public channel (self) or add another user (admin+ of a public/private/group channel). */
   async addMember(
     channelId: string,
     input: AddChannelMemberInput,
     actor: AuthUser,
   ): Promise<ChannelDto> {
     const channel = await this.acl.loadChannel(channelId);
+    this.assertManageableMembership(channel);
     const selfJoin = input.userId === actor.id;
+    let role: ChannelMemberRole;
     if (selfJoin) {
-      // Only public channels are freely joinable.
+      // Only public channels are freely joinable, always as a plain member.
       if (channel.kind !== 'public') {
         throw AppException.forbidden('chat.channel.not_joinable', 'Channel is invite-only');
       }
+      role = 'member';
     } else {
-      await this.acl.requireMember(channelId, actor, 'admin');
+      const actorRole = await this.acl.roleFor(channelId, actor.id);
+      if (!actorRole || CHANNEL_ROLE_RANK[actorRole] < CHANNEL_ROLE_RANK.admin) {
+        throw AppException.forbidden('chat.channel.forbidden', 'Not a channel member');
+      }
+      // Cannot grant a role above your own (an admin cannot mint an owner).
+      if (CHANNEL_ROLE_RANK[input.role] > CHANNEL_ROLE_RANK[actorRole]) {
+        throw AppException.forbidden(
+          'chat.channel.role_too_high',
+          'Cannot grant a role above your own',
+        );
+      }
       await this.requireUser(input.userId);
+      role = input.role;
     }
     await this.db
       .insert(chatMembers)
-      .values({ channelId, userId: input.userId, memberRole: selfJoin ? 'member' : input.role })
+      .values({ channelId, userId: input.userId, memberRole: role })
       .onConflictDoNothing({ target: [chatMembers.channelId, chatMembers.userId] });
     this.emitChannelUpdated(channelId, actor.id);
-    return this.get(channelId, actor.id === input.userId ? actor : actor);
+    return this.get(channelId, actor);
   }
 
   async removeMember(channelId: string, userId: string, actor: AuthUser): Promise<void> {
+    const channel = await this.acl.loadChannel(channelId);
+    this.assertManageableMembership(channel);
     const selfLeave = userId === actor.id;
-    if (!selfLeave) await this.acl.requireMember(channelId, actor, 'admin');
-    else await this.acl.requireMember(channelId, actor);
+    if (selfLeave) {
+      await this.acl.requireMember(channelId, actor);
+    } else {
+      const actorRole = await this.acl.roleFor(channelId, actor.id);
+      if (!actorRole || CHANNEL_ROLE_RANK[actorRole] < CHANNEL_ROLE_RANK.admin) {
+        throw AppException.forbidden('chat.channel.forbidden', 'Not a channel member');
+      }
+      const targetRole = await this.acl.roleFor(channelId, userId);
+      if (!targetRole) return; // already not a member — idempotent
+      // You may only remove someone strictly below your own rank.
+      if (CHANNEL_ROLE_RANK[targetRole] >= CHANNEL_ROLE_RANK[actorRole]) {
+        throw AppException.forbidden(
+          'chat.channel.cannot_remove_peer',
+          'Cannot remove a member of equal or higher role',
+        );
+      }
+    }
+    await this.assertNotLastOwner(channelId, userId);
     await this.db
       .delete(chatMembers)
       .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)));
@@ -378,5 +411,36 @@ export class ChannelsService {
       channelId,
       actorId,
     });
+  }
+
+  /** Membership is user-managed only for public/private/group/incident channels. A DM has a fixed pair
+   *  and org channels are reconciled from personnel (docs/modules/13 §2) — neither is hand-editable. */
+  private assertManageableMembership(channel: ChannelRow): void {
+    if (channel.kind === 'dm' || channel.kind === 'org') {
+      throw AppException.forbidden(
+        'chat.channel.membership_locked',
+        'This channel’s membership is managed automatically',
+      );
+    }
+  }
+
+  /** Refuse to remove the sole remaining owner — it would orphan the channel (no one could manage it). */
+  private async assertNotLastOwner(channelId: string, userId: string): Promise<void> {
+    const [target] = await this.db
+      .select({ role: chatMembers.memberRole })
+      .from(chatMembers)
+      .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)))
+      .limit(1);
+    if (target?.role !== 'owner') return;
+    const [owners] = await this.db
+      .select({ n: count() })
+      .from(chatMembers)
+      .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.memberRole, 'owner')));
+    if (Number(owners?.n ?? 0) <= 1) {
+      throw AppException.badRequest(
+        'chat.channel.last_owner',
+        'Assign another owner before leaving',
+      );
+    }
   }
 }

@@ -135,6 +135,11 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     const userId = (client.data as { userId?: string }).userId;
     const channelId = body?.channelId;
     if (!userId || !channelId) return { ok: false };
+    // Same gate as the REST endpoints: the `chat.use` permission plus channel membership. Without the
+    // permission check a user who lost `chat.use` but still has membership rows (e.g. auto-provisioned
+    // org channels) could keep receiving live messages the REST layer already refuses them.
+    const perms = await this.users.getPermissions(userId);
+    if (!perms.isSuperadmin && !perms.permissions.includes('chat.use')) return { ok: false };
     const [member] = await this.db
       .select({ id: chatMembers.id })
       .from(chatMembers)
