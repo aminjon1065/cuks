@@ -454,6 +454,9 @@ export const signatures = appSchema.table(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    // The person signed FOR, when a deputy signs «за» an absent principal (task 3.11). Null for
+    // an ordinary signature; the key/cert is always the actual signer's (`user_id`).
+    onBehalfOf: uuid('on_behalf_of').references(() => users.id, { onDelete: 'restrict' }),
     certificateId: uuid('certificate_id')
       .notNull()
       .references(() => certificates.id, { onDelete: 'restrict' }),
