@@ -274,6 +274,13 @@
       "when": 1784167921554,
       "tag": "0038_smooth_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1784172534024,
+      "tag": "0039_careless_oracle",
+      "breakpoints": true
     }
   ]
 }
