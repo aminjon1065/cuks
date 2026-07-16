@@ -1,7 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
-import { meetRooms, type Database } from '@cuks/db';
+import { meetRooms, recordings, type Database } from '@cuks/db';
 import { wsRooms } from '@cuks/shared';
+import { EgressStatus } from 'livekit-server-sdk';
 import type { WebhookEvent } from 'livekit-server-sdk';
 import { DB } from '../../common/db/db.module';
 import { RealtimeService } from '../events/realtime.service';
@@ -38,6 +39,13 @@ export class MeetWebhookService {
           this.logger.error({ err }, 'room_finished handling failed');
         }
         return { event: name, handled: true };
+      case 'egress_ended':
+        try {
+          await this.onEgressEnded(event);
+        } catch (err) {
+          this.logger.error({ err }, 'egress_ended handling failed');
+        }
+        return { event: name, handled: true };
       case 'room_started':
       case 'participant_joined':
       case 'participant_left':
@@ -46,7 +54,6 @@ export class MeetWebhookService {
       case 'track_unpublished':
       case 'egress_started':
       case 'egress_updated':
-      case 'egress_ended':
         this.logger.debug(`livekit webhook: ${name} (id=${event.id})`);
         return { event: name, handled: true };
       default:
@@ -69,6 +76,42 @@ export class MeetWebhookService {
         channelId: room.channelId,
         roomId: room.id,
         active: false,
+      });
+    }
+  }
+
+  /** Egress finished — complete the recording row and tell participants (docs/modules/14 §4/§6). */
+  private async onEgressEnded(event: WebhookEvent): Promise<void> {
+    const info = event.egressInfo;
+    if (!info) return;
+    const file = info.fileResults[0];
+    const ok = info.status === EgressStatus.EGRESS_COMPLETE && !!file;
+    const patch = ok
+      ? {
+          status: 'ready' as const,
+          fileKey: file.filename,
+          size: Number(file.size),
+          // FileInfo.duration is int64 NANOSECONDS.
+          duration: Math.round(Number(file.duration) / 1e9),
+          updatedAt: new Date(),
+        }
+      : { status: 'failed' as const, updatedAt: new Date() };
+    const [row] = await this.db
+      .update(recordings)
+      .set(patch)
+      .where(eq(recordings.egressId, info.egressId))
+      .returning({
+        id: recordings.id,
+        roomId: recordings.roomId,
+        startedBy: recordings.startedBy,
+        participants: recordings.participants,
+      });
+    if (!row) return;
+    for (const userId of new Set([...(row.participants ?? []), row.startedBy].filter(Boolean))) {
+      this.realtime.emitToUser(userId as string, 'meet.recording.state', {
+        recordingId: row.id,
+        roomId: row.roomId,
+        status: ok ? 'ready' : 'failed',
       });
     }
   }

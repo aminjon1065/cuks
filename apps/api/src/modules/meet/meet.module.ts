@@ -13,6 +13,8 @@ import { MeetWebhookController } from './meet-webhook.controller';
 import { MeetWebhookService } from './meet-webhook.service';
 import { MeetingsController } from './meetings.controller';
 import { MeetingsService } from './meetings.service';
+import { RecordingsController } from './recordings.controller';
+import { RecordingsService } from './recordings.service';
 import { RingService } from './ring.service';
 
 /**
@@ -26,7 +28,13 @@ import { RingService } from './ring.service';
     EventsModule,
     BullModule.registerQueue({ name: QUEUE.meetRing }, { name: QUEUE.meetReminder }),
   ],
-  controllers: [MeetWebhookController, MeetRoomsController, MeetRingController, MeetingsController],
+  controllers: [
+    MeetWebhookController,
+    MeetRoomsController,
+    MeetRingController,
+    MeetingsController,
+    RecordingsController,
+  ],
   providers: [
     LivekitService,
     MeetWebhookService,
@@ -36,6 +44,7 @@ import { RingService } from './ring.service';
     MeetRingProcessor,
     MeetingsService,
     MeetReminderProcessor,
+    RecordingsService,
   ],
   exports: [LivekitService],
 })

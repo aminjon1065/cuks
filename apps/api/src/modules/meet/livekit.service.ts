@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { AccessToken, RoomServiceClient, TrackSource, WebhookReceiver } from 'livekit-server-sdk';
+import {
+  AccessToken,
+  EgressClient,
+  EncodedFileOutput,
+  EncodedFileType,
+  EncodingOptionsPreset,
+  RoomServiceClient,
+  TrackSource,
+  WebhookReceiver,
+} from 'livekit-server-sdk';
 import type { VideoGrant, WebhookEvent } from 'livekit-server-sdk';
 import type { MeetRoomRole } from '@cuks/shared';
 import { ConfigService } from '../../config/config.service';
@@ -34,6 +43,7 @@ export class LivekitService {
   private readonly url: string | undefined;
   private receiver: WebhookReceiver | undefined;
   private roomClientInstance: RoomServiceClient | undefined;
+  private egressClientInstance: EgressClient | undefined;
 
   constructor(config: ConfigService) {
     this.apiKey = config.get('LIVEKIT_API_KEY');
@@ -136,6 +146,44 @@ export class LivekitService {
   /** End the call for everyone (docs/modules/14 §3: «завершить встречу для всех»). */
   async endRoom(room: string): Promise<void> {
     await this.roomClient.deleteRoom(room).catch((err: unknown) => {
+      if (!isNotFoundError(err)) throw err;
+    });
+  }
+
+  /** LiveKit identities (= user ids) currently in the room — the recording roster snapshot (§4). */
+  async participantIdentities(room: string): Promise<string[]> {
+    const participants = await this.roomClient.listParticipants(room);
+    return participants.map((p) => p.identity);
+  }
+
+  // --- Recording (Egress, docs/modules/14 §4). The S3 target is configured globally in
+  //     infra/docker/livekit/egress.yaml, so start requests carry only the object key. ---
+
+  private get egressClient(): EgressClient {
+    if (!this.enabled || !this.apiKey || !this.apiSecret || !this.url) {
+      throw new Error('LiveKit is not configured');
+    }
+    this.egressClientInstance ??= new EgressClient(httpUrl(this.url), this.apiKey, this.apiSecret);
+    return this.egressClientInstance;
+  }
+
+  /** Start a room-composite MP4 recording (1080p, speaker layout). Returns the egress id to correlate
+   *  with the `egress_ended` webhook. */
+  async startRoomRecording(room: string, fileKey: string): Promise<string> {
+    const output = new EncodedFileOutput({
+      fileType: EncodedFileType.MP4,
+      filepath: fileKey,
+      disableManifest: true,
+    });
+    const info = await this.egressClient.startRoomCompositeEgress(room, output, {
+      layout: 'speaker',
+      encodingOptions: EncodingOptionsPreset.H264_1080P_30,
+    });
+    return info.egressId;
+  }
+
+  async stopRecording(egressId: string): Promise<void> {
+    await this.egressClient.stopEgress(egressId).catch((err: unknown) => {
       if (!isNotFoundError(err)) throw err;
     });
   }

@@ -7,10 +7,12 @@ import {
   fileUploads,
   fileVersions,
   fsNodes,
+  recordings,
   resourceAcl,
   type Database,
 } from '@cuks/db';
 import {
+  MEET_RECORDING_RETENTION_DAYS,
   PREVIEW_SIZES,
   QUEUE,
   STALE_PENDING_SCAN_HOURS,
@@ -69,7 +71,33 @@ export class RetentionProcessor extends WorkerHost {
     const purged = await this.purgeTrash();
     const reconciled = await this.reconcileStalePendingScans();
     const expiredLinks = await this.purgeExpiredLinks();
-    this.logger.log({ purged, abandoned, reconciled, expiredLinks }, 'retention sweep complete');
+    const recordingsPurged = await this.purgeExpiredRecordings();
+    this.logger.log(
+      { purged, abandoned, reconciled, expiredLinks, recordingsPurged },
+      'retention sweep complete',
+    );
+  }
+
+  /** Delete meeting recordings past their retention window (docs/modules/14 §4): soft-delete the row
+   *  and remove the MP4 object. (The 14-day expiry warning is a follow-up — needs an outbox dispatcher.) */
+  private async purgeExpiredRecordings(): Promise<number> {
+    const cutoff = new Date(Date.now() - MEET_RECORDING_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const expired = await this.db
+      .select({ id: recordings.id, fileKey: recordings.fileKey })
+      .from(recordings)
+      .where(and(lt(recordings.createdAt, cutoff), isNull(recordings.deletedAt)));
+    for (const rec of expired) {
+      await this.db
+        .update(recordings)
+        .set({ deletedAt: new Date() })
+        .where(eq(recordings.id, rec.id));
+      if (rec.fileKey) {
+        await this.storage.deleteObject(rec.fileKey).catch((err: unknown) => {
+          this.logger.warn({ err, id: rec.id }, 'failed to delete recording object');
+        });
+      }
+    }
+    return expired.length;
   }
 
   /** Delete internal links past their expiry. Enforcement already ignores an

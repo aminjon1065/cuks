@@ -68,6 +68,13 @@ export interface WsEventPayloads {
   /** A channel call started or ended (docs/modules/14 §2, §7): `channel:{id}` subscribers refresh the
    *  «Идёт звонок» banner. */
   'meet.room.updated': { channelId: string; roomId: string; active: boolean };
+  /** A recording's state changed (docs/modules/14 §4/§7): delivered to each participant's `user:{id}`
+   *  room so an open «Записи» list refreshes when a recording starts or becomes ready/failed. */
+  'meet.recording.state': {
+    recordingId: string;
+    roomId: string | null;
+    status: 'processing' | 'ready' | 'failed';
+  };
 }
 
 export type WsEventName = keyof WsEventPayloads;

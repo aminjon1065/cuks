@@ -190,6 +190,16 @@ export class StorageService {
   }
 
   /**
+   * Presigned GET for INLINE playback (no `Content-Disposition: attachment`) — used by the recording
+   * video player, which range-requests the object. Range works on a presigned GET because SigV4 does
+   * not sign the `Range` header.
+   */
+  async getStreamUrl(key: string, expiresIn = DOWNLOAD_URL_EXPIRY_SECONDS): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+    return getSignedUrl(this.s3, command, { expiresIn });
+  }
+
+  /**
    * Presigned GET with a forced `Content-Disposition: attachment` (docs/09 §2:
    * never expose the bucket for direct listing/inline serving). `filename*`
    * (RFC 5987) carries non-ASCII names (Cyrillic document titles are the norm here).

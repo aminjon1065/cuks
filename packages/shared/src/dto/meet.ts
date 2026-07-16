@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import type { MeetingStatus, MeetRoomAccess, MeetRoomKind, MeetRoomRole } from '../enums/index';
+import type {
+  MeetingStatus,
+  MeetRoomAccess,
+  MeetRoomKind,
+  MeetRoomRole,
+  RecordingStatus,
+} from '../enums/index';
+
+/** At most this many recordings may run at once (docs/modules/14 §4). */
+export const MEET_MAX_CONCURRENT_RECORDINGS = 2;
+/** Recordings are kept this long before the retention sweep deletes them (docs/modules/14 §4). */
+export const MEET_RECORDING_RETENTION_DAYS = 180;
 
 /**
  * Meet DTOs (docs/modules/14 §7, task 6.2). The room-creation endpoint opens a call room for a DM,
@@ -64,6 +75,33 @@ export interface MeetCallMessageBody {
 export interface MeetActiveCallDto {
   roomId: string;
   slug: string;
+}
+
+// --- Recordings (docs/modules/14 §4/§7, task 6.6) ---
+
+/** Start a recording (host + meet.record). Body carries an optional title override. */
+export const startRecordingSchema = z.object({
+  title: z.string().trim().max(200).nullish(),
+});
+export type StartRecordingInput = z.infer<typeof startRecordingSchema>;
+
+/** A recording as the «Записи» list sees it. Access is gated server-side (participants + manage). */
+export interface RecordingDto {
+  id: string;
+  roomId: string | null;
+  meetingId: string | null;
+  title: string;
+  startedById: string | null;
+  startedByName: string | null;
+  status: RecordingStatus;
+  /** Length in whole seconds (null until the egress completes). */
+  durationSec: number | null;
+  /** File size in bytes (null until ready). */
+  sizeBytes: number | null;
+  participantCount: number;
+  createdAt: string;
+  /** The caller may delete it (the host who started it, or meet.recordings.manage). */
+  canManage: boolean;
 }
 
 // --- Scheduled meetings (docs/modules/14 §2/§5/§7, task 6.5) ---

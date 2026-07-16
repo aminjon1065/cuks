@@ -11,14 +11,15 @@ api_secret: devsecretdevsecretdevsecretdevsecret
 # LiveKit signaling (plain ws in dev — see `insecure` below).
 ws_url: ws://livekit:7880
 
-# Recordings land in a dedicated bucket (provisioned in task 6.6). MinIO speaks the
-# S3 API with path-style addressing.
+# Recordings land in the shared app bucket under a `recordings/` key prefix (task 6.6) — this lets the
+# api's StorageService presign the range download and the worker's retention sweep delete the object,
+# both of which are bound to S3_BUCKET (`cuks`). MinIO speaks the S3 API with path-style addressing.
 s3:
   access_key: cuks
   secret: cuks-dev-secret
   region: us-east-1
   endpoint: http://minio:9000
-  bucket: recordings
+  bucket: cuks
   force_path_style: true
 
 # Allow the non-TLS LiveKit ws:// and http:// MinIO endpoints in dev.
