@@ -42,7 +42,6 @@ export function IncidentDetailPage(): React.JSX.Element {
   const canView = useCan('gis.view');
   const canCreate = useCan('incidents.create');
   const canManage = useCan('incidents.manage');
-  const canChat = useCan('chat.use');
   const incidentChannel = useOpenIncidentChannel();
   const incident = useIncident(id);
   const [tab, setTab] = useState<Tab>('overview');
@@ -154,7 +153,7 @@ export function IncidentDetailPage(): React.JSX.Element {
         actions={
           <>
             <SeverityBadge level={data.severity} label={t(`severity.${data.severity}`)} />
-            {canChat ? (
+            {canManage ? (
               <Button
                 variant="outline"
                 size="sm"

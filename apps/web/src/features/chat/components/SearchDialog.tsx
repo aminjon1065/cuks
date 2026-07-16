@@ -15,6 +15,12 @@ import type { ChatSearchPeriod, ChatSearchResultDto } from '@cuks/shared';
 import { CHAT_SEARCH_PERIODS } from '@cuks/shared';
 import { formatDateTime } from '@/lib/format';
 import { useChatSearch, useDirectoryUsers, useMyChannels } from '../api/queries';
+import { channelDisplayName } from '../lib/grouping';
+
+interface PickedUser {
+  id: string;
+  name: string;
+}
 
 /** Global message search with channel / author / period filters and jump-to-message (docs/modules/13
  *  §4). Opened from the conversation list; a hit navigates to the channel focused on the message. */
@@ -34,7 +40,7 @@ export function SearchDialog({
   const [q, setQ] = useState('');
   const [period, setPeriod] = useState<ChatSearchPeriod>('all');
   const [channelId, setChannelId] = useState<string>(presetChannelId ?? '');
-  const [fromUserId, setFromUserId] = useState<string>('');
+  const [fromUser, setFromUser] = useState<PickedUser | null>(null);
 
   // Debounce the query so we don't fire a request per keystroke.
   useEffect(() => {
@@ -46,7 +52,7 @@ export function SearchDialog({
   const search = useChatSearch({
     q,
     channelId: channelId || undefined,
-    fromUserId: fromUserId || undefined,
+    fromUserId: fromUser?.id,
     period,
   });
   const results = useMemo(() => (search.data?.pages ?? []).flatMap((p) => p.items), [search.data]);
@@ -93,15 +99,13 @@ export function SearchDialog({
               aria-label={t('search.channelFilter')}
             >
               <option value="">{t('search.allChannels')}</option>
-              {(channels.data ?? [])
-                .filter((c) => c.name)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+              {(channels.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {channelDisplayName(c, t('kind.dm'))}
+                </option>
+              ))}
             </select>
-            <FromUserFilter value={fromUserId} onChange={setFromUserId} meId={meId} />
+            <FromUserFilter value={fromUser} onChange={setFromUser} meId={meId} />
           </div>
 
           <div className="max-h-[26rem] min-h-40 overflow-y-auto">
@@ -190,23 +194,22 @@ function FromUserFilter({
   onChange,
   meId,
 }: {
-  value: string;
-  onChange: (id: string) => void;
+  value: PickedUser | null;
+  onChange: (user: PickedUser | null) => void;
   meId: string;
 }): React.JSX.Element {
   const { t } = useTranslation('chat');
-  const [open, setOpen] = useState(false);
   const [term, setTerm] = useState('');
   const directory = useDirectoryUsers(term);
-  const selected = (directory.data ?? []).find((u) => u.id === value);
 
-  if (value && !open) {
+  // Remember the chosen user's name so the chip doesn't depend on the current directory result set.
+  if (value) {
     return (
       <span className="flex items-center gap-1 rounded-full bg-primary/10 py-0.5 pl-2.5 pr-1 text-xs text-primary">
-        {t('search.from')} {selected?.shortName ?? ''}
+        {t('search.from')} {value.name}
         <button
           type="button"
-          onClick={() => onChange('')}
+          onClick={() => onChange(null)}
           aria-label={t('common.cancel')}
           className="rounded-full p-0.5 hover:bg-primary/20"
         >
@@ -221,14 +224,10 @@ function FromUserFilter({
       <Input
         className="h-8 w-40"
         value={term}
-        onChange={(e) => {
-          setTerm(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
+        onChange={(e) => setTerm(e.target.value)}
         placeholder={t('search.fromPlaceholder')}
       />
-      {open && term.trim() ? (
+      {term.trim() ? (
         <div className="absolute z-10 mt-1 max-h-48 w-56 overflow-y-auto rounded-md border border-border bg-surface p-1 shadow-lg">
           {(directory.data ?? [])
             .filter((u) => u.id !== meId)
@@ -238,8 +237,7 @@ function FromUserFilter({
                 key={u.id}
                 type="button"
                 onClick={() => {
-                  onChange(u.id);
-                  setOpen(false);
+                  onChange({ id: u.id, name: u.shortName });
                   setTerm('');
                 }}
                 className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[13px] hover:bg-surface-2"

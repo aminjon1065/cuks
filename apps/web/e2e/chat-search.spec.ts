@@ -137,6 +137,19 @@ test('an incident channel is created idempotently and linked back', async () => 
       }),
     );
     expect(again.id).toBe(channel.id);
+
+    // A chat user without incidents.manage cannot self-join an incident channel.
+    const employee = await apiLogin(E2E_USER.username, E2E_USER.password);
+    try {
+      const eh = await headers(employee);
+      const refused = await employee.post('/api/v1/chat/channels/from-incident', {
+        headers: eh,
+        data: { incidentId: incident!.id },
+      });
+      expect(refused.status()).toBe(403);
+    } finally {
+      await employee.dispose();
+    }
   } finally {
     await admin.dispose();
   }

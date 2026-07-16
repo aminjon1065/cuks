@@ -77,7 +77,11 @@ export class ChannelsController {
   }
 
   @Post('from-incident')
-  @ApiOperation({ summary: 'Open (or create) the chat channel for an incident' })
+  // The incident channel is a curated responder channel (docs/modules/13 §2); opening/joining it
+  // must need the same authority that manages incidents, not merely chat.use — otherwise a chat-only
+  // user could self-join and read an incident's coordination history they can't even open the card for.
+  @RequirePermission('incidents.manage')
+  @ApiOperation({ summary: 'Open (or create) the chat channel for an incident (incident manager)' })
   fromIncident(
     @Body(new ZodValidationPipe(channelFromIncidentSchema)) body: ChannelFromIncidentInput,
     @CurrentUser() user: AuthUser,
