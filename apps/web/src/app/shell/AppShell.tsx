@@ -14,7 +14,11 @@ export function AppShell(): React.JSX.Element | null {
   // The map and chat are full-bleed (docs/06 §3): no content padding, no page scroll — they own their
   // own full-height layout and internal scroll regions.
   const { pathname } = useLocation();
-  const fullbleed = pathname === '/app/map' || pathname.startsWith('/app/chat');
+  // The call room is full-bleed too (the /app/meet landing stays a normal padded page).
+  const fullbleed =
+    pathname === '/app/map' ||
+    pathname.startsWith('/app/chat') ||
+    pathname.startsWith('/app/meet/r/');
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {

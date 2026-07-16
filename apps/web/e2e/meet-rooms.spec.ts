@@ -107,3 +107,44 @@ test('a channel call room is member-gated for reads and tokens; ad-hoc link room
     await admin.dispose();
   }
 });
+
+test('host moderation is restricted to the room host', async () => {
+  const duty = await apiLogin(E2E_DUTY.username, E2E_DUTY.password);
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  try {
+    const dutyPost = await postHeaders(duty);
+    const channel = await json<{ id: string }>(
+      await duty.post('/api/v1/chat/channels', {
+        headers: dutyPost,
+        data: { kind: 'private', name: `Host ${Date.now()}` },
+      }),
+    );
+    const room = await json<RoomDto>(
+      await duty.post('/api/v1/meet/rooms', {
+        headers: dutyPost,
+        data: { kind: 'channel', channelId: channel.id },
+      }),
+    );
+
+    // A non-host (superadmin, not the creator) cannot end or mute the call.
+    const outsiderEnd = await admin.post(`/api/v1/meet/rooms/${room.id}/host/end`, {
+      headers: await csrfHeaders(admin),
+    });
+    expect(outsiderEnd.status()).toBe(403);
+
+    // The host can end the call — this marks the room inactive even without LiveKit wired.
+    const end = await duty.post(`/api/v1/meet/rooms/${room.id}/host/end`, {
+      headers: await csrfHeaders(duty),
+    });
+    expect(end.ok()).toBeTruthy();
+
+    // The room is now ended: minting a token for it is refused with a conflict.
+    const tokenAfterEnd = await duty.post(`/api/v1/meet/rooms/${room.id}/token`, {
+      headers: await csrfHeaders(duty),
+    });
+    expect(tokenAfterEnd.status()).toBe(409);
+  } finally {
+    await duty.dispose();
+    await admin.dispose();
+  }
+});

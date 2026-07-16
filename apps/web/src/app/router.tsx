@@ -56,10 +56,18 @@ const ReportsPage = lazy(() =>
 const ChatPage = lazy(() =>
   import('@/features/chat/pages/ChatPage').then((m) => ({ default: m.ChatPage })),
 );
+// Meet pulls in the LiveKit client + components (~200 kB gz); lazy-load so that weight ships only
+// when a call screen is opened.
+const MeetPage = lazy(() =>
+  import('@/features/meet/pages/MeetPage').then((m) => ({ default: m.MeetPage })),
+);
+const MeetRoomPage = lazy(() =>
+  import('@/features/meet/pages/MeetRoomPage').then((m) => ({ default: m.MeetRoomPage })),
+);
 
 // Module sections not yet implemented render the ComingSoon placeholder inside the
 // shell, so every sidebar entry navigates somewhere real (docs/06 §3).
-const PLACEHOLDER_PATHS = ['meet'];
+const PLACEHOLDER_PATHS: string[] = [];
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/app" replace /> },
@@ -155,6 +163,22 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<div className="h-full w-full bg-background" />}>
             <ChatPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'meet',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <MeetPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'meet/r/:slug',
+        element: (
+          <Suspense fallback={<div className="h-full w-full bg-background" />}>
+            <MeetRoomPage />
           </Suspense>
         ),
       },

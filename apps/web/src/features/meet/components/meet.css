@@ -1,0 +1,32 @@
+/* Floating emoji reactions (docs/modules/14 §3). */
+@keyframes meet-reaction-float {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-140px) scale(1.15);
+  }
+}
+
+.meet-reaction {
+  animation: meet-reaction-float 4s ease-out forwards;
+}
+
+/* LiveKit layouts fill the stage area. */
+.lk-grid-layout,
+.lk-focus-layout {
+  height: 100%;
+}
+
+/* The ephemeral room-chat prefab blends into the design-system side panel. */
+.meet-chat .lk-chat {
+  height: 100%;
+  background: transparent;
+  border: 0;
+}
