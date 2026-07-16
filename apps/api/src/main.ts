@@ -36,6 +36,16 @@ async function bootstrap(): Promise<void> {
   // Cookie parsing/signing for session + CSRF cookies (docs/05 §1).
   await app.register(cookie, { secret: config.get('SESSION_SECRET') });
 
+  // LiveKit posts webhooks as `application/webhook+json` (docs/modules/14 §6).
+  // Keep the raw body string so the signature can be verified against the exact
+  // bytes; Fastify would otherwise reject the unknown content type with 415.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser('application/webhook+json', { parseAs: 'string' }, (_req, body, done) => {
+      done(null, body);
+    });
+
   // Security headers (docs/09 §1). Strict CSP + HSTS only in production, where
   // the API serves JSON only (Swagger is dev-only, see below); the SPA's own CSP
   // is applied at the edge (Caddy). Frame/nosniff/referrer apply everywhere.

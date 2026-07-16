@@ -104,6 +104,9 @@ importers:
       ioredis:
         specifier: ^5.4.2
         version: 5.11.1
+      livekit-server-sdk:
+        specifier: ^2.17.0
+        version: 2.17.0
       nestjs-pino:
         specifier: ^4.2.0
         version: 4.6.1(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(pino-http@10.5.0)(pino@9.14.0)(rxjs@7.8.2)
@@ -810,6 +813,9 @@ packages:
 
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
+
+  '@bufbuild/protobuf@1.10.1':
+    resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
 
   '@casl/ability@6.8.1':
     resolution: {integrity: sha512-VX5DD1JbSP/DdewZnNwXXaCzve+0pLe14mcUj2l93CdOFAQUT/ylAptNqxf3Wc/jlsuSanAgXza4Z1Iq23dzpQ==}
@@ -1966,6 +1972,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@livekit/protocol@1.50.0':
+    resolution: {integrity: sha512-xbZ2bXE935HH+95dgdKtcCkRHMJD4Cg9tzOm+iui7s1qCJlXs2ejLl4ieYR1EpcDYbYvtSs+/n4PH++Lh6j//A==}
 
   '@lukeed/csprng@1.1.0':
     resolution: {integrity: sha512-Z7C/xXCiGWsg0KuKsHTKJxbWhpI3Vs5GwLfOean7MGyVFGqdRgBbAjOCh6u4bbjPc/8MJ2pZmK/0DLdCbivLDA==}
@@ -4907,6 +4916,9 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
+  jose@5.10.0:
+    resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
+
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
@@ -5078,6 +5090,10 @@ packages:
   listr2@8.3.3:
     resolution: {integrity: sha512-LWzX2KsqcB1wqQ4AHgYb4RsDXauQiqhjLk+6hjbaeHG4zpjjVAB6wC/gz6X0l+Du1cN3pUB5ZlrvTbhGSNnUQQ==}
     engines: {node: '>=18.0.0'}
+
+  livekit-server-sdk@2.17.0:
+    resolution: {integrity: sha512-GWNEQrUD13UwZNrmosyTVFPgeBvSU2lFKGxdA4DaUI5F4sMb1cGeep/PPEE9vvRNELJYpxWS0ImS4gQmovKUDA==}
+    engines: {node: '>=18'}
 
   load-esm@1.0.3:
     resolution: {integrity: sha512-v5xlu8eHD1+6r8EHTg6hfmO97LN8ugKtiXcy5e6oN72iD2r6u0RPfLl6fxM+7Wnh2ZRq15o0russMst44WauPA==}
@@ -7055,6 +7071,8 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
+  '@bufbuild/protobuf@1.10.1': {}
+
   '@casl/ability@6.8.1':
     dependencies:
       '@ucast/mongo2js': 1.4.1
@@ -7945,6 +7963,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@livekit/protocol@1.50.0':
+    dependencies:
+      '@bufbuild/protobuf': 1.10.1
 
   '@lukeed/csprng@1.1.0': {}
 
@@ -10853,6 +10875,8 @@ snapshots:
 
   jiti@2.7.0: {}
 
+  jose@5.10.0: {}
+
   joycon@3.1.1: {}
 
   js-tokens@4.0.0: {}
@@ -11027,6 +11051,12 @@ snapshots:
       log-update: 6.1.0
       rfdc: 1.4.1
       wrap-ansi: 9.0.2
+
+  livekit-server-sdk@2.17.0:
+    dependencies:
+      '@bufbuild/protobuf': 1.10.1
+      '@livekit/protocol': 1.50.0
+      jose: 5.10.0
 
   load-esm@1.0.3: {}
 

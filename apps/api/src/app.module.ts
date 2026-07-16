@@ -31,6 +31,7 @@ import { FilesModule } from './modules/files/files.module';
 import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
+import { MeetModule } from './modules/meet/meet.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
@@ -93,6 +94,7 @@ import { UsersModule } from './modules/users/users.module';
     TasksModule,
     ChatModule,
     DirectoryModule,
+    MeetModule,
     HealthModule,
   ],
   providers: [
