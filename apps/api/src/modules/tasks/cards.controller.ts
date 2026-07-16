@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   createChecklistItemSchema,
   createCommentSchema,
+  createEntityLinkSchema,
   moveTaskSchema,
   updateChecklistItemSchema,
   updateTaskSchema,
@@ -12,6 +13,8 @@ import {
   type CommentDto,
   type CreateChecklistItemInput,
   type CreateCommentInput,
+  type CreateEntityLinkInput,
+  type EntityLinkDto,
   type MoveTaskInput,
   type TaskCardDetailDto,
   type TaskCardDto,
@@ -25,6 +28,7 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { TasksService } from './tasks.service';
 import { ChecklistService } from './checklist.service';
 import { TaskCommentsService } from './comments.service';
+import { EntityLinksService } from './entity-links.service';
 
 const uuidSchema = z.string().uuid();
 const uuidPipe = new ZodValidationPipe(uuidSchema);
@@ -40,6 +44,7 @@ export class CardsController {
     private readonly tasks: TasksService,
     private readonly checklist: ChecklistService,
     private readonly comments: TaskCommentsService,
+    private readonly links: EntityLinksService,
   ) {}
 
   @Get(':id')
@@ -178,5 +183,36 @@ export class CardsController {
     @CurrentUser() user: AuthUser,
   ): Promise<ActivityDto[]> {
     return this.tasks.listActivity(id, user);
+  }
+
+  // --- Links to ЧС / documents ---
+
+  @Get(':id/links')
+  @ApiOperation({ summary: 'Card links to ЧС / documents (viewer)' })
+  listLinks(
+    @Param('id', uuidPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<EntityLinkDto[]> {
+    return this.links.listLinks(id, user);
+  }
+
+  @Post(':id/links')
+  @ApiOperation({ summary: 'Link a card to a ЧС / document (editor)' })
+  addLink(
+    @Param('id', uuidPipe) id: string,
+    @Body(new ZodValidationPipe(createEntityLinkSchema)) body: CreateEntityLinkInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<EntityLinkDto[]> {
+    return this.links.addLink(id, body, user);
+  }
+
+  @Delete(':id/links/:linkId')
+  @ApiOperation({ summary: 'Remove a card link (editor)' })
+  removeLink(
+    @Param('id', uuidPipe) id: string,
+    @Param('linkId', uuidPipe) linkId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<EntityLinkDto[]> {
+    return this.links.removeLink(id, linkId, user);
   }
 }

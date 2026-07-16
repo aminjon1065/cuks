@@ -5,6 +5,8 @@ import {
   createColumnSchema,
   createLabelSchema,
   createTaskSchema,
+  createTaskTemplateSchema,
+  instantiateTemplateSchema,
   moveColumnSchema,
   updateColumnSchema,
   type BoardDto,
@@ -12,9 +14,12 @@ import {
   type CreateColumnInput,
   type CreateLabelInput,
   type CreateTaskInput,
+  type CreateTaskTemplateInput,
+  type InstantiateTemplateInput,
   type LabelDto,
   type MoveColumnInput,
   type TaskCardDto,
+  type TaskTemplateDto,
   type UpdateColumnInput,
 } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -24,6 +29,7 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { ColumnsService } from './columns.service';
 import { ProjectsService } from './projects.service';
 import { TasksService } from './tasks.service';
+import { TaskTemplatesService } from './templates.service';
 
 const uuidSchema = z.string().uuid();
 
@@ -35,6 +41,7 @@ export class BoardController {
     private readonly tasks: TasksService,
     private readonly columns: ColumnsService,
     private readonly projects: ProjectsService,
+    private readonly templates: TaskTemplatesService,
   ) {}
 
   @Get('board')
@@ -123,5 +130,51 @@ export class BoardController {
     @CurrentUser() user: AuthUser,
   ): Promise<LabelDto> {
     return this.projects.createLabel(projectId, body, user);
+  }
+
+  // --- Card templates (docs/modules/15 §4) ---
+
+  @Get('templates')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Project card templates (viewer)' })
+  listTemplates(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<TaskTemplateDto[]> {
+    return this.templates.list(projectId, user);
+  }
+
+  @Post('templates')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Create a card template (editor)' })
+  createTemplate(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @Body(new ZodValidationPipe(createTaskTemplateSchema)) body: CreateTaskTemplateInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<TaskTemplateDto> {
+    return this.templates.create(projectId, body, user);
+  }
+
+  @Delete('templates/:templateId')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Delete a card template (editor)' })
+  removeTemplate(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @Param('templateId', new ZodValidationPipe(uuidSchema)) templateId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    return this.templates.remove(projectId, templateId, user);
+  }
+
+  @Post('templates/:templateId/card')
+  @RequirePermission('tasks.use')
+  @ApiOperation({ summary: 'Create a card from a template (editor)' })
+  instantiateTemplate(
+    @Param('projectId', new ZodValidationPipe(uuidSchema)) projectId: string,
+    @Param('templateId', new ZodValidationPipe(uuidSchema)) templateId: string,
+    @Body(new ZodValidationPipe(instantiateTemplateSchema)) body: InstantiateTemplateInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<TaskCardDto> {
+    return this.templates.instantiate(projectId, templateId, body, user);
   }
 }

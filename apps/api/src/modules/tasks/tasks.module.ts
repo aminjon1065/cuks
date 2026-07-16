@@ -5,6 +5,7 @@ import { ProjectsController } from './projects.controller';
 import { BoardController } from './board.controller';
 import { CardsController } from './cards.controller';
 import { MyTasksController } from './my-tasks.controller';
+import { TaskLinksController } from './task-links.controller';
 import { TasksAclService } from './tasks-acl.service';
 import { ProjectsService } from './projects.service';
 import { ColumnsService } from './columns.service';
@@ -12,6 +13,8 @@ import { TasksService } from './tasks.service';
 import { ChecklistService } from './checklist.service';
 import { TaskCommentsService } from './comments.service';
 import { TaskDeadlineOutboxService } from './task-deadline-outbox.service';
+import { EntityLinksService } from './entity-links.service';
+import { TaskTemplatesService } from './templates.service';
 
 /**
  * Tasks / kanban module (docs/modules/15). Task 4.2 lands the board (projects with the membership
@@ -21,7 +24,13 @@ import { TaskDeadlineOutboxService } from './task-deadline-outbox.service';
  */
 @Module({
   imports: [AuthModule, EventsModule],
-  controllers: [ProjectsController, BoardController, CardsController, MyTasksController],
+  controllers: [
+    ProjectsController,
+    BoardController,
+    CardsController,
+    MyTasksController,
+    TaskLinksController,
+  ],
   providers: [
     TasksAclService,
     ProjectsService,
@@ -30,6 +39,8 @@ import { TaskDeadlineOutboxService } from './task-deadline-outbox.service';
     ChecklistService,
     TaskCommentsService,
     TaskDeadlineOutboxService,
+    EntityLinksService,
+    TaskTemplatesService,
   ],
 })
 export class TasksModule {}
