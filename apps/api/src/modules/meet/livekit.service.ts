@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AccessToken, WebhookReceiver } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient, TrackSource, WebhookReceiver } from 'livekit-server-sdk';
 import type { VideoGrant, WebhookEvent } from 'livekit-server-sdk';
 import type { MeetRoomRole } from '@cuks/shared';
 import { ConfigService } from '../../config/config.service';
@@ -33,6 +33,7 @@ export class LivekitService {
   private readonly apiSecret: string | undefined;
   private readonly url: string | undefined;
   private receiver: WebhookReceiver | undefined;
+  private roomClientInstance: RoomServiceClient | undefined;
 
   constructor(config: ConfigService) {
     this.apiKey = config.get('LIVEKIT_API_KEY');
@@ -80,6 +81,66 @@ export class LivekitService {
   }
 
   /**
+   * Server-side room moderation (docs/modules/14 §3, host actions). These use the RoomServiceClient
+   * (api key/secret over the SFU's HTTP API), so authority never depends on the caller's own token —
+   * the api re-checks that the caller is the room host before invoking any of them.
+   */
+  private get roomClient(): RoomServiceClient {
+    if (!this.enabled || !this.apiKey || !this.apiSecret || !this.url) {
+      throw new Error('LiveKit is not configured');
+    }
+    this.roomClientInstance ??= new RoomServiceClient(
+      httpUrl(this.url),
+      this.apiKey,
+      this.apiSecret,
+    );
+    return this.roomClientInstance;
+  }
+
+  /** Mute a participant's microphone track(s). The host cannot un-mute — the participant may unmute
+   *  themselves (docs/modules/14 §3: «mute участника (без unmute)»). No-op if they already left. */
+  async muteParticipantAudio(room: string, identity: string): Promise<void> {
+    const client = this.roomClient;
+    const participants = await client.listParticipants(room);
+    const target = participants.find((p) => p.identity === identity);
+    if (!target) return;
+    for (const track of target.tracks) {
+      if (track.source === TrackSource.MICROPHONE && !track.muted) {
+        await client.mutePublishedTrack(room, identity, track.sid, true);
+      }
+    }
+  }
+
+  /** Mute every participant's microphone except the host (docs/modules/14 §3: «выключить всем микрофоны»). */
+  async muteAllExcept(room: string, exceptIdentity: string): Promise<void> {
+    const client = this.roomClient;
+    const participants = await client.listParticipants(room);
+    for (const p of participants) {
+      if (p.identity === exceptIdentity) continue;
+      for (const track of p.tracks) {
+        if (track.source === TrackSource.MICROPHONE && !track.muted) {
+          await client.mutePublishedTrack(room, p.identity, track.sid, true);
+        }
+      }
+    }
+  }
+
+  /** Disconnect a participant and stop them re-joining the current session (docs/modules/14 §3). */
+  async removeParticipant(room: string, identity: string): Promise<void> {
+    await this.roomClient.removeParticipant(room, identity).catch((err: unknown) => {
+      // Already gone (removed / left) — treat as success.
+      if (!isNotFoundError(err)) throw err;
+    });
+  }
+
+  /** End the call for everyone (docs/modules/14 §3: «завершить встречу для всех»). */
+  async endRoom(room: string): Promise<void> {
+    await this.roomClient.deleteRoom(room).catch((err: unknown) => {
+      if (!isNotFoundError(err)) throw err;
+    });
+  }
+
+  /**
    * Verify a LiveKit webhook and parse its event. The `Authorization` header is a
    * JWT (issuer = api key, HS256 with the secret) whose `sha256` claim must equal
    * the hash of the exact request body — the SDK's WebhookReceiver enforces both,
@@ -94,4 +155,15 @@ export class LivekitService {
     this.receiver ??= new WebhookReceiver(this.apiKey, this.apiSecret);
     return this.receiver.receive(body, authHeader);
   }
+}
+
+/** The RoomServiceClient talks to the SFU's HTTP API — derive it from the ws(s) signaling URL. */
+function httpUrl(wsUrl: string): string {
+  return wsUrl.replace(/^ws(s?):\/\//, 'http$1://');
+}
+
+/** LiveKit returns a 404-ish twirp error when a room/participant is already gone. */
+function isNotFoundError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+  return message.includes('not found') || message.includes('does not exist');
 }

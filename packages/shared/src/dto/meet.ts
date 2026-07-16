@@ -31,3 +31,9 @@ export interface MeetTokenDto {
   token: string;
   url: string;
 }
+
+/** Host moderation target (docs/modules/14 §3): the LiveKit identity (= user id) to mute/remove. */
+export const meetHostTargetSchema = z.object({
+  identity: z.string().min(1),
+});
+export type MeetHostTargetInput = z.infer<typeof meetHostTargetSchema>;

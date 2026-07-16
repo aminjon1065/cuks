@@ -111,6 +111,80 @@ export class MeetRoomsService {
     return { token, url };
   }
 
+  // --- Host moderation (docs/modules/14 §3). Only the room host may act. ---
+
+  /** Mute one participant's microphone (host cannot un-mute; they may unmute themselves). */
+  async hostMute(roomId: string, identity: string, user: AuthUser): Promise<void> {
+    const room = await this.requireHost(roomId, user);
+    this.requireLivekit();
+    await this.livekit.muteParticipantAudio(room.livekitRoom, identity);
+    this.audit.log({
+      action: 'meet.host.muted',
+      actorId: user.id,
+      entityType: 'meet_room',
+      entityId: room.id,
+      meta: { identity },
+    });
+  }
+
+  /** Mute everyone's microphone except the host. */
+  async hostMuteAll(roomId: string, user: AuthUser): Promise<void> {
+    const room = await this.requireHost(roomId, user);
+    this.requireLivekit();
+    await this.livekit.muteAllExcept(room.livekitRoom, user.id);
+    this.audit.log({
+      action: 'meet.host.muted_all',
+      actorId: user.id,
+      entityType: 'meet_room',
+      entityId: room.id,
+    });
+  }
+
+  /** Remove (kick) a participant from the call. */
+  async hostRemove(roomId: string, identity: string, user: AuthUser): Promise<void> {
+    const room = await this.requireHost(roomId, user);
+    this.requireLivekit();
+    await this.livekit.removeParticipant(room.livekitRoom, identity);
+    this.audit.log({
+      action: 'meet.host.removed',
+      actorId: user.id,
+      entityType: 'meet_room',
+      entityId: room.id,
+      meta: { identity },
+    });
+  }
+
+  /** End the call for everyone and mark the room inactive (a new open() then starts a fresh room). */
+  async hostEnd(roomId: string, user: AuthUser): Promise<void> {
+    const room = await this.requireHost(roomId, user);
+    if (this.livekit.enabled) await this.livekit.endRoom(room.livekitRoom);
+    await this.db
+      .update(meetRooms)
+      .set({ isActive: false })
+      .where(and(eq(meetRooms.id, room.id), eq(meetRooms.isActive, true)));
+    this.audit.log({
+      action: 'meet.room.ended',
+      actorId: user.id,
+      entityType: 'meet_room',
+      entityId: room.id,
+    });
+  }
+
+  /** Load a room and assert the caller is its host (docs/modules/14 §1: creator = host). */
+  private async requireHost(roomId: string, user: AuthUser): Promise<MeetRoomRow> {
+    const room = await this.requireRoomById(roomId);
+    if (room.createdBy !== user.id) {
+      throw AppException.forbidden('meet.room.not_host', 'Only the host can moderate this call');
+    }
+    return room;
+  }
+
+  private requireLivekit(): void {
+    if (!this.livekit.enabled) {
+      throw AppException.serviceUnavailable('meet.unavailable', 'Calls are not configured');
+    }
+  }
+
   private async openAdhoc(user: AuthUser): Promise<MeetRoomDto> {
     const roomId = uuidv7();
     await this.db.insert(meetRooms).values({
