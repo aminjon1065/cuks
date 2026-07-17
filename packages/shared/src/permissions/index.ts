@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   'admin.settings.manage',
   'admin.audit.view',
   'admin.substitutions.manage',
+  'admin.system.monitor',
   // files
   'files.use',
   'files.org.manage',
@@ -82,6 +83,7 @@ export const PERMISSIONS_REQUIRING_2FA: readonly string[] = [
   'admin.dicts.manage',
   'admin.settings.manage',
   'admin.audit.view',
+  'admin.system.monitor',
   'docflow.sign',
   'gis.pg.access',
 ];
@@ -130,6 +132,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'admin.settings.manage',
       'admin.audit.view',
       'admin.substitutions.manage',
+      'admin.system.monitor',
       'files.use',
       'chat.use',
       'meet.use',
