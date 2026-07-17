@@ -10,16 +10,18 @@
 	{$CUKS_TLS_INTERNAL:}
 	encode zstd gzip
 
-	# Security headers for the SPA + API (docs/09 §1). The CSP allows same-origin only, plus the MinIO
-	# subdomain for presigned upload/download/stream. 'unsafe-inline' for styles is required by MapLibre
-	# / Radix runtime styles (tightening it is task 7.5).
+	# Security headers for the SPA + API (docs/09 §1, §7). script-src is strict 'self' (no unsafe-inline —
+	# the real XSS lever). style-src keeps 'unsafe-inline' only because MapLibre GL / Radix inject runtime
+	# inline styles with no nonce hook (style injection is low-risk vs. scripts; task 7.5 accepted). CSP
+	# allows same-origin plus the MinIO subdomain for presigned upload/download/stream. object-src 'none' +
+	# form-action 'self' close plugin-embed and form-hijack vectors; frame-ancestors 'none' blocks framing.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "same-origin"
 		-Server
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://s3.{$CUKS_DOMAIN}; media-src 'self' blob: https://s3.{$CUKS_DOMAIN}; connect-src 'self' https://s3.{$CUKS_DOMAIN}; worker-src 'self' blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://s3.{$CUKS_DOMAIN}; media-src 'self' blob: https://s3.{$CUKS_DOMAIN}; connect-src 'self' https://s3.{$CUKS_DOMAIN}; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
 	}
 
 	# API (REST) + Socket.IO realtime (session-authenticated).

@@ -1,0 +1,8 @@
+# Accepted / unfixable CVEs for the trivy scan (docs/09 §7, task 7.5). One CVE id per line with a
+# comment: why it's accepted and when to revisit. Keep this list SHORT and dated — an entry here is a
+# conscious risk decision, not a way to silence the scanner.
+#
+# Format:
+#   CVE-YYYY-NNNNN  # <reason> (accepted YYYY-MM-DD, revisit: <trigger>)
+#
+# (none yet — populate after the first real scan on the built images)
