@@ -227,6 +227,10 @@ services:
       context: ../..
       dockerfile: infra/docker/Dockerfile
       target: backup
+    # Explicit tag so restore can run the same image via a plain `docker run` with RW mounts — a one-off
+    # `docker compose run` here would inherit the :ro data mounts below and silently skip the volume restore
+    # (see docs/runbook-backup.md §Restore-drill).
+    image: cuks-backup
     restart: unless-stopped
     env_file: [../../.env]
     environment:

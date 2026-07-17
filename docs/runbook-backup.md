@@ -58,8 +58,11 @@ dc exec backup restic stats
 docker run --rm -v cuks_backupdata:/repo:ro -v /mnt/external/cuks-restic:/dst alpine \
   sh -c 'apk add --no-cache rsync >/dev/null && rsync -a --delete /repo/ /dst/'
 
-# Вариант Б — restic copy во второй репозиторий (SFTP/USB); пароль второго репо — тот же RESTIC_PASSWORD:
-dc exec backup sh -c 'restic copy --repo2 sftp:backup@nas:/cuks-restic --password-file2 /run/secrets/restic'
+# Вариант Б — второй restic-репозиторий через `restic copy`. Направление: ИЗ локального /repo (источник,
+# --from-repo) В удалённый (назначение, -r). Удалённый инициализируется один раз (`restic -r <remote> init`);
+# пароль тот же, поэтому источнику передаём RESTIC_FROM_PASSWORD=$RESTIC_PASSWORD. Для sftp-бэкенда в образе
+# нужен ssh-клиент (по умолчанию его нет — используйте локальный путь/USB или добавьте openssh-client).
+dc exec backup sh -c 'RESTIC_FROM_PASSWORD="$RESTIC_PASSWORD" restic -r <remote-repo> copy --from-repo /repo'
 ```
 
 Внешнюю копию тоже проверяйте restore-drill'ом (см. ниже) не реже раза в квартал.
@@ -77,16 +80,21 @@ dc exec backup sh -c 'restic copy --repo2 sftp:backup@nas:/cuks-restic --passwor
    dc up -d postgres minio
    dc ps            # дождаться healthy
    ```
-3. **Восстановление** одноразовым запуском `backup`-образа с томами, смонтированными на запись (в отличие от
-   планового сервиса, где они `:ro`):
+3. **Восстановление.** Запускать через **`docker run`** образа `cuks-backup` (собран `dc build`), а НЕ через
+   `dc run`: сервис `backup` в compose монтирует тома данных как `:ro`, и `dc run -v …` этот `:ro` не
+   переопределяет — тома остались бы только для чтения, и `restore.sh` молча пропустил бы их (восстановилась
+   бы лишь БД). Плоский `docker run` обходит определение сервиса и монтирует тома на запись:
    ```bash
-   dc run --rm --no-deps \
+   docker run --rm --network cuks_default --env-file .env \
+     -v cuks_backupdata:/repo \
      -v cuks_miniodata:/data/minio -v cuks_geoserverdata:/data/geoserver \
      -v cuks_ca_data:/data/ca -v cuks_caddy_data:/data/caddy \
-     backup restore.sh latest
+     cuks-backup restore.sh latest
    ```
-   Скрипт: `restic restore latest` → `pg_restore --clean --if-exists` в БД → копирование объектов/конфигов в
-   тома. (Без RW-монтирования тома пропускаются с явным предупреждением — только БД восстановится.)
+   Скрипт: `restic restore latest` → `pg_restore --clean --if-exists` в БД (через сеть `cuks_default`) →
+   копирование объектов/конфигов в тома. `--env-file .env` передаёт `RESTIC_PASSWORD` и `POSTGRES_*`; репозиторий
+   (`/repo`) и `PG_HOST=postgres` заданы по умолчанию. (Если том смонтирован только для чтения, `restore.sh`
+   пропустит его с явным предупреждением — так виден недосмотр вроде `dc run`.)
 4. **Поднять стек и мигрировать при необходимости.**
    ```bash
    dc run --rm api pnpm db:migrate    # обычно no-op: дамп уже на актуальной схеме
