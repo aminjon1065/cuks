@@ -9,6 +9,9 @@ name: cuks-dev
 services:
   postgres:
     image: postgis/postgis:17-3.5
+    # postgis/postgis has no arm64 manifest — run under amd64 emulation (Rosetta) on
+    # Apple Silicon. No-op on amd64 hosts (CLAUDE.md Apple-Silicon note).
+    platform: linux/amd64
     restart: unless-stopped
     # pg_stat_statements for slow-query profiling (docs/runbook-load.md, task 7.4); the CREATE EXTENSION
     # is a migration, this just preloads the collector library (matches compose.prod).
@@ -71,6 +74,8 @@ services:
 
   clamav:
     image: clamav/clamav:latest
+    # clamav/clamav:latest currently ships amd64 only — emulate on Apple Silicon.
+    platform: linux/amd64
     restart: unless-stopped
     ports:
       - '3310:3310'
