@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 7 (Hardening) — в работе. 7.1 готова. Фаза 6 завершена (6.1–6.7).
-- **Последняя сессия**: 2026-07-17 — задача 7.1 (prod-стек: Dockerfile, compose.prod, Caddy, LiveKit, установка «с нуля»)
+- **Фаза**: 7 (Hardening) — в работе. 7.1–7.2 готовы. Фаза 6 завершена (6.1–6.7).
+- **Последняя сессия**: 2026-07-17 — задача 7.2 (бэкапы restic + restore-drill; end-to-end drill пройден)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -21,11 +21,54 @@
 | 4 Задачи          | 🟢 задачи 4.1–4.6 готовы       | —                  |
 | 5 Чат             | 🟢 задачи 5.1–5.8 готовы       | приёмка §10: критерии закрыты, финальный ОК заказчика — открыт |
 | 6 Звонки          | 🟢 задачи 6.1–6.7 готовы       | приёмка §9: автотесты закрыты, медиа-критерии — ручной runbook (14-acceptance.md), финальный ОК заказчика — открыт |
-| 7 Hardening       | 🟡 7.1 готова (7.2–7.8 впереди) | —                  |
+| 7 Hardening       | 🟡 7.1–7.2 готовы (7.3–7.8 впереди) | —              |
 
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-17 — Фаза 7: задача 7.2 (бэкапы restic + restore-drill)
+
+**Сделано** (по `docs/08` §Бэкапы, `docs/09` §6; коммиты `feat(infra): encrypted restic backups…`,
+`docs: backup & restore runbook…`, `fix(infra): correct restore command…`):
+
+- **Backup-система, полностью в репозитории** (без стороннего backup-образа). Заменён плейсхолдер
+  `offen/docker-volume-backup` (сырой tar живого pgdata — небезопасно) на:
+  - `infra/scripts/backup.sh` — ночью `pg_dump -Fc` (логический, консистентный) + один restic-снапшот томов
+    MinIO/GeoServer/УЦ/Caddy (смонтированы `:ro`); ротация `--keep-daily 30 --keep-monthly 12 --prune`;
+    `restic check` (структура + 5% данных). Redis (сессии/очереди) не копируется намеренно.
+  - `infra/scripts/restore.sh` — `restic restore` → `pg_restore --clean --if-exists` + копирование
+    объектов/конфигов в тома (только там, где они смонтированы на запись).
+  - `infra/scripts/backup-entrypoint.sh` — планировщик через busybox `crond` (или разовый exec команды).
+  - Dockerfile-таргет `backup` (`alpine:3.21` + `restic` + `postgresql17-client` — major совпадает с
+    сервером PG 17, иначе `pg_dump` отказывается). Сервис `backup` в compose.prod: build-таргет,
+    `image: cuks-backup`, репозиторий `:rw` + тома данных `:ro`, env из `.env`, guard на `RESTIC_PASSWORD`.
+  - `.env.prod.example`: `RESTIC_PASSWORD` (предупреждение хранить копию оффлайн) + ручки расписания/ротации.
+  - `.gitattributes`: `*.sh`/Dockerfile закреплены как LF, чтобы Windows-checkout не сломал shebang в образе.
+- **Runbook** `docs/runbook-backup.md`: что/куда, оффлайн-пароль, ежедневная эксплуатация, off-site-копия и
+  **процедура restore-drill на чистой VM** (RPO 24ч / RTO 4ч, ежеквартально) + аварийное восстановление;
+  ссылка из runbook-install §12.
+
+**Валидация**: `docker build --target backup`; `docker compose config`; гейт (typecheck/lint/test) зелёный.
+**Реальный end-to-end restore-drill пройден дважды**: посев строки PG + объекта MinIO → `backup.sh` (init
+репо, дамп, снапшот, prune, check) → удаление обоих → `restore.sh` → обе сущности восстановлены. Второй drill
+воспроизвёл точную команду из runbook (плоский `docker run` + `--env-file` + образ `cuks-backup`).
+
+**Ревью** (adversarial, 4 измерения → 2 скептика; коммит `fix(infra): correct restore command…`):
+- **Критично, подтверждено**: runbook предлагал восстановление через `dc run -v … backup restore.sh`, но
+  сервис `backup` монтирует тома `:ro`, а CLI `-v` не переопределяет service-level `:ro` (воспроизведено на
+  Docker 29 / Compose v5.2) — `restore.sh` молча пропускал бы ВСЕ тома данных (ключ УЦ, файлы, записи), вернув
+  лишь БД, и печатал «restore complete». Исправлено: восстановление через плоский `docker run` образа
+  `cuks-backup` (RW-монтирование, сеть `cuks_default`, `--env-file .env`), что обходит `:ro` сервиса; добавлен
+  `image: cuks-backup`. (Мой первый drill не поймал это, т.к. уже использовал плоский `docker run`; добавлен
+  второй drill, доказывающий и опасность `:ro`, и корректную RW-команду.)
+- **Split-vote, механизм подтверждён**: off-site-пример `restic copy` копировал в обратную сторону (`--repo2`
+  — это ИСТОЧНИК) и ссылался на несуществующий файл пароля. Исправлено на push `/repo → remote` через
+  `--from-repo` + `RESTIC_FROM_PASSWORD`.
+
+**Открыто / вперёд**: off-site-хранилище и его периодический drill — операторская настройка; sftp-бэкенд
+restic требует ssh-клиента в образе (по умолчанию нет — локальный путь/USB или доустановить). Дальше — 7.3
+(мониторинг: Uptime Kuma, health-дашборд, алерты).
 
 ### 2026-07-17 — Фаза 7: задача 7.1 (production-развёртывание)
 
