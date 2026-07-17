@@ -1,43 +1,43 @@
 {
   "sections": {
-    "main": "Основное",
-    "admin": "Администрирование"
+    "main": "Асосӣ",
+    "admin": "Маъмурият"
   },
   "items": {
-    "dashboard": "Дашборд",
-    "map": "Карта",
-    "incidents": "ЧС",
-    "analytics": "Аналитика",
-    "docs": "Документы",
-    "tasks": "Задачи",
+    "dashboard": "Лавҳаи идора",
+    "map": "Харита",
+    "incidents": "ҲФ",
+    "analytics": "Таҳлил",
+    "docs": "Ҳуҷҷатҳо",
+    "tasks": "Вазифаҳо",
     "chat": "Чат",
-    "meet": "Встречи",
-    "files": "Файлы",
-    "adminUsers": "Пользователи",
-    "adminRoles": "Роли",
-    "adminOrg": "Оргструктура",
+    "meet": "Вохӯриҳо",
+    "files": "Файлҳо",
+    "adminUsers": "Корбарон",
+    "adminRoles": "Нақшҳо",
+    "adminOrg": "Сохтори ташкилӣ",
     "adminAudit": "Аудит",
-    "adminHealth": "Здоровье",
-    "adminGisAccess": "Доступ ГИС",
-    "docflowControl": "Контроль",
-    "docflowJournals": "Журналы",
-    "docflowReports": "Отчёты",
-    "docflowSubstitutions": "Замещения",
-    "docflowSettings": "Настройки ДОУ"
+    "adminHealth": "Ҳолати система",
+    "adminGisAccess": "Дастрасии ГИС",
+    "docflowControl": "Назорат",
+    "docflowJournals": "Журналҳо",
+    "docflowReports": "Ҳисоботҳо",
+    "docflowSubstitutions": "Ивазкуниҳо",
+    "docflowSettings": "Танзимоти ҲК"
   },
   "sidebar": {
-    "collapse": "Свернуть меню",
-    "expand": "Развернуть меню"
+    "collapse": "Пӯшидани меню",
+    "expand": "Кушодани меню"
   },
   "commandPalette": {
-    "open": "Открыть командную панель",
-    "placeholder": "Поиск разделов и действий…",
-    "empty": "Ничего не найдено",
-    "groupNavigation": "Навигация"
+    "open": "Кушодани лавҳаи фармонҳо",
+    "placeholder": "Ҷустуҷӯи бахшҳо ва амалҳо…",
+    "empty": "Ҳеҷ чиз ёфт нашуд",
+    "groupNavigation": "Навигатсия"
   },
   "notifications": {
-    "label": "Уведомления",
-    "empty": "Новых уведомлений нет",
-    "markAllRead": "Прочитать все"
+    "label": "Огоҳиномаҳо",
+    "empty": "Огоҳиномаҳои нав нест",
+    "markAllRead": "Ҳамаро хонда ҳисоб кардан"
   }
 }

@@ -1,20 +1,20 @@
 {
-  "countActive": "Загрузка {{done}} из {{total}}",
-  "allDone": "Загружено {{total}}",
-  "clear": "Очистить",
-  "done": "Готово",
-  "failed": "Ошибка",
-  "uploading": "Загрузка",
+  "countActive": "Боркунӣ {{done}} аз {{total}}",
+  "allDone": "Бор карда шуд {{total}}",
+  "clear": "Тоза кардан",
+  "done": "Тайёр",
+  "failed": "Хатогӣ",
+  "uploading": "Боркунӣ",
   "dropzone": {
-    "label": "Перетащите файлы сюда",
-    "hint": "или нажмите, чтобы выбрать"
+    "label": "Файлҳоро ба ин ҷо кашед",
+    "hint": "ё барои интихоб зер кунед"
   },
   "actions": {
-    "download": "Скачать",
-    "remove": "Убрать"
+    "download": "Боргирӣ",
+    "remove": "Хориҷ кардан"
   },
   "av": {
-    "pending": "Проверка…",
-    "infected": "Заблокировано"
+    "pending": "Санҷиш…",
+    "infected": "Манъ карда шуд"
   }
 }
