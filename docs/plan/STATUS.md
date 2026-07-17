@@ -5,7 +5,8 @@
 ## Текущее состояние
 
 - **Фаза**: 7 (Hardening) — **ЗАВЕРШЕНА** (7.1–7.8). Все фазы 0–7 реализованы; открыт финальный ОК заказчика.
-- **Последняя сессия**: 2026-07-17 — задача 7.8 (обучающие сиды/демо-режим) — ФАЗА 7 ЗАВЕРШЕНА
+- **Последняя сессия**: 2026-07-17 — развёртывание dev-окружения на новой машине (Apple Silicon): fresh
+  checkout поднят, гейт зелёный; setup-фиксы `turbo dev`→`^build` и amd64-пины в compose.dev
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -26,6 +27,46 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-17 — Развёртывание dev-окружения на новой машине (Apple Silicon, arm64)
+
+Задача: поднять dev-окружение на новом MacBook, проверить работоспособность, доложить о готовности.
+Кода фаз не трогал — только setup-фиксы, необходимые для fresh checkout / arm64.
+
+**Исправления (2 коммита):**
+
+- **`turbo.json`: `dev` → `dependsOn: ["^build"]`.** На чистом клоне библиотечные пакеты (`@cuks/db`,
+  `@cuks/shared`) не собраны — `dist/` отсутствует, — и `dev`-таск их не собирал, поэтому `pnpm dev`
+  падал: api выдавал **514 ошибок TS2307 «Cannot find module '@cuks/db'/'@cuks/shared'»** (пакеты
+  резолвятся на `./dist/index.js`+`.d.ts`). Раньше маскировалось тем, что CI/`typecheck`/`lint`/`test`
+  зависят от `^build` и всегда собирали `dist` до dev. Теперь `pnpm dev` самодостаточен на fresh
+  checkout (dry-run подтверждает: `api#dev` зависит от `config/db/shared#build`; `@cuks/ui`/`@cuks/config`
+  без build-скрипта — экспортируют исходники/конфиги напрямую, no-op).
+- **`compose.dev.yaml`: `platform: linux/amd64` для `postgres` (postgis 17-3.5) и `clamav`** — у образов
+  нет arm64-манифеста; запускаются под эмуляцией (Rosetta включена, проверено `alpine amd64 → x86_64`).
+  No-op на amd64-хостах (CI/прод). `geoserver` тоже amd64-only — docker эмулирует автоматически (стартует
+  с варнингом, пин не потребовался).
+
+**Окружение:** Node 22.23.1 (fnm) ✓; corepack → pnpm 9.15.0. pnpm-shim поставлен в `~/.local/bin`
+(`corepack enable --install-directory`), т.к. вложенные `pnpm --filter …` в npm-скриптах требуют `pnpm`
+на PATH, а fnm даёт per-shell PATH.
+
+**Проверка (всё зелёное):**
+
+- Инфра: 8 контейнеров healthy (postgres/redis/minio/martin/clamav/maildev/geoserver — healthy; livekit —
+  running, без healthcheck by design). `db:migrate` + `db:seed:demo` (20 демо-юзеров, 50 ЧС, доска, чат).
+  `docker restart cuks-dev-martin-1` → catalog перечитал gis-источники (incidents_mvt, layer_features,
+  risk_zones, facilities, admin_units).
+- `pnpm dev`: api(3000)+web(5173)+worker онлайн, лог без ошибок. `/api/health` → ok; `/api/health/ready`
+  → postgres/redis/minio **up**.
+- Гейт: **typecheck 8/8, lint 8/8, test 8/8** (api 363 теста/62 файла) — зелёный.
+- Браузер-смоук: вход `nazarova.n`/`Demo!2026` → дашборд «Оперативная сводка» с демо-данными (ЧС 12,
+  ущерб 2 037 500, «Активных ЧС: 40»); страница «Карта» — слои/легенды/фильтры/таймлайн; тайл-пайплайн
+  `/tiles/catalog?token=…` → **200** (подпис-токен api + Martin). Базовая подложка пустая — нет
+  `region.pmtiles` (ожидаемо/документировано; донесения и слои работают без неё).
+
+Открытые пункты приёмки (раздел E `acceptance-report.md`) — без изменений: реальный прогон k6/ZAP/trivy на
+стенде, вычитка tg носителем, медиа-критерии звонков (ручной runbook), финальный сквозной ОК заказчика.
 
 ### 2026-07-17 — Финальная приёмка (фазы 0–7)
 
@@ -4206,6 +4247,16 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
 
 <!-- Формат: дата — решение — причина — какие доки затронуты -->
 
+- 2026-07-17 — **`turbo dev` получил `dependsOn: ["^build"]`.** Причина: на чистом клоне `pnpm dev` не
+  собирал библиотечные пакеты (`@cuks/{db,shared}` резолвятся на `dist/`, которого нет) → api падал с
+  514×TS2307 «Cannot find module '@cuks/db'». Раньше маскировалось CI/`typecheck`/`lint`/`test` (те
+  зависят от `^build`). Минимальный фикс делает dev самодостаточным на fresh checkout. Затронуто:
+  `turbo.json`.
+- 2026-07-17 — **`platform: linux/amd64` для `postgres` и `clamav`** в `compose.dev.yaml` (образы без
+  arm64-манифеста; на Apple Silicon — эмуляция). No-op на amd64-хостах (CI/прод). `geoserver` тоже
+  amd64-only, но docker эмулирует его автоматически — пин не потребовался. Реализует ранее отмеченный
+  [P3]-техдолг по postgis. Затронуто: `infra/docker/compose.dev.yaml`.
+
 - 2026-07-12 — **pnpm через corepack**, без глобальной установки; версия закреплена в
   `packageManager`. Причина: вопрос заказчика «зачем pnpm». Инвариант pnpm сохранён (ADR-15);
   corepack (встроен в Node 22) снимает необходимость ручной установки. Затронуто: README.
@@ -4256,8 +4307,10 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
 - [P3] Nest 11 при старте пишет деприкейт-варнинг `Unsupported route path: "/api/*"`
   (path-to-regexp v8), авто-конвертируется в `/api/{*path}` и работает. — apps/api (bootstrap/
   swagger) — пересмотреть при апгрейдах Nest.
-- [P3] Образ `postgis/postgis:17-3.5` — только amd64; на Apple Silicon (arm64) запускается через
-  эмуляцию (медленнее). Для dev приемлемо; прод-сервер — amd64. — infra/docker/compose.dev.yaml.
+- [P3] Образы `postgis/postgis:17-3.5`, `clamav/clamav:latest`, `docker.osgeo.org/geoserver:2.26.1` —
+  только amd64; на Apple Silicon (arm64) идут через эмуляцию (медленнее). postgres/clamav закреплены
+  `platform: linux/amd64` (2026-07-17); geoserver docker эмулирует автоматически. Для dev приемлемо;
+  прод-сервер — amd64. — infra/docker/compose.dev.yaml.
 - [P3] Playwright: конфиг и smoke-спека есть, браузеры не установлены, e2e не в CI — включается
   в 0.14.
 - [P2] Стандартный конверт ошибок `{ error: { code, message, details, requestId } }` (docs/04 §13)
