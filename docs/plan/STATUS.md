@@ -5,8 +5,8 @@
 ## Текущее состояние
 
 - **Фаза**: 7 (Hardening) — **ЗАВЕРШЕНА** (7.1–7.8). Все фазы 0–7 реализованы; открыт финальный ОК заказчика.
-- **Последняя сессия**: 2026-07-17 — развёртывание dev-окружения на новой машине (Apple Silicon): fresh
-  checkout поднят, гейт зелёный; setup-фиксы `turbo dev`→`^build` и amd64-пины в compose.dev
+- **Последняя сессия**: 2026-07-17 — настройка GeoServer (WMS/WFS: workspace/datastore + публикация
+  admin_units) и базовой подложки Martin (region.pmtiles, Таджикистан); карта рендерит подложку+границы+ЧС
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -27,6 +27,38 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-17 — Настройка GeoServer (WMS/WFS) и базовой подложки Martin
+
+Продолжение развёртывания dev: оба сервиса были подняты в compose.dev, но GeoServer был **отключён**
+(пустой `GEOSERVER_URL`), а карте не хватало **базовой подложки**. Кода не менял — только конфиг + артефакт.
+
+**GeoServer (WMS/WFS для QGIS/ArcGIS):**
+
+- `.env`/`.env.example`: `GEOSERVER_URL=http://localhost:8080/geoserver`, `GEOSERVER_ADMIN_PASSWORD=geoserver`
+  (совпадает с хардкодом пароля в compose.dev), `GEOSERVER_PG_PASSWORD=cuks` (было пусто — а это plain
+  `z.string().default('cuks')`, который на `''` не срабатывает → datastore падал бы с пустым паролем),
+  `MARTIN_URL=http://localhost:3001` (health-проба админ-дашборда). Перезапуск api.
+- Создано рабочее пространство `cuks` + PostGIS-datastore `gis` тем же REST-путём, что `GeoServerService.publish`;
+  опубликован слой `admin_units` (границы регионов). **WFS GetFeature → 5 регионов** с геометрией (MultiPolygon),
+  **WMS GetCapabilities** листит слой — подтверждает связь GeoServer→PostGIS end-to-end. (Прямая публикация
+  `admin_units` — смоук OGC-поверхности + создание standing-инфры; реестровая публикация слоёв через api
+  `is_published_wms` покрыта e2e `shp-import`.)
+- api видит GeoServer: `/api/v1/gis/access-info` → блок `ogc` (wms/wfs/workspace) + PostGIS-координаты;
+  страница «Для ГИС-специалистов» (`/app/map/gis-access`) показывает оба блока с готовыми URL.
+
+**Тайлы Martin (базовая подложка):**
+
+- Собрана `infra/basemap/region.pmtiles` (bbox Таджикистана 67,36.5–75.5,41.2) через `build-basemap.sh`,
+  `PLANET_URL=https://build.protomaps.com/20260716.pmtiles`, `pmtiles` CLI (Homebrew, 1.31.1). **308 МБ,
+  PMTiles v3 MVT, zoom 0–15.** Артефакт gitignored (`infra/basemap/*`).
+- `docker restart cuks-dev-martin-1` → источник `region` в каталоге (Martin serves 93/88/23 КБ на z0/z5/z7).
+  Карта в браузере рендерит подложку (Душанбе/Худжанд/Куляб/Хорог, реки, соседние страны), границы регионов
+  и кластеры ЧС по уровням. (Ранее пустой холст был таймингом загрузки тайлов, не дефектом — WebGL 2.0 в
+  preview-браузере есть.)
+
+**Гейт зелёный** (typecheck/lint/test 8/8; правка `.env` инвалидировала turbo-кэш → прогон честный).
+Коммит: `.env.example` + STATUS.
 
 ### 2026-07-17 — Развёртывание dev-окружения на новой машине (Apple Silicon, arm64)
 
@@ -4247,6 +4279,16 @@ liveness/readiness), web 1 (smoke Testing Library). Playwright: конфиг + s
 
 <!-- Формат: дата — решение — причина — какие доки затронуты -->
 
+- 2026-07-17 — **GeoServer включён в dev по умолчанию** (`.env.example`): `GEOSERVER_URL=http://localhost:8080/geoserver`,
+  `GEOSERVER_ADMIN_PASSWORD=geoserver` (совпадает с хардкодом compose.dev), `GEOSERVER_PG_PASSWORD=cuks`,
+  `MARTIN_URL=http://localhost:3001`. Причина: geoserver — сервис по умолчанию в compose.dev, WMS/WFS должен
+  работать OOTB; ранее пустой `GEOSERVER_URL` отключал интеграцию (публикация недоступна, карта работает).
+  Пустой `GEOSERVER_URL` по-прежнему полностью отключает OGC. В prod — `gis_reader`-роль + сильный пароль
+  (docs/09 §Права PG). Затронуто: `.env.example`, `apps/api/src/config/env.ts` (поведение без изменений).
+- 2026-07-17 — **Базовая подложка карты** собирается `build-basemap.sh` с
+  `PLANET_URL=https://build.protomaps.com/20260716.pmtiles` (актуальный planet-билд на дату), bbox Таджикистана
+  (дефолт скрипта). `pmtiles` CLI — через Homebrew (`brew install pmtiles`). Артефакт `infra/basemap/region.pmtiles`
+  (~308 МБ) **не коммитится** (gitignored `infra/basemap/*`) — пересобирается на каждой машине. Затронуто: —.
 - 2026-07-17 — **`turbo dev` получил `dependsOn: ["^build"]`.** Причина: на чистом клоне `pnpm dev` не
   собирал библиотечные пакеты (`@cuks/{db,shared}` резолвятся на `dist/`, которого нет) → api падал с
   514×TS2307 «Cannot find module '@cuks/db'». Раньше маскировалось CI/`typecheck`/`lint`/`test` (те
