@@ -218,21 +218,33 @@ services:
     mem_limit: 2g
     logging: *logging
 
-  # Volume backup (docs/08 §Бэкапы). Task 7.2 wires the restic repository + schedule + restore drill;
-  # this ships a nightly local mirror of the data volumes so a fresh install already has a safety net.
+  # Encrypted backups into a local restic repository (docs/08 §Бэкапы, docs/runbook-backup.md, task 7.2).
+  # Nightly: pg_dump -Fc (logical, consistent) + a restic snapshot of the object/config volumes, with
+  # retention (30 daily / 12 monthly). The repo lives on the backupdata volume — mirror it off-site
+  # (external disk / second host) per the runbook. RESTIC_PASSWORD must be kept OFFLINE.
   backup:
-    image: offen/docker-volume-backup:v2
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+      target: backup
     restart: unless-stopped
+    env_file: [../../.env]
     environment:
-      BACKUP_CRON_EXPRESSION: '0 2 * * *'
-      BACKUP_FILENAME: 'cuks-%Y%m%d-%H%M%S.tar.gz'
-      BACKUP_RETENTION_DAYS: '30'
+      RESTIC_REPOSITORY: /repo
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:?set RESTIC_PASSWORD and keep a copy OFFLINE — losing it makes backups unrecoverable}
+      PG_HOST: postgres
+      BACKUP_CRON: ${BACKUP_CRON:-0 2 * * *}
+      KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
+      KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
+      TZ: Asia/Dushanbe
     volumes:
-      - pgdata:/backup/pgdata:ro
-      - miniodata:/backup/miniodata:ro
-      - geoserverdata:/backup/geoserverdata:ro
-      - ca_data:/backup/ca:ro
-      - backupdata:/archive
+      - backupdata:/repo
+      - miniodata:/data/minio:ro
+      - geoserverdata:/data/geoserver:ro
+      - ca_data:/data/ca:ro
+      - caddy_data:/data/caddy:ro
+    depends_on:
+      postgres: { condition: service_healthy }
     mem_limit: 512m
     logging: *logging
 

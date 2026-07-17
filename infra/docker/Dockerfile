@@ -39,3 +39,15 @@ CMD ["node", "apps/worker/dist/main.js"]
 FROM caddy:2.8-alpine AS caddy
 COPY --from=build /repo/apps/web/dist /srv/web
 COPY infra/caddy/Caddyfile /etc/caddy/Caddyfile
+
+# --- Backup (restic + pg_dump, scheduled via crond; docs/runbook-backup.md, task 7.2) ---
+# Independent of the monorepo build. pg client MUST match the server major (postgis 17-3.5 -> 17),
+# else pg_dump refuses ("server version newer than pg_dump"). Alpine 3.21 ships postgresql17-client.
+FROM alpine:3.21 AS backup
+RUN apk add --no-cache restic postgresql17-client bash coreutils findutils tzdata
+ENV TZ=Asia/Dushanbe \
+    RESTIC_REPOSITORY=/repo \
+    BACKUP_STAGE_DIR=/staging
+COPY infra/scripts/backup.sh infra/scripts/restore.sh infra/scripts/backup-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/restore.sh /usr/local/bin/backup-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/backup-entrypoint.sh"]
