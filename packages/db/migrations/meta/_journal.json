@@ -316,6 +316,13 @@
       "when": 1784254365779,
       "tag": "0044_striped_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1784256477946,
+      "tag": "0045_pg_stat_statements",
+      "breakpoints": true
     }
   ]
 }

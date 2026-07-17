@@ -10,6 +10,18 @@ services:
   postgres:
     image: postgis/postgis:17-3.5
     restart: unless-stopped
+    # pg_stat_statements for slow-query profiling (docs/runbook-load.md, task 7.4); the CREATE EXTENSION
+    # is a migration, this just preloads the collector library (matches compose.prod).
+    command:
+      [
+        'postgres',
+        '-c',
+        'shared_preload_libraries=pg_stat_statements',
+        '-c',
+        'pg_stat_statements.track=all',
+        '-c',
+        'pg_stat_statements.max=5000',
+      ]
     environment:
       POSTGRES_USER: cuks
       POSTGRES_PASSWORD: cuks

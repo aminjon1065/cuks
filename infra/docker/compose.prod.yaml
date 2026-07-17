@@ -77,6 +77,18 @@ services:
   postgres:
     image: postgis/postgis:17-3.5
     restart: unless-stopped
+    # pg_stat_statements for slow-query profiling (docs/runbook-load.md, task 7.4). The extension itself is
+    # created by a migration; it only collects once the library is preloaded here (needs a server restart).
+    command:
+      [
+        'postgres',
+        '-c',
+        'shared_preload_libraries=pg_stat_statements',
+        '-c',
+        'pg_stat_statements.track=all',
+        '-c',
+        'pg_stat_statements.max=5000',
+      ]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cuks}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD}
