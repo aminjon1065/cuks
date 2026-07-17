@@ -166,5 +166,59 @@
       "time": "Время",
       "meta": "Детали"
     }
+  },
+  "health": {
+    "title": "Здоровье платформы",
+    "subtitle": "Состояние сервисов, хранилища и очередей. Не заменяет мониторинг — взгляд одним глазом.",
+    "refresh": "Обновить",
+    "error": "Не удалось загрузить состояние платформы",
+    "status": {
+      "ok": "Всё в норме",
+      "degraded": "Есть проблемы",
+      "down": "Недоступно"
+    },
+    "services": { "title": "Сервисы" },
+    "service": {
+      "postgres": "PostgreSQL",
+      "redis": "Redis",
+      "minio": "Хранилище (MinIO)",
+      "geoserver": "GeoServer",
+      "martin": "Тайлы (Martin)",
+      "livekit": "Звонки (LiveKit)",
+      "clamav": "Антивирус (ClamAV)"
+    },
+    "serviceState": {
+      "up": "Работает",
+      "down": "Недоступен",
+      "notConfigured": "Не настроен"
+    },
+    "storage": {
+      "title": "Хранилище",
+      "db": "База данных",
+      "bucket": "Объекты (MinIO)",
+      "objects": "{{n}} объектов",
+      "disk": "Диск (свободно)",
+      "diskCaption": "{{free}} свободно из {{total}}",
+      "diskUnavailable": "Недоступно из контейнера"
+    },
+    "queues": {
+      "title": "Очереди задач",
+      "name": "Очередь",
+      "waiting": "Ожидают",
+      "active": "Активны",
+      "delayed": "Отложены",
+      "failed": "Ошибки",
+      "completed": "Выполнено",
+      "retry": "Повторить",
+      "retried": "Повторно поставлено задач: {{n}} ({{name}})"
+    },
+    "backup": {
+      "title": "Последний бэкап",
+      "never": "Ещё не было",
+      "snapshot": "Снапшот {{id}}"
+    },
+    "errors": {
+      "title": "Ошибки за 24 часа"
+    }
   }
 }

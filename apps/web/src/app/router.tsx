@@ -15,6 +15,7 @@ import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { RolesPage } from '@/features/admin/pages/RolesPage';
 import { OrgPage } from '@/features/admin/pages/OrgPage';
 import { AuditPage } from '@/features/admin/pages/AuditPage';
+import { HealthPage } from '@/features/admin/pages/HealthPage';
 import { GisAccessPage } from '@/features/gis-access/pages/GisAccessPage';
 import { GisDbAccountsPage } from '@/features/gis-access/pages/GisDbAccountsPage';
 import { DocflowSettingsPage } from '@/features/docflow/pages/DocflowSettingsPage';
@@ -116,6 +117,7 @@ export const router = createBrowserRouter([
       { path: 'admin/roles', element: <RolesPage /> },
       { path: 'admin/org', element: <OrgPage /> },
       { path: 'admin/audit', element: <AuditPage /> },
+      { path: 'admin/health', element: <HealthPage /> },
       { path: 'files', element: <FilesPage /> },
       {
         path: 'incidents',

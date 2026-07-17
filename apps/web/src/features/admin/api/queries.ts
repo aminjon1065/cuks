@@ -8,7 +8,9 @@ import type {
   CreatePositionInput,
   CreateRoleInput,
   CreateUserInput,
+  HealthOverview,
   ListUsersQuery,
+  QueueRetryResult,
   MoveOrgUnitInput,
   OrgUnitTreeNode,
   PaginatedResult,
@@ -269,5 +271,28 @@ export function useAuditLog(query: AuditLogQuery): UseQueryResult<PaginatedResul
   return useQuery({
     queryKey: ['admin', 'audit', query],
     queryFn: () => api.get<PaginatedResult<AuditLogDto>>(`/v1/admin/audit?${params}`),
+  });
+}
+
+// ---- Health (docs/modules/16 §7, task 7.3) ---------------------------------
+export const healthKey = ['admin', 'health'] as const;
+
+export function useHealth(): UseQueryResult<HealthOverview> {
+  return useQuery({
+    queryKey: healthKey,
+    queryFn: () => api.get<HealthOverview>('/v1/admin/health'),
+    // At-a-glance dashboard: refresh often but not aggressively (storage sizes are cached server-side).
+    refetchInterval: 15_000,
+  });
+}
+
+export function useRetryQueue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      api.post<QueueRetryResult>(`/v1/admin/health/queues/${encodeURIComponent(name)}/retry`, {}),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: healthKey });
+    },
   });
 }
