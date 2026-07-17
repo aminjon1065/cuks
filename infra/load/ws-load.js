@@ -18,8 +18,8 @@ export const options = {
   },
   thresholds: {
     ws_connecting: ['p(95)<1000'], // time to the WS upgrade
-    ws_namespace_errors: ['count<1'], // any /ws CONNECT_ERROR (e.g. auth) fails the run
-    checks: ['rate>0.99'], // namespace-connected checks
+    ws_namespace_errors: ['count<1'], // socket.io CONNECT_ERROR (44) frames — should be none
+    checks: ['rate>0.99'], // must include the authorized (connection.ready) check
   },
 };
 
@@ -33,27 +33,30 @@ export default function (data) {
   const holdMs = Number(__ENV.WS_HOLD_MS || 60000);
 
   const res = ws.connect(WS_URL, params, (socket) => {
-    let connected = false;
+    // The gateway authorizes inside handleConnection AFTER the namespace CONNECT ack (40/ws,{sid}) — a
+    // rejected socket still receives that ack, then is disconnect()ed with no CONNECT_ERROR frame. So the
+    // ack is NOT proof of a real connection; the authorized-only `connection.ready` event is (the gateway
+    // emits it only after resolving the session — events.gateway.ts).
+    let authorized = false;
 
     socket.on('message', (msg) => {
       if (msg.startsWith('0{')) {
-        // engine.io OPEN -> connect the /ws namespace (session cookie already authorized the handshake).
-        socket.send('40/ws,');
-      } else if (msg.startsWith('40/ws')) {
-        connected = true; // namespace CONNECT ack
+        socket.send('40/ws,'); // engine.io OPEN -> CONNECT the /ws namespace
+      } else if (msg.startsWith('42/ws') && msg.indexOf('"connection.ready"') !== -1) {
+        authorized = true; // authenticated + joined — a genuinely held connection
       } else if (msg.startsWith('44')) {
-        nsErrors.add(1); // namespace CONNECT_ERROR (auth/namespace rejected)
+        nsErrors.add(1); // socket.io CONNECT_ERROR (namespace middleware rejection)
       } else if (msg === '2') {
         socket.send('3'); // engine.io PING -> PONG (EIO4: server pings)
       }
-      // 42/ws,[event,data] broadcasts are received but not asserted here.
     });
 
-    // Hold the connection for the configured window, then verify it actually joined /ws and close.
-    socket.setTimeout(() => {
-      check(connected, { 'ws /ws namespace connected': (c) => c });
-      socket.close();
-    }, holdMs);
+    // Fires whether we close after the hold or the server drops us (e.g. auth rejection closes early).
+    socket.on('close', () => {
+      check(authorized, { 'ws /ws authorized (connection.ready)': (a) => a });
+    });
+
+    socket.setTimeout(() => socket.close(), holdMs);
   });
 
   check(res, { 'ws upgrade 101': (r) => r && r.status === 101 });

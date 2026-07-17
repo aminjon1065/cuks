@@ -19,9 +19,14 @@ export const options = {
 
 export const setup = authenticatePool;
 
+// Analytics wants an explicit ISO window (from < to, both with a timezone offset — toISOString()'s Z
+// qualifies); there is no `period` param on the API (that's a frontend concept). Compute a 7-day window.
+const TO = new Date().toISOString();
+const FROM = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
 // Core read paths a duty officer hits (all confirmed to exist under /api/v1). Adjust to your deployment.
 const READS = [
-  { name: 'analytics', path: '/api/v1/analytics/summary?period=7d' },
+  { name: 'analytics', path: `/api/v1/analytics/summary?from=${FROM}&to=${TO}` },
   { name: 'incidents', path: '/api/v1/incidents?page=1&limit=25' },
   { name: 'notifications', path: '/api/v1/notifications?limit=20' },
   { name: 'unread', path: '/api/v1/notifications/unread-count' },
