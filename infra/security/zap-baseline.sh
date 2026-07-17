@@ -22,7 +22,9 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="${ZAP_OUT:-zap-report.html}"
 
 # The rules file + report share the ZAP working dir mount. rw so ZAP can write the report back.
+# -I: don't fail on WARN-level alerts — only FAIL-level (set in zap-rules.tsv) gates the run, as documented.
+# Without -I, zap-baseline.py exits 2 on any WARN (an SPA raises many informational ones) and set -e aborts.
 docker run --rm -v "${DIR}":/zap/wrk:rw ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t "${TARGET}" -c "zap-rules.tsv" -r "${OUT}" -w zap-report.md -a
+  zap-baseline.py -t "${TARGET}" -c "zap-rules.tsv" -r "${OUT}" -w zap-report.md -a -I
 
 echo "ZAP report written to ${DIR}/${OUT}"

@@ -13,7 +13,9 @@ set -euo pipefail
 SEVERITY="${TRIVY_SEVERITY:-CRITICAL,HIGH}"
 IGNOREFILE="$(cd "$(dirname "$0")" && pwd)/.trivyignore"
 
-# The images we build + the pinned third-party images that face the app. Update if compose changes.
+# The images we build + every pinned third-party image in compose.prod.yaml. GeoServer and Martin are
+# reverse-proxied by the edge Caddy, ClamAV processes attacker-controlled uploads, and egress runs media —
+# all app-facing, so all are scanned. Update if compose changes.
 IMAGES=(
   "cuks-api"
   "cuks-worker"
@@ -24,6 +26,10 @@ IMAGES=(
   "minio/minio:latest"
   "caddy:2.8-alpine"
   "livekit/livekit-server:latest"
+  "livekit/egress:latest"
+  "docker.osgeo.org/geoserver:2.26.1"
+  "ghcr.io/maplibre/martin:latest"
+  "clamav/clamav:latest"
   "louislam/uptime-kuma:1"
 )
 

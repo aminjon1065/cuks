@@ -9,6 +9,7 @@
 SELECT DISTINCT u.username, u.full_name, string_agg(DISTINCT rp.permission, ', ') AS privileged_perms
 FROM app.users u
 JOIN app.user_roles ur ON ur.user_id = u.id
+JOIN app.roles r ON r.id = ur.role_id AND r.deleted_at IS NULL
 JOIN app.role_permissions rp ON rp.role_id = ur.role_id
 WHERE u.deleted_at IS NULL
   AND u.totp_enabled = false
