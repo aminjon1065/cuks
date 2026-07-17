@@ -27,7 +27,7 @@ export function PeriodPicker({
             aria-selected={selected}
             onClick={() => onChange(period)}
             className={cn(
-              'rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors',
+              'rounded-sm px-3 py-1 text-[13px] font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
               selected ? 'bg-primary text-primary-fg' : 'text-text-muted hover:text-text',
             )}

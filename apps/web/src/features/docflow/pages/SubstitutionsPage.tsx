@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { UserPlus, X } from 'lucide-react';
+import { AlertTriangle, UserPlus, X } from 'lucide-react';
 import {
   Button,
+  ConfirmDialog,
   EmptyState,
   Input,
   Label,
@@ -15,6 +16,7 @@ import {
 import type { SubstitutionDto } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
 import { formatDate } from '@/lib/format';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import {
   useCreateSubstitution,
   useDirectoryUsers,
@@ -31,6 +33,7 @@ const inputClass = cn(
  *  deputy for a period, and sees whom they themselves cover. */
 export function SubstitutionsPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('substitutions.title'));
   const me = useMe();
   const list = useSubstitutions();
 
@@ -43,6 +46,17 @@ export function SubstitutionsPage(): React.JSX.Element {
 
       {list.isPending ? (
         <Skeleton className="h-24 w-full rounded-md" />
+      ) : list.isError ? (
+        <EmptyState
+          icon={AlertTriangle}
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : (
         <>
           <CreateForm />
@@ -191,6 +205,7 @@ function Group({
 }): React.JSX.Element {
   const { t } = useTranslation('docflow');
   const remove = useRemoveSubstitution();
+  const [toRemove, setToRemove] = useState<SubstitutionDto | null>(null);
 
   return (
     <section className="rounded-md border border-border bg-surface p-4">
@@ -217,13 +232,7 @@ function Group({
                   variant="ghost"
                   className="ml-auto"
                   disabled={remove.isPending}
-                  onClick={() =>
-                    remove.mutate(s.id, {
-                      onSuccess: () =>
-                        toast({ title: t('substitutions.removedToast'), tone: 'success' }),
-                      onError: () => toast({ title: t('common.actionFailed'), tone: 'danger' }),
-                    })
-                  }
+                  onClick={() => setToRemove(s)}
                 >
                   {t('substitutions.remove')}
                 </Button>
@@ -232,6 +241,28 @@ function Group({
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={!!toRemove}
+        onOpenChange={(o) => !o && setToRemove(null)}
+        title={t('substitutions.removeConfirm.title')}
+        description={t('substitutions.removeConfirm.description', {
+          name: toRemove?.deputyName ?? '',
+        })}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        loading={remove.isPending}
+        onConfirm={() => {
+          if (!toRemove) return;
+          remove.mutate(toRemove.id, {
+            onSuccess: () => {
+              toast({ title: t('substitutions.removedToast'), tone: 'success' });
+              setToRemove(null);
+            },
+            onError: () => toast({ title: t('common.actionFailed'), tone: 'danger' }),
+          });
+        }}
+      />
     </section>
   );
 }

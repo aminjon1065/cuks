@@ -35,6 +35,7 @@ import {
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { useCan } from '@/lib/ability';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { formatDateTime } from '@/lib/format';
 import { useSocketEvent } from '@/lib/socket';
 import {
@@ -104,6 +105,7 @@ function fromSavedFilters(filters: IncidentRegistryFilters): FilterState {
 
 export function IncidentsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation('incidents');
+  useDocumentTitle(t('title'));
   const navigate = useNavigate();
   const canView = useCan('gis.view');
   const canCreate = useCan('incidents.create');

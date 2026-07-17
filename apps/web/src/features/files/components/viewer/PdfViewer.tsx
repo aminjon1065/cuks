@@ -62,7 +62,7 @@ function PdfPageCanvas({
 
   return (
     <div
-      className="relative bg-surface shadow-[0_1px_2px_rgba(15,23,42,.06)]"
+      className="relative bg-surface shadow-sm"
       style={{ width: targetWidth, height: targetWidth * ratio }}
     >
       <canvas ref={canvasRef} className="block h-full w-full" />

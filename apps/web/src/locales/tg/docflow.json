@@ -457,7 +457,11 @@
     "openEnded": "Беохир",
     "remove": "Бекор кардан",
     "createdToast": "Ивазкунӣ таъин шуд",
-    "removedToast": "Ивазкунӣ бекор шуд"
+    "removedToast": "Ивазкунӣ бекор шуд",
+    "removeConfirm": {
+      "title": "Ивазкунӣ бекор карда шавад?",
+      "description": "Ивазкунии «{{name}}» бекор карда мешавад."
+    }
   },
   "history": {
     "system": "Система",

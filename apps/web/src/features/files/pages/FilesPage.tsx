@@ -35,6 +35,7 @@ import {
 } from '@cuks/ui';
 import type { BreadcrumbDto, FsNodeDto } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useMe } from '@/features/auth/api/queries';
 import {
   filesKey,
@@ -82,6 +83,7 @@ const VIEW_KEY = 'cuks-files-view';
 
 export function FilesPage(): React.JSX.Element {
   const { t } = useTranslation('files');
+  useDocumentTitle(t('title'));
   const me = useMe();
   const [params, setParams] = useSearchParams();
   const section = (params.get('section') as Section) || 'personal';

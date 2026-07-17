@@ -92,6 +92,16 @@ export function GisDbAccountsPage(): React.JSX.Element {
             <Skeleton className="h-14 w-full" />
             <Skeleton className="h-14 w-full" />
           </div>
+        ) : accounts.isError ? (
+          <EmptyState
+            icon={TriangleAlert}
+            title={t('accounts.loadFailed')}
+            action={
+              <Button variant="outline" size="sm" onClick={() => void accounts.refetch()}>
+                {t('retry')}
+              </Button>
+            }
+          />
         ) : list.length === 0 ? (
           <EmptyState
             icon={KeyRound}

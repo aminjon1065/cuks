@@ -22,6 +22,7 @@ import {
 } from '@cuks/ui';
 import { ORG_UNIT_TYPES, type OrgUnitTreeNode } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import {
   useCreateOrgUnit,
   useCreatePosition,
@@ -275,6 +276,7 @@ function UnitPanel({
 
 export function OrgPage(): React.JSX.Element {
   const { t } = useTranslation('admin');
+  useDocumentTitle(t('org.title'));
   const tree = useOrgTree();
   const create = useCreateOrgUnit();
   const [selectedId, setSelectedId] = useState<string | null>(null);

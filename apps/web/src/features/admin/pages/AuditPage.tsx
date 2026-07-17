@@ -19,6 +19,7 @@ import {
 } from '@cuks/ui';
 import type { AuditLogDto, AuditLogQuery } from '@cuks/shared';
 import { api } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useAuditLog } from '../api/queries';
 import { downloadCsv, formatDateTime, toCsv } from '../lib';
 
@@ -26,6 +27,7 @@ const PAGE = 25;
 
 export function AuditPage(): React.JSX.Element {
   const { t } = useTranslation('admin');
+  useDocumentTitle(t('audit.title'));
   const [page, setPage] = useState(1);
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');

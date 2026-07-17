@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Lock } from 'lucide-react';
 import {
+  Button,
   PageHeader,
   Skeleton,
   Switch,
@@ -26,8 +28,13 @@ import { useNotificationPrefs, useUpdateNotificationPrefs } from '../api/queries
 
 export function NotificationPrefsPage(): React.JSX.Element {
   const { t } = useTranslation('notifications');
+  const { t: tc } = useTranslation('common');
   const prefs = useNotificationPrefs();
   const update = useUpdateNotificationPrefs();
+
+  useEffect(() => {
+    document.title = t('prefs.title');
+  }, [t]);
 
   const cell = (
     group: NotificationGroup,
@@ -51,6 +58,15 @@ export function NotificationPrefsPage(): React.JSX.Element {
 
       {prefs.isLoading ? (
         <Skeleton className="h-64 w-full rounded-md" />
+      ) : prefs.isError ? (
+        <div className="rounded-md border border-border py-12 text-center text-[13px] text-text-muted">
+          {t('prefs.loadError')}
+          <div className="mt-3">
+            <Button variant="outline" size="sm" onClick={() => void prefs.refetch()}>
+              {tc('actions.retry')}
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="rounded-lg border border-border bg-surface">
           <Table>

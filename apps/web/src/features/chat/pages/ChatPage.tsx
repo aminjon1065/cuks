@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
-import { EmptyState, SidePanel, Skeleton, cn } from '@cuks/ui';
+import { AlertTriangle, MessageSquare } from 'lucide-react';
+import { Button, EmptyState, SidePanel, Skeleton, cn } from '@cuks/ui';
 import { useMe } from '@/features/auth/api/queries';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { ConversationList } from '../components/ConversationList';
 import { ChannelFeed } from '../components/ChannelFeed';
 import { InfoPanel } from '../components/InfoPanel';
@@ -16,6 +17,7 @@ import '../chat.css';
  *  and below 768px the columns stack (the list yields to the feed once a channel is open). */
 export function ChatPage(): React.JSX.Element | null {
   const { t } = useTranslation('chat');
+  useDocumentTitle(t('title'));
   const { channelId } = useParams();
   const navigate = useNavigate();
   const me = useMe();
@@ -114,7 +116,23 @@ function InfoPanelContainer({
   meId: string;
   onLeft: () => void;
 }): React.JSX.Element {
+  const { t } = useTranslation('chat');
   const channel = useChannel(channelId);
+  if (channel.isError) {
+    return (
+      <div className="p-4">
+        <EmptyState
+          icon={AlertTriangle}
+          title={t('info.loadError')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void channel.refetch()}>
+              {t('list.retry')}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
   if (!channel.data) {
     return (
       <div className="space-y-3 p-4">

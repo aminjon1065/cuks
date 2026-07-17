@@ -19,6 +19,7 @@ import {
 } from '@cuks/ui';
 import type { DisciplineGroupDto, DisciplineReportQuery, DisciplineTotals } from '@cuks/shared';
 import { exportDisciplineXlsx, useDisciplineReport } from '../api/queries';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 const inputClass = cn(
   'h-9 rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -49,6 +50,7 @@ function defaultPeriod(): { from: string; to: string } {
  *  подразделениям/исполнителям, с экспортом в XLSX. */
 export function ReportsPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('reports.title'));
   const [period, setPeriod] = useState(defaultPeriod);
   const [exporting, setExporting] = useState(false);
 

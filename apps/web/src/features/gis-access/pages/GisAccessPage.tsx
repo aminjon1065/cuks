@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Database, Globe, Info } from 'lucide-react';
-import { PageHeader, Skeleton } from '@cuks/ui';
+import { Button, PageHeader, Skeleton } from '@cuks/ui';
 import { useCan } from '@/lib/ability';
 import { ForbiddenPage } from '@/app/pages/ForbiddenPage';
 import { useGisAccessInfo } from '@/features/map/api/queries';
@@ -35,7 +35,12 @@ export function GisAccessPage(): React.JSX.Element {
           <Skeleton className="h-40 w-full" />
         </div>
       ) : info.isError || !info.data ? (
-        <p className="mt-6 text-sm text-danger">{t('loadFailed')}</p>
+        <div className="mt-6">
+          <p className="text-sm text-danger">{t('loadFailed')}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void info.refetch()}>
+            {t('retry')}
+          </Button>
+        </div>
       ) : (
         <div className="mt-6 space-y-6">
           {/* --- Direct PostGIS (primary path) --- */}

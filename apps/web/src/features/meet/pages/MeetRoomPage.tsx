@@ -6,6 +6,7 @@ import { Loader2, VideoOff } from 'lucide-react';
 import type { MeetRoomDto } from '@cuks/shared';
 import { Button, EmptyState } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useRoom } from '../api/queries';
 import { PreJoinScreen } from '../components/PreJoinScreen';
 import { CallRoom } from '../components/CallRoom';
@@ -16,6 +17,8 @@ export function MeetRoomPage(): React.JSX.Element {
   const navigate = useNavigate();
   const { t } = useTranslation('meet');
   const room = useRoom(slug);
+  // The room DTO carries no display name; the tab shows the section title (docs/06 §8).
+  useDocumentTitle(t('title'));
   const [choices, setChoices] = useState<LocalUserChoices | undefined>();
 
   if (room.isLoading) {

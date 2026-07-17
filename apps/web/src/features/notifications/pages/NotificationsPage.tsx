@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { BellRing, CheckCheck, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
@@ -47,6 +47,10 @@ export function NotificationsPage(): React.JSX.Element {
   const me = useMe();
   const [page, setPage] = useState(1);
   const [unreadOnly, setUnreadOnly] = useState(false);
+
+  useEffect(() => {
+    document.title = t('page.title');
+  }, [t]);
 
   const query = { page, limit: PAGE_SIZE, ...(unreadOnly ? { unread: true } : {}) };
   const list = useNotifications(query);

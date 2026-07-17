@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Label, Skeleton } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { AuthCard } from '../components/AuthCard';
 import { useTotpConfirm, useTotpSetup } from '../api/queries';
 
 export function EnrollTotpPage(): React.JSX.Element {
   const { t } = useTranslation('auth');
+  useDocumentTitle(t('totp.title'));
   const navigate = useNavigate();
   const setup = useTotpSetup();
   const confirm = useTotpConfirm();
@@ -82,9 +84,22 @@ export function EnrollTotpPage(): React.JSX.Element {
         </div>
 
         {errorText ? (
-          <p role="alert" className="text-[13px] text-danger">
-            {errorText}
-          </p>
+          <div className="flex items-center gap-3">
+            <p role="alert" className="text-[13px] text-danger">
+              {errorText}
+            </p>
+            {setup.isError ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void setup.refetch()}
+                disabled={setup.isFetching}
+              >
+                {t('totp.retry')}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         <Button type="submit" className="w-full" disabled={!secret || confirm.isPending}>

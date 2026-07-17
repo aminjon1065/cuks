@@ -18,11 +18,13 @@ import {
   toast,
 } from '@cuks/ui';
 import { useCan } from '@/lib/ability';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useCreateProject, useProjects } from '../api/queries';
 
 /** «Проекты задач» (docs/modules/15 §1, task 4.2): the caller's boards + create. */
 export function ProjectsPage(): React.JSX.Element {
   const { t } = useTranslation('tasks');
+  useDocumentTitle(t('projects.title'));
   const navigate = useNavigate();
   const projects = useProjects();
   const canCreate = useCan('tasks.projects.create');
@@ -48,6 +50,12 @@ export function ProjectsPage(): React.JSX.Element {
             <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
+      ) : projects.isError ? (
+        <EmptyState
+          icon={KanbanSquare}
+          title={t('projects.loadError')}
+          action={<Button onClick={() => void projects.refetch()}>{t('actions.retry')}</Button>}
+        />
       ) : (projects.data ?? []).length === 0 ? (
         <EmptyState
           icon={KanbanSquare}
@@ -129,7 +137,7 @@ function CreateDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
               id="proj-key"
               value={key}
               onChange={(e) => setKey(e.target.value.toUpperCase())}
-              placeholder="ОПЕР"
+              placeholder={t('projects.form.keyPlaceholder')}
               maxLength={12}
               required
             />

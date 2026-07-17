@@ -41,7 +41,7 @@ export function ImportLayerDialog({
   onOpenChange,
   onImported,
 }: ImportLayerDialogProps): React.JSX.Element {
-  const { t } = useTranslation('map');
+  const { t, i18n } = useTranslation('map');
   const queryClient = useQueryClient();
   const startImport = useStartGisImport();
   const [title, setTitle] = useState('');
@@ -83,11 +83,16 @@ export function ImportLayerDialog({
       { file, ...(title.trim() ? { title: title.trim() } : {}) },
       {
         onSuccess: (created) => setImportId(created.id),
-        onError: (error) =>
+        onError: (error) => {
+          // Server errors carry a stable code (docs/04 §REST); the message is an
+          // English log line, so localize the codes we know and fall back for the rest.
+          const code = error instanceof ApiError ? error.code : null;
+          const key = code ? `errors.${code}` : null;
           toast({
-            title: error instanceof ApiError ? error.message : t('import.failed'),
+            title: key && i18n.exists(`map:${key}`) ? t(key) : t('import.failed'),
             tone: 'danger',
-          }),
+          });
+        },
       },
     );
   };

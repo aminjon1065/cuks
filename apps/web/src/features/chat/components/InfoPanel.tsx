@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Check, LogOut, Pencil, Pin, Search, ShieldAlert, UserPlus, X } from 'lucide-react';
-import { Avatar, AvatarFallback, Button, Input, Switch, cn, toast } from '@cuks/ui';
+import { Avatar, AvatarFallback, Button, ConfirmDialog, Input, Switch, cn, toast } from '@cuks/ui';
 import type { ChannelDto, ChannelMemberRole, ChatNotifyLevel } from '@cuks/shared';
 import {
   useAddMember,
@@ -254,6 +254,8 @@ function MembersSection({
   const { t } = useTranslation('chat');
   const remove = useRemoveMember(channel.id);
   const [adding, setAdding] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<{ userId: string; name: string } | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const canLeave = channel.kind !== 'dm' && channel.kind !== 'org';
   const myRank = channel.myRole ? RANK[channel.myRole] : 0;
   const memberIds = useMemo(() => channel.members.map((m) => m.userId), [channel.members]);
@@ -268,7 +270,10 @@ function MembersSection({
 
   const onRemove = (userId: string): void =>
     remove.mutate(userId, {
-      onSuccess: () => toast({ title: t('info.removed'), tone: 'success' }),
+      onSuccess: () => {
+        toast({ title: t('info.removed'), tone: 'success' });
+        setConfirmRemove(null);
+      },
       onError: () => toast({ title: t('info.failed'), tone: 'danger' }),
     });
 
@@ -276,6 +281,7 @@ function MembersSection({
     remove.mutate(meId, {
       onSuccess: () => {
         toast({ title: t('info.left'), tone: 'success' });
+        setConfirmLeave(false);
         onLeft();
       },
       onError: () => toast({ title: t('info.failed'), tone: 'danger' }),
@@ -322,7 +328,7 @@ function MembersSection({
               {removable ? (
                 <button
                   type="button"
-                  onClick={() => onRemove(m.userId)}
+                  onClick={() => setConfirmRemove({ userId: m.userId, name: m.name ?? m.userId })}
                   className="opacity-0 transition group-hover:opacity-100 hover:text-danger"
                   aria-label={t('info.removeMember')}
                 >
@@ -335,9 +341,40 @@ function MembersSection({
       </ul>
 
       {canLeave ? (
-        <Button variant="ghost" size="sm" className="mt-2 text-danger" onClick={onLeave}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2 text-danger"
+          onClick={() => setConfirmLeave(true)}
+        >
           <LogOut className="size-4" /> {t('info.leave')}
         </Button>
+      ) : null}
+
+      {confirmRemove ? (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => !o && setConfirmRemove(null)}
+          title={t('info.removeConfirmTitle')}
+          description={t('info.removeConfirmBody', { name: confirmRemove.name })}
+          confirmLabel={t('info.removeMember')}
+          cancelLabel={t('common.cancel')}
+          loading={remove.isPending}
+          onConfirm={() => onRemove(confirmRemove.userId)}
+        />
+      ) : null}
+
+      {confirmLeave ? (
+        <ConfirmDialog
+          open
+          onOpenChange={setConfirmLeave}
+          title={t('info.leaveConfirmTitle')}
+          description={t('info.leaveConfirmBody')}
+          confirmLabel={t('info.leave')}
+          cancelLabel={t('common.cancel')}
+          loading={remove.isPending}
+          onConfirm={onLeave}
+        />
       ) : null}
     </Section>
   );

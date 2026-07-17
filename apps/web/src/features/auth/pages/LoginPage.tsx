@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Label } from '@cuks/ui';
 import type { LoginInput } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { AuthCard } from '../components/AuthCard';
 import { useLogin } from '../api/queries';
 
@@ -17,6 +18,7 @@ const ERROR_KEY: Record<string, string> = {
 
 export function LoginPage(): React.JSX.Element {
   const { t } = useTranslation('auth');
+  useDocumentTitle(t('login.title'));
   const navigate = useNavigate();
   const location = useLocation();
   const login = useLogin();

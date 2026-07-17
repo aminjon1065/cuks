@@ -6,6 +6,7 @@ import { Button, EmptyState, Input, PageHeader, SidePanel, Skeleton, cn, toast }
 import type { TaskCardDto, TaskPriority } from '@cuks/shared';
 import { TASK_PRIORITIES } from '@cuks/shared';
 import { useMe } from '@/features/auth/api/queries';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { BoardView } from '../components/BoardView';
 import { TaskListView } from '../components/TaskListView';
 import { CardPanel } from '../components/CardPanel';
@@ -29,6 +30,8 @@ export function BoardPage(): React.JSX.Element {
   const projectId = project.data?.id;
   const board = useBoard(projectId);
   useBoardRealtime(projectId);
+
+  useDocumentTitle(project.data?.name ?? t('board.title'));
 
   const move = useMoveCard(projectId ?? '');
   const create = useCreateCard(projectId ?? '');
@@ -161,7 +164,13 @@ export function BoardPage(): React.JSX.Element {
         </div>
       </div>
 
-      {board.isPending || !board.data ? (
+      {board.isError ? (
+        <EmptyState
+          icon={Kanban}
+          title={t('board.loadError')}
+          action={<Button onClick={() => void board.refetch()}>{t('actions.retry')}</Button>}
+        />
+      ) : board.isPending || !board.data ? (
         <div className="flex gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-72 w-72" />

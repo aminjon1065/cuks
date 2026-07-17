@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Download, FileBarChart, Lock, Play, Save, Trash2 } from 'lucide-react';
 import {
   Button,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -15,6 +16,7 @@ import {
   Skeleton,
   toast,
 } from '@cuks/ui';
+import type { SavedReportDto } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
 import { ApiError } from '@/lib/api-client';
 import { useIncidentMapFilterOptions } from '@/features/map/api/queries';
@@ -48,6 +50,7 @@ export function ReportsPage(): React.JSX.Element {
   const [title, setTitle] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SavedReportDto | null>(null);
 
   const run = useRunReport();
   const save = useSaveReport();
@@ -187,7 +190,7 @@ export function ReportsPage(): React.JSX.Element {
                 type="button"
                 className="text-text-muted hover:text-danger"
                 aria-label={t('deleteReport', { name: report.name })}
-                onClick={() => remove.mutate(report.id)}
+                onClick={() => setPendingDelete(report)}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -229,6 +232,25 @@ export function ReportsPage(): React.JSX.Element {
         defaultName={title}
         pending={save.isPending}
         onSubmit={submitSave}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={t('deleteReportTitle')}
+        description={t('deleteReportDescription')}
+        {...(pendingDelete ? { entityName: pendingDelete.name } : {})}
+        confirmLabel={t('deleteReportConfirm')}
+        cancelLabel={t('cancel')}
+        closeLabel={t('cancel')}
+        loading={remove.isPending}
+        destructive
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          remove.mutate(pendingDelete.id, {
+            onSuccess: () => setPendingDelete(null),
+          });
+        }}
       />
     </div>
   );

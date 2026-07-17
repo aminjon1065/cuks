@@ -23,6 +23,7 @@ import type {
   ServiceStatus,
 } from '@cuks/shared';
 import { formatBytes, formatDateTime } from '@/lib/format';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useHealth, useRetryQueue } from '../api/queries';
 
 const OVERALL_TONE: Record<HealthState, 'success' | 'warning' | 'danger'> = {
@@ -38,6 +39,7 @@ function serviceTone(s: ServiceStatus): 'success' | 'danger' | 'neutral' {
 
 export function HealthPage(): React.JSX.Element {
   const { t } = useTranslation('admin');
+  useDocumentTitle(t('health.title'));
   const health = useHealth();
   const retry = useRetryQueue();
   const data = health.data;

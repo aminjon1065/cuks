@@ -26,6 +26,7 @@ import {
 } from '@cuks/ui';
 import type { PermissionCatalogEntry, RoleDto } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import {
   useCreateRole,
   useDeleteRole,
@@ -187,6 +188,7 @@ function RoleEditor({
 
 export function RolesPage(): React.JSX.Element {
   const { t } = useTranslation('admin');
+  useDocumentTitle(t('roles.title'));
   const roles = useRoles();
   const catalog = usePermissionCatalog();
   const create = useCreateRole();

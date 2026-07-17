@@ -38,6 +38,16 @@ export function CatalogDialog({
               <Skeleton className="h-14 rounded-md" />
               <Skeleton className="h-14 rounded-md" />
             </div>
+          ) : catalog.isError ? (
+            <EmptyState
+              icon={Hash}
+              title={t('catalog.loadError')}
+              action={
+                <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>
+                  {t('list.retry')}
+                </Button>
+              }
+            />
           ) : (catalog.data ?? []).length === 0 ? (
             <EmptyState icon={Hash} title={t('catalog.empty')} />
           ) : (

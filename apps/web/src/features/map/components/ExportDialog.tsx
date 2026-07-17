@@ -57,7 +57,7 @@ export function ExportDialog({
   request,
   existingId,
 }: ExportDialogProps): React.JSX.Element {
-  const { t } = useTranslation('map');
+  const { t, i18n } = useTranslation('map');
   const create = useCreateGisExport();
   const [format, setFormat] = useState<GisExportFormat>('geojson');
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -76,6 +76,17 @@ export function ExportDialog({
     create.reset();
   };
 
+  // Server errors carry a stable code (docs/04 §REST); the message is an English
+  // log line, so localize the codes we know and fall back for the rest.
+  const showError = (error: unknown): void => {
+    const code = error instanceof ApiError ? error.code : null;
+    const key = code ? `errors.${code}` : null;
+    toast({
+      title: key && i18n.exists(`map:${key}`) ? t(key) : t('export.failed'),
+      tone: 'danger',
+    });
+  };
+
   const submit = (): void => {
     if (!request) return;
     const input: CreateGisExportInput = {
@@ -86,11 +97,7 @@ export function ExportDialog({
     };
     create.mutate(input, {
       onSuccess: (created) => setCreatedId(created.id),
-      onError: (error) =>
-        toast({
-          title: error instanceof ApiError ? error.message : t('export.failed'),
-          tone: 'danger',
-        }),
+      onError: (error) => showError(error),
     });
   };
 
@@ -100,12 +107,7 @@ export function ExportDialog({
       .then(({ url }) => {
         window.location.href = url;
       })
-      .catch((error: unknown) =>
-        toast({
-          title: error instanceof ApiError ? error.message : t('export.failed'),
-          tone: 'danger',
-        }),
-      );
+      .catch((error: unknown) => showError(error));
   };
 
   return (

@@ -5,6 +5,7 @@ import { CalendarClock, FolderKanban, ListTodo } from 'lucide-react';
 import { Button, EmptyState, PageHeader, Skeleton, StatusBadge, cn, toast } from '@cuks/ui';
 import { TASK_DUE_BUCKETS, taskDueBucket, type MyTaskDto } from '@cuks/shared';
 import { formatDate } from '@/lib/format';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { PRIORITY_STRIPE, dueTone } from '../lib/task-ui';
 import { useMyTasks, useQuickComplete } from '../api/queries';
 
@@ -12,6 +13,7 @@ import { useMyTasks, useQuickComplete } from '../api/queries';
  *  grouped by due proximity, with a quick-complete checkbox and a «где я наблюдатель» filter. */
 export function MyTasksPage(): React.JSX.Element {
   const { t } = useTranslation('tasks');
+  useDocumentTitle(t('my.title'));
   const navigate = useNavigate();
   const [watching, setWatching] = useState(false);
   const query = useMyTasks(watching);
@@ -56,6 +58,12 @@ export function MyTasksPage(): React.JSX.Element {
             <Skeleton key={i} className="h-11 rounded-md" />
           ))}
         </div>
+      ) : query.isError ? (
+        <EmptyState
+          icon={ListTodo}
+          title={t('my.loadError')}
+          action={<Button onClick={() => void query.refetch()}>{t('actions.retry')}</Button>}
+        />
       ) : groups.length === 0 ? (
         <EmptyState
           icon={ListTodo}

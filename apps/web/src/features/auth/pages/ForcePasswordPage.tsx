@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Input, Label } from '@cuks/ui';
 import { PASSWORD_MIN_LENGTH } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { AuthCard } from '../components/AuthCard';
 import { useChangePassword } from '../api/queries';
 
 export function ForcePasswordPage(): React.JSX.Element {
   const { t } = useTranslation('auth');
+  useDocumentTitle(t('forcePassword.title'));
   const navigate = useNavigate();
   const changePassword = useChangePassword();
 

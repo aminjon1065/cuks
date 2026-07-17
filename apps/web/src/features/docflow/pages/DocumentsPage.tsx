@@ -17,6 +17,7 @@ import { useDocuments, useQueueCounts } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
 import { CreateDocumentDialog } from '../components/CreateDocumentDialog';
 import { QueueRowActions } from '../components/QueueRowActions';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 const PAGE_SIZE = 50;
 const selectClass = cn(
@@ -26,6 +27,7 @@ const selectClass = cn(
 
 export function DocumentsPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('documents.title'));
   const navigate = useNavigate();
   const canCreate = useCan('docflow.create');
   const canRegister = useCan('docflow.register');

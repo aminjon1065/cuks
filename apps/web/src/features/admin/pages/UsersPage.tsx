@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@cuks/ui';
 import type { ListUsersQuery, UserStatus } from '@cuks/shared';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useOrgTree, useRoles, useUsers } from '../api/queries';
 import { formatDateTime } from '../lib';
 import { CreateUserDialog } from '../components/CreateUserDialog';
@@ -29,6 +30,7 @@ const PAGE = 25;
 
 export function UsersPage(): React.JSX.Element {
   const { t } = useTranslation('admin');
+  useDocumentTitle(t('users.title'));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<UserStatus | ''>('');

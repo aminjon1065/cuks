@@ -1,20 +1,36 @@
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
-import { EmptyState, PageHeader, Skeleton } from '@cuks/ui';
+import { AlertTriangle, Check, ShieldCheck, ShieldX, X } from 'lucide-react';
+import { Button, EmptyState, PageHeader, Skeleton } from '@cuks/ui';
 import type { VerifyCheckDto } from '@cuks/shared';
 import { formatDateTime } from '@/lib/format';
 import { useVerifySignature } from '../api/queries';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 /** Signature verification page (docs/09-security.md §4, task 3.5): validity, chain to
  *  CA, revocation at signing time, and whether the file still matches. */
 export function VerifyPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('signatures.verify.title'));
   const { signatureId } = useParams<{ signatureId: string }>();
   const query = useVerifySignature(signatureId ?? null);
 
   if (query.isPending) return <Skeleton className="h-80 w-full max-w-2xl rounded-md" />;
-  if (query.isError || !query.data) {
+  if (query.isError) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title={t('common.loadError')}
+        description={t('common.loadErrorHint')}
+        action={
+          <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+            {t('common.retry')}
+          </Button>
+        }
+      />
+    );
+  }
+  if (!query.data) {
     return (
       <EmptyState
         icon={ShieldX}

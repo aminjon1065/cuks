@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileCheck2, Paperclip } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileCheck2, Paperclip } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -40,6 +40,7 @@ import { AccessSection } from '../components/AccessSection';
 import { LinksSection } from '../components/LinksSection';
 import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 import { HistorySection } from '../components/HistorySection';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'tasks', 'history'] as const;
 type CardTab = (typeof CARD_TABS)[number];
@@ -57,11 +58,33 @@ export function DocumentCardPage(): React.JSX.Element {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [tab, setTab] = useState<CardTab>('overview');
+  useDocumentTitle(
+    doc.data
+      ? `${doc.data.regNumber ?? doc.data.subject} — ${t('documents.title')}`
+      : t('documents.title'),
+  );
 
   if (doc.isPending) {
     return <Skeleton className="h-96 w-full rounded-md" />;
   }
-  if (doc.isError || !doc.data) {
+  if (doc.isError) {
+    return (
+      <div className="flex flex-col gap-4">
+        <BackLink />
+        <EmptyState
+          icon={AlertTriangle}
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void doc.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+  if (!doc.data) {
     return (
       <div className="flex flex-col gap-4">
         <BackLink />

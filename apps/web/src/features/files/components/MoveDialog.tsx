@@ -94,8 +94,17 @@ export function MoveDialog({
             <div className="flex h-full items-center justify-center">
               <Loader2 className="size-5 animate-spin text-text-muted" />
             </div>
+          ) : tree.isError ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-xs text-text-muted">
+              <span>{t('moveDialog.loadError')}</span>
+              <Button variant="outline" size="sm" onClick={() => void tree.refetch()}>
+                {t('moveDialog.retry')}
+              </Button>
+            </div>
           ) : folders.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-xs text-text-muted">—</div>
+            <div className="flex h-full items-center justify-center text-xs text-text-muted">
+              {t('moveDialog.empty')}
+            </div>
           ) : (
             folders.map((f) => (
               <button

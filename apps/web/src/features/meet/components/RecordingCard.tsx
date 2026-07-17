@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Download, Loader2, Trash2, TriangleAlert } from 'lucide-react';
 import type { RecordingDto } from '@cuks/shared';
 import { Button, ConfirmDialog, toast } from '@cuks/ui';
@@ -13,10 +14,12 @@ function formatDuration(sec: number | null): string {
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
-function formatSize(bytes: number | null): string {
+function formatSize(bytes: number | null, t: TFunction<'meet'>): string {
   if (!bytes) return '';
   const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} ГБ` : `${Math.max(1, Math.round(mb))} МБ`;
+  return mb >= 1024
+    ? t('recordings.gb', { value: (mb / 1024).toFixed(1) })
+    : t('recordings.mb', { value: Math.max(1, Math.round(mb)) });
 }
 
 /** One recording in the «Записи» list (docs/modules/14 §4): metadata + inline player + download/delete. */
@@ -41,7 +44,7 @@ export function RecordingCard({ recording }: { recording: RecordingDto }): React
           <p className="mt-1 text-xs text-text-muted">
             {t('room.participantsCount', { count: recording.participantCount })}
             {ready
-              ? ` · ${formatDuration(recording.durationSec)} · ${formatSize(recording.sizeBytes)}`
+              ? ` · ${formatDuration(recording.durationSec)} · ${formatSize(recording.sizeBytes, t)}`
               : ''}
           </p>
         </div>

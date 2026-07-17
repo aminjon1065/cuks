@@ -35,6 +35,7 @@ import type {
   NomenclatureDto,
 } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import {
   useCorrespondentCategories,
   useCorrespondents,
@@ -75,6 +76,7 @@ function useActionError() {
 
 export function DocflowSettingsPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('settings.title'));
   const [tab, setTab] = useState<Tab>('journals');
   return (
     <div className="flex flex-col gap-4">
@@ -130,7 +132,15 @@ function JournalsPanel(): React.JSX.Element {
       {journals.isPending ? (
         <Skeleton className="h-48 w-full rounded-md" />
       ) : journals.isError ? (
-        <EmptyState title={t('common.loadError')} description={t('common.loadErrorHint')} />
+        <EmptyState
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void journals.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : journals.data.length === 0 ? (
         <EmptyState
           title={t('journals.empty.title')}
@@ -347,7 +357,15 @@ function CorrespondentsPanel(): React.JSX.Element {
       {correspondents.isPending ? (
         <Skeleton className="h-48 w-full rounded-md" />
       ) : correspondents.isError ? (
-        <EmptyState title={t('common.loadError')} description={t('common.loadErrorHint')} />
+        <EmptyState
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void correspondents.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : correspondents.data.length === 0 ? (
         <EmptyState
           title={t('correspondents.empty.title')}
@@ -538,7 +556,15 @@ function NomenclaturePanel(): React.JSX.Element {
       {items.isPending ? (
         <Skeleton className="h-48 w-full rounded-md" />
       ) : items.isError ? (
-        <EmptyState title={t('common.loadError')} description={t('common.loadErrorHint')} />
+        <EmptyState
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void items.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : items.data.length === 0 ? (
         <EmptyState
           title={t('nomenclature.empty.title')}

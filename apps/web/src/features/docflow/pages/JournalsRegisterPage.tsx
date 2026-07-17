@@ -9,6 +9,7 @@ import { useCan } from '@/lib/ability';
 import { formatDateTime } from '@/lib/format';
 import { useDocuments, useJournals } from '../api/queries';
 import { RegisterWizard } from '../components/RegisterWizard';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 const selectClass = cn(
   'h-9 rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -22,6 +23,7 @@ const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
  *  the registered documents, print the register, and launch the incoming-doc wizard. */
 export function JournalsRegisterPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('register.journals.title'));
   const navigate = useNavigate();
   const canRegister = useCan('docflow.register');
   const journals = useJournals();

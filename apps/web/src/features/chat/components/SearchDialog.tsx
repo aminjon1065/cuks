@@ -115,6 +115,16 @@ export function SearchDialog({
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-text-muted">
                 <Loader2 className="size-4 animate-spin" /> {t('search.searching')}
               </div>
+            ) : search.isError ? (
+              <EmptyState
+                icon={Search}
+                title={t('search.loadError')}
+                action={
+                  <Button variant="outline" size="sm" onClick={() => void search.refetch()}>
+                    {t('list.retry')}
+                  </Button>
+                }
+              />
             ) : results.length === 0 ? (
               <EmptyState icon={Search} title={t('search.empty')} />
             ) : (

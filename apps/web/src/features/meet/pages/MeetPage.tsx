@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CalendarPlus, Film, Link2, Loader2, Video } from 'lucide-react';
+import { CalendarPlus, Film, Link2, RefreshCw, Video } from 'lucide-react';
 import type { MeetingDto, MeetingsRange } from '@cuks/shared';
-import { Button, EmptyState, Input, PageHeader, cn, toast } from '@cuks/ui';
+import { Button, EmptyState, Input, PageHeader, Skeleton, cn, toast } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
+import { useDocumentTitle } from '@/lib/use-document-title';
 import { useCreateRoom, useMeetings } from '../api/queries';
 import { MeetingCard } from '../components/MeetingCard';
 import { ScheduleMeetingDialog } from '../components/ScheduleMeetingDialog';
@@ -24,6 +25,7 @@ function parseSlug(raw: string): string | null {
  *  instant call, joining by link, and scheduling a meeting. */
 export function MeetPage(): React.JSX.Element {
   const { t } = useTranslation('meet');
+  useDocumentTitle(t('title'));
   const navigate = useNavigate();
   const createRoom = useCreateRoom();
   const [range, setRange] = useState<MeetingsRange>('today');
@@ -126,11 +128,35 @@ export function MeetPage(): React.JSX.Element {
 
       <div className="mt-4 space-y-2">
         {meetings.isPending ? (
-          <div className="flex justify-center py-10 text-text-muted">
-            <Loader2 className="size-5 animate-spin" />
-          </div>
+          <>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-border bg-surface-1 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-3 w-1/3" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                  <Skeleton className="h-8 w-20" />
+                </div>
+              </div>
+            ))}
+          </>
         ) : meetings.isError ? (
-          <EmptyState icon={Video} title={t('toast.actionFailed')} />
+          <EmptyState
+            icon={Video}
+            title={t('error.meetingsLoadFailed')}
+            action={
+              <Button
+                variant="secondary"
+                className="gap-1.5"
+                onClick={() => void meetings.refetch()}
+              >
+                <RefreshCw className="size-4" />
+                {t('retry')}
+              </Button>
+            }
+          />
         ) : (meetings.data?.length ?? 0) === 0 ? (
           <EmptyState
             icon={CalendarPlus}

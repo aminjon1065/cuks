@@ -44,7 +44,7 @@ export function CreateLayerDialog({
   onOpenChange,
   onCreated,
 }: CreateLayerDialogProps): React.JSX.Element {
-  const { t } = useTranslation('map');
+  const { t, i18n } = useTranslation('map');
   const create = useCreateGisLayer();
   const palette = useMemo(
     () => COLOR_TOKENS.map((token) => ({ token, hex: cssToken(token, '#15803d') })),
@@ -73,11 +73,16 @@ export function CreateLayerDialog({
           close();
           onCreated(layer.id);
         },
-        onError: (error) =>
+        onError: (error) => {
+          // Server errors carry a stable code (docs/04 §REST); the message is an
+          // English log line, so localize the codes we know and fall back for the rest.
+          const code = error instanceof ApiError ? error.code : null;
+          const key = code ? `errors.${code}` : null;
           toast({
-            title: error instanceof ApiError ? error.message : t('drawn.createFailed'),
+            title: key && i18n.exists(`map:${key}`) ? t(key) : t('drawn.createFailed'),
             tone: 'danger',
-          }),
+          });
+        },
       },
     );
   };

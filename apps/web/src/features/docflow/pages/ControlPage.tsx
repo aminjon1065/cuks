@@ -23,6 +23,7 @@ import type { ControlItemDto } from '@cuks/shared';
 import { formatDate } from '@/lib/format';
 import { useControlList, useControlResolutionAction } from '../api/queries';
 import { controlSeverityTone } from '../lib/document';
+import { useDocumentTitle } from '@/lib/use-document-title';
 
 const inputClass = cn(
   'h-9 w-full rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
@@ -33,6 +34,7 @@ const inputClass = cn(
  *  deadline, colour-coded by severity, with Продлить / Снять actions. */
 export function ControlPage(): React.JSX.Element {
   const { t } = useTranslation('docflow');
+  useDocumentTitle(t('control.title'));
   const navigate = useNavigate();
   const list = useControlList();
   const [extendItem, setExtendItem] = useState<ControlItemDto | null>(null);
