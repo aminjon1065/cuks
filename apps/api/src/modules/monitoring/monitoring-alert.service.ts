@@ -37,38 +37,46 @@ export class MonitoringAlertService {
   async postAlert(text: string): Promise<void> {
     const channelId = this.channelId;
     if (!channelId) return;
-    // Guard against an orphan message if the channel id is mistyped.
-    const [channel] = await this.db
-      .select({ id: chatChannels.id })
-      .from(chatChannels)
-      .where(eq(chatChannels.id, channelId))
-      .limit(1);
-    if (!channel) {
-      this.logger.warn({ channelId }, 'MONITORING_ALERT_CHANNEL_ID does not exist; alert dropped');
-      return;
-    }
+    // An alert must never 500 the webhook (which would also inflate the dashboard's 24h error count).
+    // A mistyped channel id — missing OR not a valid uuid (Postgres would reject the query) — is dropped.
+    try {
+      const [channel] = await this.db
+        .select({ id: chatChannels.id })
+        .from(chatChannels)
+        .where(eq(chatChannels.id, channelId))
+        .limit(1);
+      if (!channel) {
+        this.logger.warn(
+          { channelId },
+          'MONITORING_ALERT_CHANNEL_ID does not exist; alert dropped',
+        );
+        return;
+      }
 
-    const now = new Date();
-    const [row] = await this.db
-      .insert(chatMessages)
-      .values({
+      const now = new Date();
+      const [row] = await this.db
+        .insert(chatMessages)
+        .values({
+          channelId,
+          authorId: null,
+          kind: 'system',
+          body: null,
+          bodyText: text.slice(0, 2000),
+          fileIds: [],
+          createdAt: now,
+        })
+        .returning({ id: chatMessages.id });
+      await this.db
+        .update(chatChannels)
+        .set({ lastMessageAt: now, updatedAt: now })
+        .where(eq(chatChannels.id, channelId));
+      this.realtime.emitToRoom(wsRooms.channel(channelId), 'chat.message.created', {
         channelId,
-        authorId: null,
-        kind: 'system',
-        body: null,
-        bodyText: text.slice(0, 2000),
-        fileIds: [],
-        createdAt: now,
-      })
-      .returning({ id: chatMessages.id });
-    await this.db
-      .update(chatChannels)
-      .set({ lastMessageAt: now, updatedAt: now })
-      .where(eq(chatChannels.id, channelId));
-    this.realtime.emitToRoom(wsRooms.channel(channelId), 'chat.message.created', {
-      channelId,
-      messageId: row!.id,
-      actorId: '',
-    });
+        messageId: row!.id,
+        actorId: '',
+      });
+    } catch (err) {
+      this.logger.warn({ err, channelId }, 'failed to post monitoring alert; dropped');
+    }
   }
 }

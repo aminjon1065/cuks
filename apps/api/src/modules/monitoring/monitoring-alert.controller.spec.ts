@@ -44,4 +44,11 @@ describe('MonitoringAlertController.alert', () => {
     });
     expect(alerts.postAlert).toHaveBeenCalledWith('Мониторинг: GeoServer — недоступен');
   });
+
+  it('does not 500 on a null / bodyless POST (normalises to a fallback line)', async () => {
+    const { controller, alerts } = make({ secret: 'topsecret' });
+    await expect(controller.alert('topsecret', null)).resolves.toEqual({ ok: true });
+    await expect(controller.alert('topsecret', undefined)).resolves.toEqual({ ok: true });
+    expect(alerts.postAlert).toHaveBeenCalledWith('Мониторинг: сервис — недоступен');
+  });
 });

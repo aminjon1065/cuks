@@ -20,7 +20,7 @@ export class MonitoringAlertController {
   @ApiExcludeEndpoint()
   async alert(
     @Headers('x-monitoring-secret') provided: string | undefined,
-    @Body() body: Record<string, unknown>,
+    @Body() body: unknown,
   ): Promise<{ ok: true }> {
     if (!this.alerts.enabled) {
       throw AppException.notFound(
@@ -44,8 +44,11 @@ function secretMatches(expected: string | undefined, provided: string | undefine
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Build a readable line from an Uptime Kuma payload ({ msg, monitor, heartbeat }) or fall back. */
-function alertText(body: Record<string, unknown>): string {
+/** Build a readable line from an Uptime Kuma payload ({ msg, monitor, heartbeat }) or fall back. The
+ *  body is unvalidated (Fastify delivers null for a literal `null` JSON body, undefined for a bodyless
+ *  POST), so normalise to an object before dereferencing — a malformed ping must not 500. */
+function alertText(raw: unknown): string {
+  const body = asRecord(raw) ?? {};
   if (typeof body.msg === 'string' && body.msg.trim()) return body.msg.trim();
   const monitor = asRecord(body.monitor);
   const heartbeat = asRecord(body.heartbeat);
