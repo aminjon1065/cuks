@@ -22,7 +22,7 @@
     "@nestjs/core": "^11.0.1",
     "bullmq": "^5.80.2",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.2",
     "file-type": "^22.0.1",
     "gdal-async": "^3.12.3",
     "mammoth": "^1.12.0",
