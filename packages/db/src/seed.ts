@@ -25,10 +25,12 @@ import {
   taskColumns,
   taskProjectMembers,
   taskProjects,
+  tasks,
   userPositions,
   userRoles,
   users,
 } from './schema/index';
+import { chatMessages } from './unmanaged/chat-messages';
 import { and, inArray, isNull } from 'drizzle-orm';
 
 const SUPERADMIN_ROLE_CODE = 'superadmin';
@@ -1292,6 +1294,172 @@ async function seedOrgChannels(db: Database): Promise<void> {
   );
 }
 
+/** Minimal TipTap doc for a chat text message body (the renderer expects doc>paragraph>text). */
+function textDoc(text: string): unknown {
+  return { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] };
+}
+
+const DEMO_TASK_ID = (n: number): string =>
+  `0190a5c1-0000-7000-8000-${String(n).padStart(12, '0')}`;
+
+/** Board cards for the ops project (`col` = index into OPS_COLUMNS). */
+const DEMO_TASKS = [
+  {
+    col: 0,
+    title: 'Уточнить сводку по паводковой обстановке в Хатлонской области',
+    prio: 'p2',
+    who: 'latifi.z',
+  },
+  {
+    col: 0,
+    title: 'Подготовить проект распоряжения о готовности сил РСЧС',
+    prio: 'p2',
+    who: 'nazarova.n',
+  },
+  {
+    col: 0,
+    title: 'Проверить резерв ГСМ на складах длительного хранения',
+    prio: 'p3',
+    who: 'nozimov.h',
+  },
+  {
+    col: 1,
+    title: 'Организовать эвакуацию из зоны подтопления (джамоат Восеъ)',
+    prio: 'p1',
+    who: 'karimova.o',
+  },
+  {
+    col: 1,
+    title: 'Свести донесения районных управлений за прошедшие сутки',
+    prio: 'p3',
+    who: 'latifi.z',
+  },
+  { col: 2, title: 'Развернуть оперативный штаб КЧС', prio: 'p1', who: 'rahimov.d', done: true },
+  {
+    col: 2,
+    title: 'Оповестить население через СМС-рассылку',
+    prio: 'p2',
+    who: 'nozimov.h',
+    done: true,
+  },
+] as const;
+
+/** A realistic operational chat thread for the central-apparatus channel. */
+const DEMO_THREAD: readonly { who: string; text: string }[] = [
+  {
+    who: 'admin',
+    text: 'Коллеги, по ЧС-DEMO-001 (паводок, Хатлон) собираем оперативную сводку к 14:00.',
+  },
+  { who: 'rahimov.d', text: 'Оперативный штаб развёрнут, дежурная смена на месте.' },
+  { who: 'latifi.z', text: 'От управления Восеъ: подтоплено 12 домохозяйств, эвакуация начата.' },
+  { who: 'karimova.o', text: 'Направили две группы спасателей и автоцистерну.' },
+  { who: 'nazarova.n', text: 'Проект распоряжения о готовности сил РСЧС подготовлю к обеду.' },
+  { who: 'nozimov.h', text: 'Резерв ГСМ проверен — в норме.' },
+  { who: 'admin', text: 'Принято. СМС-оповещение населения запустили?' },
+  { who: 'nozimov.h', text: 'Да, рассылка ушла по зоне подтопления.' },
+];
+
+const CENTRAL_APPARATUS_ORG_ID = '0190a000-0000-7000-8000-000000000002';
+
+/**
+ * Presentation-ready demo content across modules for a leadership walkthrough (task 7.8): board cards on
+ * the ops project + a realistic ops chat thread. Idempotent — task ids are fixed (onConflictDoNothing) and
+ * the thread is skipped if the channel already has messages. Runs only in `--demo` mode.
+ */
+async function seedDemoContent(db: Database, adminId: string): Promise<void> {
+  // Look up the demo roster (created by seedDemoUsers) by username.
+  const roster = await db.select({ id: users.id, username: users.username }).from(users);
+  const idByUsername = new Map(roster.map((u) => [u.username, u.id]));
+  idByUsername.set('admin', adminId);
+  const resolve = (who: string): string => idByUsername.get(who) ?? adminId;
+
+  // --- Board cards ---
+  const now = new Date();
+  // Idempotency: if the first demo card is already present, the demo content was seeded — skip everything.
+  const [already] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.id, DEMO_TASK_ID(1)))
+    .limit(1);
+  if (already) {
+    console.log('Demo content already present, skipping.');
+    return;
+  }
+  // Fresh per-project seq numbers after any existing tasks (the ops project may already have real cards).
+  const seqRows = await db
+    .select({ maxSeq: sql<number>`coalesce(max(${tasks.seq}), 0)` })
+    .from(tasks)
+    .where(eq(tasks.projectId, OPS_PROJECT_ID));
+  const base = Number(seqRows[0]?.maxSeq ?? 0);
+  const byColumn = new Map<number, number>(); // column index -> how many cards placed (for order keys)
+  for (const [i, task] of DEMO_TASKS.entries()) {
+    const inCol = byColumn.get(task.col) ?? 0;
+    byColumn.set(task.col, inCol + 1);
+    const orderInColumn = keysBetween(
+      null,
+      null,
+      DEMO_TASKS.filter((t) => t.col === task.col).length,
+    )[inCol]!;
+    await db
+      .insert(tasks)
+      .values({
+        id: DEMO_TASK_ID(i + 1),
+        projectId: OPS_PROJECT_ID,
+        columnId: OPS_COLUMN_IDS[task.col]!,
+        seq: base + i + 1,
+        title: task.title,
+        authorId: adminId,
+        assigneeIds: [resolve(task.who)],
+        priority: task.prio,
+        orderInColumn,
+        ...('done' in task && task.done ? { completedAt: now } : {}),
+        createdAt: now,
+      })
+      .onConflictDoNothing({ target: tasks.id });
+  }
+  await db
+    .update(taskProjects)
+    .set({ lastSeq: base + DEMO_TASKS.length })
+    .where(eq(taskProjects.id, OPS_PROJECT_ID));
+
+  // --- Ops chat thread (only if the channel is still empty, so re-seeding doesn't duplicate) ---
+  const [channel] = await db
+    .select({ id: chatChannels.id })
+    .from(chatChannels)
+    .where(and(eq(chatChannels.orgUnitId, CENTRAL_APPARATUS_ORG_ID), eq(chatChannels.kind, 'org')))
+    .limit(1);
+  if (channel) {
+    const [firstMsg] = await db
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.channelId, channel.id))
+      .limit(1);
+    if (!firstMsg) {
+      let lastAt = now;
+      for (const [i, m] of DEMO_THREAD.entries()) {
+        // Space messages over the last ~40 minutes so the feed reads naturally.
+        const at = new Date(now.getTime() - (DEMO_THREAD.length - i) * 5 * 60 * 1000);
+        lastAt = at;
+        await db.insert(chatMessages).values({
+          channelId: channel.id,
+          authorId: resolve(m.who),
+          kind: 'text',
+          body: textDoc(m.text),
+          bodyText: m.text,
+          fileIds: [],
+          createdAt: at,
+        });
+      }
+      await db
+        .update(chatChannels)
+        .set({ lastMessageAt: lastAt })
+        .where(eq(chatChannels.id, channel.id));
+    }
+  }
+
+  console.log(`Demo content seeded: ${DEMO_TASKS.length} board cards, ops chat thread.`);
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   const isDemo = process.argv.includes('--demo');
@@ -1324,6 +1492,8 @@ async function main(): Promise<void> {
       // Re-run now that the demo roster exists, so duty officers attach as editors / channel members.
       await seedDefaultTaskProject(db, adminId);
       await seedOrgChannels(db);
+      // Presentation content across modules (board cards + ops chat thread) — needs the roster/board/channels.
+      await seedDemoContent(db, adminId);
     }
   } finally {
     await pool.end();
