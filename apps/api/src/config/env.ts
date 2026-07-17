@@ -55,6 +55,16 @@ export const envSchema = z
     S3_REGION: z.string().default('us-east-1'),
     S3_BUCKET: z.string().default('cuks'),
 
+    // Antivirus (ClamAV) — the worker scans uploads; the api only probes it for the health dashboard.
+    CLAMAV_HOST: z.string().default('clamav'),
+    CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+
+    // Monitoring alert webhook (docs/modules/16 §7, task 7.3). Uptime Kuma POSTs alerts to
+    // /api/v1/monitoring/alert with the X-Monitoring-Secret header; matching alerts are posted as a
+    // system message into MONITORING_ALERT_CHANNEL_ID. Both unset -> the endpoint is disabled.
+    MONITORING_WEBHOOK_SECRET: optionalString(),
+    MONITORING_ALERT_CHANNEL_ID: optionalString(),
+
     // Later phases — optional for now.
     SMTP_URL: optionalString(),
     LIVEKIT_URL: optionalString(),

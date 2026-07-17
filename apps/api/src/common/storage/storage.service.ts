@@ -8,6 +8,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -54,6 +55,26 @@ export class StorageService {
     config: ConfigService,
   ) {
     this.bucket = config.get('S3_BUCKET');
+  }
+
+  /** Total bytes + object count of the bucket (admin health dashboard, docs/modules/16 §7). Paginates
+   *  ListObjectsV2; on a large bucket this is O(objects/1000) HEAD-less list calls, so callers should
+   *  cache the result rather than probe it per request. */
+  async bucketSize(): Promise<{ bytes: number; objects: number }> {
+    let bytes = 0;
+    let objects = 0;
+    let token: string | undefined;
+    do {
+      const res = await this.s3.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, ContinuationToken: token }),
+      );
+      for (const obj of res.Contents ?? []) {
+        bytes += obj.Size ?? 0;
+        objects += 1;
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (token);
+    return { bytes, objects };
   }
 
   /** Idempotent — safe to call on every boot (mirrors `ensure_audit_log_partition`). */

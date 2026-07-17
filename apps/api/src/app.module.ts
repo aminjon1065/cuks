@@ -32,6 +32,7 @@ import { GisModule } from './modules/gis/gis.module';
 import { HealthModule } from './modules/health/health.module';
 import { IncidentsModule } from './modules/incidents/incidents.module';
 import { MeetModule } from './modules/meet/meet.module';
+import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrgModule } from './modules/org/org.module';
 import { UsersModule } from './modules/users/users.module';
@@ -96,6 +97,7 @@ import { UsersModule } from './modules/users/users.module';
     DirectoryModule,
     MeetModule,
     HealthModule,
+    MonitoringModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

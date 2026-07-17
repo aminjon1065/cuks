@@ -9,6 +9,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '@cuks/shared';
 import { AppException } from '../exceptions/app.exception';
+import { MetricsService } from '../../modules/monitoring/metrics.service';
 
 /**
  * Renders every error as the standard envelope (docs/04 §REST):
@@ -17,6 +18,8 @@ import { AppException } from '../exceptions/app.exception';
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  constructor(private readonly metrics: MetricsService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -41,8 +44,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
-      // Only 5xx are unexpected — log with the stack for diagnosis.
+      // Only 5xx are unexpected — log with the stack for diagnosis and count it for the
+      // admin health dashboard's "errors in 24h" widget (docs/modules/16 §7).
       this.logger.error({ err: exception, requestId }, 'Unhandled error');
+      this.metrics.recordError();
       message = 'Internal server error';
       details = undefined;
     }
