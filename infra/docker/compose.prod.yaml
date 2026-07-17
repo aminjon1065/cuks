@@ -252,6 +252,20 @@ services:
     mem_limit: 512m
     logging: *logging
 
+  # Uptime Kuma — the actual monitoring (docs/08 §Мониторинг, docs/runbook-monitoring.md, task 7.3): pings
+  # the internal services and POSTs alerts to /api/monitoring/alert, which drops them into the ops chat
+  # channel. Its own UI is bound to localhost only (reach it over an SSH tunnel to configure monitors) so
+  # the monitoring console is never exposed on the network. It shares cuks_default to reach services by name.
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3001:3001'
+    volumes:
+      - uptimekuma:/app/data
+    mem_limit: 512m
+    logging: *logging
+
 volumes:
   pgdata:
   redisdata:
@@ -263,3 +277,4 @@ volumes:
   ca_data:
   egresstmp:
   backupdata:
+  uptimekuma:

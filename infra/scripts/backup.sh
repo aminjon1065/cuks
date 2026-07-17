@@ -43,11 +43,13 @@ PGPASSWORD="${POSTGRES_PASSWORD}" pg_dump -h "${PG_HOST}" -U "${POSTGRES_USER}" 
   -Fc --no-owner --no-privileges -f "${STAGE}/pg/${POSTGRES_DB}.dump"
 
 # 3. One snapshot: the dump plus the read-only data volumes. Missing/empty mounts
-#    (e.g. no Caddy certs yet) are fine — restic stores an empty tree.
+#    (e.g. no Caddy certs yet) are fine — restic stores an empty tree. tee keeps the
+#    output visible (and, on failure, pipefail aborts) while we parse the snapshot id.
 log "restic backup"
 restic backup --tag "${BACKUP_TAGS:-scheduled}" --host cuks \
   "${STAGE}/pg" \
-  /data/minio /data/geoserver /data/ca /data/caddy
+  /data/minio /data/geoserver /data/ca /data/caddy | tee /tmp/restic-backup.out
+SNAP_ID="$(sed -n 's/^snapshot \([0-9a-f]\{6,\}\) saved$/\1/p' /tmp/restic-backup.out | tail -n1)"
 
 # 4. Retention + prune old snapshots.
 log "restic forget --keep-daily ${KEEP_DAILY} --keep-monthly ${KEEP_MONTHLY} --prune"
@@ -59,6 +61,18 @@ rm -rf "${STAGE}/pg"
 # 6. Cheap integrity check: verify structure + read a 5% sample of pack data.
 log "restic check"
 restic check --read-data-subset=1/20
+
+# 7. Record a marker row for the admin health dashboard (docs/modules/16 §7). Tolerant: a missing table
+#    (migrations not yet applied) or a transient DB error must not fail an otherwise-successful backup.
+UUID="$(cat /proc/sys/kernel/random/uuid)"
+if PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${PG_HOST}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+  -v ON_ERROR_STOP=1 -qtAc \
+  "INSERT INTO app.backup_runs (id, snapshot_id) VALUES ('${UUID}', NULLIF('${SNAP_ID}', ''));" \
+  >/dev/null 2>&1; then
+  log "recorded backup marker (snapshot ${SNAP_ID:-unknown})"
+else
+  log "warning: could not record backup marker (is app.backup_runs migrated?)"
+fi
 
 log "backup complete"
 restic snapshots --compact 2>/dev/null | tail -n 5 || true
