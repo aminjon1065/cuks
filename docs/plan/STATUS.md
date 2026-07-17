@@ -4,8 +4,8 @@
 
 ## Текущее состояние
 
-- **Фаза**: 7 (Hardening) — в работе. 7.1–7.4 готовы, 7.5 в работе. Фаза 6 завершена (6.1–6.7).
-- **Последняя сессия**: 2026-07-17 — задача 7.4 (нагрузка k6 + профилирование pg_stat_statements)
+- **Фаза**: 7 (Hardening) — в работе. 7.1–7.5 готовы, 7.6 в работе. Фаза 6 завершена (6.1–6.7).
+- **Последняя сессия**: 2026-07-17 — задача 7.5 (безопасность: pnpm audit, trivy/ZAP, 2FA-аудит, CSP)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -21,11 +21,41 @@
 | 4 Задачи          | 🟢 задачи 4.1–4.6 готовы       | —                  |
 | 5 Чат             | 🟢 задачи 5.1–5.8 готовы       | приёмка §10: критерии закрыты, финальный ОК заказчика — открыт |
 | 6 Звонки          | 🟢 задачи 6.1–6.7 готовы       | приёмка §9: автотесты закрыты, медиа-критерии — ручной runbook (14-acceptance.md), финальный ОК заказчика — открыт |
-| 7 Hardening       | 🟡 7.1–7.4 готовы (7.5–7.8 впереди) | —              |
+| 7 Hardening       | 🟡 7.1–7.5 готовы (7.6–7.8 впереди) | —              |
 
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-17 — Фаза 7: задача 7.5 (безопасность, чеклист 09 §7)
+
+**Сделано** (по `docs/09` §7, `docs/runbook-security.md`; коммиты `fix(deps): resolve pnpm audit…`,
+`feat(security): pre-prod security tooling…`, `fix(security): correct scan gating…`):
+
+- **pnpm audit**: `drizzle-orm 0.38.4 → 0.45.2` (HIGH SQL-injection GHSA-gpj5-g38j-94v9) + `drizzle-kit →
+  0.31.10` — чистое обновление (весь гейт зелёный, `db:generate` без дрейфа); `echarts 5.6.0 → 6.1.0`
+  (moderate XSS) — web typecheck/tests/build зелёные. Остались 2 moderate `@fastify/static` — **обоснованное
+  исключение** (единственный потребитель — Swagger UI, поднимается только вне прод: `if (!isProduction)`).
+- **Инструменты** (`infra/security/`): `trivy-scan.sh` (+`.trivyignore`) — скан образов, падает на CRITICAL;
+  `zap-baseline.sh` (+`zap-rules.tsv`) — OWASP ZAP baseline (пассивный) по стейджу через docker;
+  `admins-without-2fa.sql` — аудит, что никто не обошёл `TotpEnrollmentGuard` (0 строк).
+- **CSP** (Caddyfile): добавлены `object-src 'none'` + `form-action 'self'`; `script-src 'self'` без
+  unsafe-inline; `style-src 'unsafe-inline'` оставлен под MapLibre/Radix (задокументировано). `caddy
+  validate` OK.
+- **Дефолтные пароли**: в git нет — все секреты через `${VAR:?}`. Runbook `docs/runbook-security.md`.
+
+**Ревью** (adversarial, 4 измерения → 2 скептика; коммит `fix(security): correct scan gating…`): 4
+подтверждённых (по сути 2 бага, каждый отмечен дважды) + 1 split-vote (механизм подтверждён), все исправлены:
+- `zap-baseline.sh` без `-I` → WARN-алерты (их много у SPA) валили прогон (exit 2 + `set -e`) вопреки
+  документированному «падать только на FAIL». Добавлен `-I`.
+- `trivy-scan.sh` пропускал app-facing образы (geoserver 2.26.1 — за Caddy, история RCE; clamav — сканит
+  загрузки; martin — за Caddy; egress) — CRITICAL там молча бы прошёл. Добавлены в список.
+- **split**: `admins-without-2fa.sql` считал назначения на soft-deleted роли → ложные срабатывания. Добавлен
+  join `roles` с `deleted_at IS NULL`.
+
+**Решения**: `@fastify/static` — исключение (dev-only Swagger); style-src unsafe-inline — принято (нет
+nonce-хука у MapLibre/Radix). Дальше — 7.6 (полировка UX + tg-локализация; заказчик выбрал ПОЛНУЮ tg на все
+экраны).
 
 ### 2026-07-17 — Фаза 7: задача 7.4 (нагрузка + профилирование)
 
