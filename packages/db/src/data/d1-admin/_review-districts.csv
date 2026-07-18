@@ -1,0 +1,29 @@
+raw_token,kind,targets,note
+Љумњурии Исломии Афѓонистон,foreign,Afghanistan,Исламская Республика Афганистан. Верно.
+в. Акмолинск,foreign,Kazakhstan,"Акмолинск — Казахстан (б. Акмола/Целиноград, ныне Астана) → заграница. Верно."
+в. Краснодар,foreign,Russia,Краснодар — город РФ. Верно.
+в. Рязан,foreign,Russia,"Рязань, РФ. Верно."
+в. Рязань,foreign,Russia,Рязань — город РФ. Верно.
+в. Саратов,foreign,Russia,Саратов — город/область в РФ → заграница. Верно.
+в. Тюмен,foreign,Russia,"Тюмень, РФ. Верно."
+в. Уфа,foreign,Russia,Уфа — город в РФ (Башкортостан) → заграница. Верно.
+в. Челябинск,foreign,Russia,Челябинск — город РФ. Верно.
+в. Чуйск,foreign,Kyrgyzstan,"Chuy (Чуйск) province/region, Kyrgyzstan; 'в.' = вилояти (province)."
+"вилояти Калуга, нохияи Мещовск",foreign,Russia,"Калужская область, Мещовский район, РФ — единая заграничная локация (не multi). Верно."
+н. Ак- Торпок,foreign,Kyrgyzstan,"Ак-Торпок, Кыргызстан (по списку). Верно."
+н. Красногвардейский,foreign,Russia,Krasnogvardeysky is a Russian district [critic fix]
+ноњияи Ќордайи вилояти Љамбил,foreign,Kazakhstan,"'Korday district of Jambyl Region' = Korday, Jambyl Region, Kazakhstan."
+ш. Актюбинск,foreign,Kazakhstan,"Актюбинск (Актобе), Казахстан. Верно."
+ш. Волгодонск,foreign,Russia,Волгодонск — город РФ. Верно.
+ш. Державинскии,foreign,Kazakhstan,"Derzhavinsk (Akmola Region), Kazakhstan; misspelling with trailing -ii; foreign/KZ is the best fit."
+ш. Москва,foreign,Russia,Moscow city (labor-migrant death) — not Hamadoni [critic fix]
+ш. Санкт Петербург,foreign,Russia,"Saint Petersburg, Russia — migration destination."
+ш. Сулюкта,foreign,Kyrgyzstan,"Sulyukta, Batken Region, Kyrgyzstan."
+шахри Краногорск,foreign,Russia,"шаҳри=город; Краногорск=Красногорск (опечатка), город в Московской обл. РФ → заграница. Верно."
+РТ,national,,"РТ = Республикаи Тоҷикистон = whole republic → national, targets empty."
+по 13 районам,national,,"'across 13 districts'=nationwide aggregate, no specific unit. Correct."
+по 23 районам,national,,'across 23 districts'=nationwide aggregate. Correct.
+по 8 районам,national,,'across 8 districts'=nationwide aggregate. Correct.
+ҶТ,national,,'ҶТ' = Ҷумҳурии Тоҷикистон = Republic of Tajikistan (nationwide). Confirmed.
+2 то,unknown,,Junk count fragment ('2 то' = 2 units); no location.
+Душанбе-Хучанд,unknown,,"Автотрасса Душанбе–Худжанд, охватывает несколько регионов/районов, не сводится к одному канону. unknown корректнее, чем натянутый multi. Верно."

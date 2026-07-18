@@ -1,0 +1,623 @@
+raw_token,kind,canonical_latin,targets,note
+", ноњияи Љ.Балхи.",district,Rumi,Rumi,Љ.Балхи = Jaloliddini Balkhi = former Rumi/Kolkhozobod → canonical Rumi. Khatlon.
+2 то,unknown,,,Junk count fragment ('2 то' = 2 units); no location.
+Ёвон,district,Yovon,TJ-KT,"Yovon district, Khatlon. Confirmed."
+Љумњурии Исломии Афѓонистон,foreign,,Afghanistan,Исламская Республика Афганистан. Верно.
+Абдуњрамони Љомї.,district,Dzhami,,Abdurahmoni Jomi → canonical Dzhami; letters transposed in Абдуњрамони.
+Айни,district,Ayni,TJ-SU,"Ayni district, Sughd. Confirmed."
+"Айни, Гончи, Истаравшан",multi,,Ayni|Ghonchi|Istaravshan,Sughd districts. Correct.
+"Айни, Шахристан",multi,,Ayni|Shahriston,Айни=Ayni; Шахристан=Шаҳристон=Shahriston. Confirmed.
+Айнинский,district,Ayni,Ayni,Soviet adjective form Айнинский район=Ayni. Confirmed.
+Анзоб,city,Ayni,,"Anzob is a settlement/mining jamoat within Ayni district, Sughd. Not a district itself, so kind=city with canonical=Ayni."
+Анзоб«ский перевал,district,Ayni,Ayni,"Анзобский перевал (лавиноопасный); джамоат/кишлак Анзоб — в р-не Айни (Согд). Не админ-единица, отнесён к ближайшему району Ayni. Согласен, conf низкая."
+Анзобский перевал,district,Ayni,TJ-SU,Anzob pass (Ayni/Varzob border) — attach to Ayni
+Ашт,district,Asht,TJ-SU,"Asht district, Sughd. Confirmed."
+Ашт/Ходжент/Кайракум,multi,,Asht|Ghafurov|TJ-SU,"Ходжент=Khujand→Ghafurov; Кайракум=Kayrakkum city (now Guliston, not a district)→TJ-SU; Asht is a district. Correct."
+Балджувон,district,Baljuvon,TJ-KT,"Baljuvon district, Khatlon. Confirmed."
+"Балджувон, Совет",multi,,Baljuvon|Temurmalik,Балджувон=Baljuvon; Совет=Советский→Temurmalik (историческое имя). Верно.
+"Балджувон, Ховалинг, Восеъ",multi,,Baljuvon|Khovaling|Vose',Балджувон=Baljuvon; Ховалинг=Khovaling; Восеъ=Vose'. Confirmed.
+Бохтар,district,Bokhtar,,Bokhtar есть в списке 58; без префикса — район приоритетнее. Канон Bokhtar независимо от город/район (Курган-Тюбе тоже→Bokhtar).
+ВМКБ,region,,TJ-GB,VMKB = Viloyati Mukhtori Kuhistoni Badakhshon = GBAO.
+Ванч,district,Vanj,TJ-GB,"Vanj district, GBAO. Confirmed."
+Варзоб,district,Varzob,TJ-RA,"Varzob district, RRP. Confirmed."
+Вахдат,district,Vahdat,TJ-RA,"Vahdat district (former Kofarnihon/Ordzhonikidzeabad), RRP. Confirmed."
+"Вахдат, Ромит",district,Vahdat,Vahdat,"Ромит is a jamoat/gorge inside Vahdat district (former Kofarnihon), never a separate district. Token resolves to a single district, so kind should be district (canonical=Vahdat), not multi. Target unchanged."
+"Вахдат, Файзобод",multi,,Vahdat|Faizobod,Вахдат=Vahdat; Файзобод=Faizobod. Confirmed.
+Вахш,district,Vakhsh,,Vakhsh district (Khatlon).
+Вањдат- Љиргатол,multi,,Vahdat|Jirgatol,Vahdat + Jirgatol — two distinct districts.
+Восе,district,Vose',TJ-KT,"Vose' district, Khatlon; canonical apostrophe form matches list. Confirmed."
+"Восеъ, Хамадони Хуросон",multi,,Vose'|Hamadoni|Khuroson,"Missing comma: Восеъ=Vose', Хамадони=Hamadoni (M.A.Hamadoni), Хуросон=Khuroson are three distinct Khatlon districts. Confirmed."
+Гарм,district,Rasht,Rasht,Гарм = б. имя Рашта → Rasht (РРП). Верно.
+Гафуров,district,Ghafurov,,Б. Ленинабадский район = Ghafurov.
+Гафуров/Истравшан/Чкаловск/Пенджекент/Канибодом,multi,,Ghafurov|Istaravshan|Panjakent|Konibodom|TJ-SU,Истравшан=Istaravshan; Чкаловск=Chkalovsk/Buston city→TJ-SU; rest Sughd districts. Correct.
+Гончи,district,Ghonchi,TJ-SU,"Ghonchi district (=Devashtich), Sughd. Confirmed."
+"Гончи, Канибадам",multi,,Ghonchi|Konibodom,Гончи=Ghonchi; Канибадам=Konibodom. Confirmed.
+"Гончи, Ура-тюбе",multi,,Ghonchi|Istaravshan,Гончи=Ghonchi; Ура-Тюбе=Istaravshan (Sughd). Correct.
+Горно-матчинский,district,Kuhistoni Mastchoh,,Soviet 'Gorno-Matchinsky' = mountainous Matcha = Kuhistoni Mastchoh (Sughd).
+Дангара,district,Danghara,,Дангара = Danghara в списке 58.
+"Дангара, Кубодиен, Н.Хисрав,",multi,,Danghara|Qabodiyon|Nosiri Khusrav,compound
+"Дангара, Кубодиен, Н.Хисрав, ",multi,,Danghara|Qabodiyon|Nosiri Khusrav,Дангара=Danghara; Кубодиен=Ќубодиён=Qabodiyon; Н.Хисрав=Носири Хусрав=Nosiri Khusrav
+Данѓара,district,Danghara,Danghara,'Данғара' = Danghara district (Khatlon). Confirmed.
+Дарбанд,district,Nurobod,,Darband = Nurobod (ex-Komsomolobod); Darband is its center.
+Дарваз,district,Darvoz,,Дарваз → Darvoz (GBAO).
+"Дарваз, Ванч, Шугнон, Рушон, Рошткала",multi,,Darvoz|Vanj|Shughnon|Rushon|Roshtqal'a,GBAO districts: Дарваз=Darvoz; Ванч=Vanj; Шугнон=Shughnon; Рушон=Rushon; Рошткала=Roshtqal'a. Confirmed.
+Дарвоз,district,Darvoz,TJ-GB,"Darvoz district, GBAO. Confirmed."
+Дарвоз.,district,Darvoz,Darvoz,"Darvoz district (GBAO). Confirmed (bare district name, unlike the village-pair token)."
+Джиликул,district,Jilikul,,Джиликуль = Jilikul.
+"Джиликул, Кабодиен",multi,,Jilikul|Qabodiyon,Джиликул=Jilikul; Кабодиен=Qabodiyon (Хатлон). Верно.
+Джиргатал,district,Jirgatol,TJ-RA,"Jirgatol (=Lakhsh, renamed), RRP. Confirmed."
+Джиргитал,district,Jirgatol,Jirgatol,"Джиргитал/Джиргаталь=Jirgatol (=Лахш, переименован). Верно."
+Джоми,district,Dzhami,TJ-KT,"A.Jomi (Abdurahmoni Jomi) district, Khatlon; canonical 'Dzhami'. Confirmed."
+Душанбе,city,,TJ-DU,"Capital city Dushanbe; kind=city, TJ-DU. Confirmed."
+"Душанбе, Нурек, Афганистан, ГБАО",multi,,TJ-DU|Norak|Afghanistan|TJ-GB,Mixed token: Душанбе=capital region TJ-DU; Нурек=Norak district; Афганистан=foreign country; ГБАО=region TJ-GB. Multi with mixed targets is the correct representation.
+Душанбе-Хучанд,unknown,,,"Автотрасса Душанбе–Худжанд, охватывает несколько регионов/районов, не сводится к одному канону. unknown корректнее, чем натянутый multi. Верно."
+Душанбе. Ваҳдат,multi,,TJ-DU|Vahdat,"Душанбе (столица, TJ-DU) + Ваҳдат (б. Кофарнихон) район. Смешанное region+district представление — лучшее из доступных. Верно."
+Зафаробод,district,Zafarobod,,Зафарабад = Zafarobod.
+И.Сомони,city,,TJ-DU,"Исмоили Сомонӣ raion of Dushanbe → kind=city, TJ-DU."
+И.Сомонї,city,,TJ-DU,"Ismoili Somoni is an internal district of Dushanbe city → kind=city, TJ-DU."
+Истаравшан,district,Istaravshan,,Б. Ура-Тюбе = Istaravshan.
+"Истаравшан, Гочни",multi,,Istaravshan|Ghonchi,Истаравшан=Istaravshan (former Ura-Tyube); Гочни=typo of Гончи=Ghonchi (=Devashtich). Confirmed.
+Исфара,district,Isfara,TJ-SU,"Isfara district, Sughd (in canonical list as district despite city status). Confirmed."
+"Исфара, Канибодом",multi,,Isfara|Konibodom,Исфара=Isfara; Канибодом=Konibodom. Confirmed.
+"Ишкашим, Рушан, Шугнон",multi,,Ishkoshim|Rushon|Shughnon,GBAO districts. Correct.
+Ишкошим,district,Ishkoshim,TJ-GB,"Ishkoshim district, GBAO. Confirmed."
+Кабодиён,district,Qabodiyon,,Кабодиён/Кубодиён = Qabodiyon.
+"Кабодиён, Шаартуз, Колхозабад, Гозималик, Болджуван, Советский",multi,,Qabodiyon|Shahrtuz|Rumi|Baljuvon|Temurmalik,"Колхозабад=Kolkhozobod→Rumi (former name); Советский→Temurmalik; Болджуван=Baljuvon. 'Гозималик' jamoat, unmapped. Khatlon. Correct."
+Кайраккум,city,,TJ-SU,"Kayrakkum (now Guliston), city in Sughd; not in 58 list."
+Кайрокум,city,,TJ-SU,Кайраккум (Ghafurov area) is a city not in the 58 list; rule maps it explicitly to region Sughd (TJ-SU).
+Канибодом,district,Konibodom,,Kanibadam = Konibodom (Sughd).
+"Канибодом, Чкаловск",multi,,Konibodom|TJ-SU,"Канибодом=Konibodom (district); Чкаловск=Chkalovsk→Buston city (Sughd, not a district)→TJ-SU. Correct."
+Колхозобод,district,Rumi,,"Kolkhozobod = renamed Rumi (J. Balkhi/Rumi, Khatlon)."
+Кубодиён,district,Qabodiyon,,Кабодиён/Ќубодиён → Qabodiyon per correspondence table.
+Кулоб,district,Kulob,TJ-KT,"Kulob district, Khatlon (in canonical list as district). Confirmed."
+"Куляб, Восе, Темур-Малик, Балджувон, Хамадони, Шуробод, Ховалинг",multi,,Kulob|Vose'|Temurmalik|Baljuvon|Hamadoni|Shuro-obod|Khovaling,"Семь районов Кулябской зоны Хатлона, все сопоставления верны: Kulob, Vose', Temurmalik, Baljuvon, Hamadoni, Shuro-obod, Khovaling."
+"Куляб, Восе, Темур-Малик, Ховалинг, Муминобад",multi,,Kulob|Vose'|Temurmalik|Khovaling|Muminobod,Куляб=Kulob; Восе=Vose'; Темур-Малик=Temurmalik; Ховалинг=Khovaling; Муминобад=Muminobod. Confirmed.
+"Куляб, Темур-Малик",multi,,Kulob|Temurmalik,Куляб=Kulob; Темур-Малик=Temurmalik. Khatlon (Kulob zone). Correct.
+Кумсангир,district,Qumsangir,,Kumsangir = Qumsangir (Khatlon).
+"Кумсангир, Дангара, Хочамастон, Курган-Тюбе, Шаартуз, Московский, Кабодиен, Куляб",multi,,Qumsangir|Danghara|Bokhtar|Shahrtuz|Hamadoni|Qabodiyon|Kulob,"Курган-Тюбе city→Bokhtar; Московский→Hamadoni (former Moskovsky, context is Khatlon not Russia); Кабодиен=Qabodiyon. 'Хочамастон' jamoat, unmapped. Correct."
+"Кумсангир, Пандж",multi,,Qumsangir|Panj,Кумсангир=Qumsangir; Пандж=Panj. Confirmed.
+Курган-Тюбе,city,Bokhtar,Bokhtar,Kurgan-Tyube (Qurghonteppa) renamed Bokhtar city (2018); maps to Bokhtar district it centers. Correct.
+Курггон-теппа,city,Bokhtar,Bokhtar,"Курггон-теппа=Ќурѓонтеппа/Курган-Тюбе, former name of Bokhtar city → maps to Bokhtar district. Confirmed."
+Масчох,district,Mastchoh,,Maschoh (lowland Matcha) = Mastchoh district (Sughd).
+Масчоњи Кўњи,district,Kuhistoni Mastchoh,Kuhistoni Mastchoh,"'Масчоҳи Кӯҳӣ' = mountainous Mastchoh = Kuhistoni Mastchoh (Gorno-Matcha), Sughd. Confirmed."
+Матча,district,Mastchoh,,Матча alone → lowland Mastchoh (Кӯҳистони/Горно-Матчинский would be Kuhistoni Mastchoh).
+Матчинский,district,Mastchoh,Mastchoh,"ВАЖНО: спека рыхло сгруппировала «Матчинский» с Kuhistoni Mastchoh, но географически голый «Матчинский» = равнинный Матча = Mastchoh (Согд, центр Бустон); «Горно-Матчинский» = Kuhistoni Mastchoh (обрабатывается отдельно). Предложение верно — Mastchoh."
+"Маълумоти иловагї, ноњияи Лахш.",district,Jirgatol,Jirgatol,'Маълумоти иловагӣ' (additional info) garbage; Lakhsh = Jirgatol.
+"Минтаќаи Кулоб, ноњияи Шуробод",district,Shuro-obod,Shuro-obod,'Минтақаи Кӯлоб' is a zonal qualifier; the specific named district is Shurobod=Shuro-obod → district priority. Khatlon.
+Минтаќаи Рашт,zone,,TJ-RA,'Минтақаи Рашт' = inter-district Rasht zone -> RRP (TJ-RA). Confirmed.
+Муминобод,district,Muminobod,TJ-KT,"Muminobod district, Khatlon. Confirmed."
+"Муминобод, Восеъ, Кабадиян, Джиликул",multi,,Muminobod|Vose'|Qabodiyon|Jilikul,Муминобод=Muminobod; Восеъ=Vose'; Кабадиян=Qabodiyon; Джиликул=Jilikul. Confirmed.
+"Муминобод, Шуробод",multi,,Muminobod|Shuro-obod,Муминобод=Muminobod; Шуробод=Shuro-obod (Khatlon). Confirmed.
+Муминобод/Кабодиён,multi,,Muminobod|Qabodiyon,Khatlon districts. Correct.
+Мургаб,district,Murghob,,"ГБАО, Мургаб = Murghob."
+"Мургаб, Шугнан",multi,,Murghob|Shughnon,GBAO districts. Correct.
+НТҶ,region,,TJ-RA,НТҶ = Ноҳияҳои тобеи ҷумҳурӣ = Districts of Republican Subordination (РРП) → TJ-RA.
+Норак,district,Norak,,Норак/Нурек — прямое соответствие Norak в списке 58.
+Носири Хисрав,district,Nosiri Khusrav,,Носири Хусрав/Бешкент = Nosiri Khusrav (Хисрав — вариант написания).
+Ноњияи Деваштиљ ( Ѓончї ),district,Ghonchi,Ghonchi,Devashtich = new name of Ғончӣ -> Ghonchi (Sughd); parenthetical confirms. Project crosswalk: Ghonchi=Деваштич.
+Ноњияи И.Сомонї.,city,,TJ-DU,Ismoili Somoni Dushanbe city-district → TJ-DU; 'ноҳияи' prefix does not change it.
+Ноњияи Исмоили Сомонї,city,,TJ-DU,"Ismoili Somoni is an internal district of Dushanbe → kind=city, TJ-DU."
+Ноњияи Конибодом,district,Konibodom,Konibodom,Konibodom district (Sughd); duplicate token.
+Ноњияи Лахш.,district,Jirgatol,,Lakhsh = renamed Jirgatol → canonical Jirgatol.
+Ноњияи Рашт,district,Rasht,,ноҳияи Рашт → Rasht.
+Ноњияи Рўдакї,district,Rudaki,Rudaki,Рӯдакӣ = Rudaki (б. Ленинский). Верно.
+Ноњияи Спитамен,district,Spitamen,Spitamen,Spitamen district (Sughd). Confirmed.
+Ноњияи Тољикобод,district,Tojikobod,Tojikobod,Тоҷикобод = Tojikobod. Верно.
+Ноњияи Фархор,district,Farkhor,Farkhor,Farkhor district (Khatlon). Confirmed.
+Ноњияи Шањристон,district,Shahriston,,"Shahriston district, Sughd."
+Нуробод,district,Nurobod,TJ-RA,"Nurobod district (former Komsomolobod/Darband), RRP. Confirmed."
+"Нуробод, Тавилдара, Гарм, Таджикобод, Джиргаталь",multi,,Nurobod|Tavildara|Rasht|Tojikobod|Jirgatol,Гарм=Rasht (former Garm center); Джиргаталь=Jirgatol (=Lakhsh). Rasht valley/RRP. Correct.
+"Нуробод, Тавильдара",multi,,Nurobod|Tavildara,Нуробод=Nurobod; Тавильдара=Tavildara (РРП). Верно.
+"Нуробод, Точикобод",multi,,Nurobod|Tojikobod,Нуробод=Nurobod; Точикобод=Tojikobod. Confirmed.
+"Нуробод, Чиргатол, Тавилдара",multi,,Nurobod|Jirgatol|Tavildara,Нуробод=Nurobod; Чиргатол=Джиргаталь→Jirgatol; Тавилдара=Tavildara. Верно.
+"Нуробод,Тавилдара,Джиргаталь",multi,,Nurobod|Tavildara|Jirgatol,Нуробод=Nurobod; Тавилдара=Tavildara; Джиргаталь=Jirgatol (=Lakhsh). Confirmed.
+Панч,district,Panj,Panj,Панч=Панҷ=Panj. Confirmed.
+Пархар,district,Farkhor,Farkhor,Пархар=Фархор=Farkhor (Хатлон). Верно.
+"Пенджекент, Канибадам, Ходжент, Джаббор-Расуловский, Шахристанский, Ура-Тюбинский, Староматчинский",multi,,Panjakent|Konibodom|Ghafurov|Jabbor Rasulov|Shahriston|Istaravshan|Kuhistoni Mastchoh,Ходжент=Khujand city→Ghafurov (surrounding district); Староматчинский=Gorno/Old Matcha→Kuhistoni Mastchoh (distinct from lowland Mastchoh). All Sughd. Correct.
+Пенджикент,district,Panjakent,TJ-SU,"Panjakent district, Sughd. Confirmed."
+Пяндж,district,Panj,,"Пяндж/Панҷ = Panj district (Khatlon), in the 58 list."
+"Пяндж, Шаартуз",multi,,Panj|Shahrtuz,Пяндж=Panj; Шаартуз=Shahrtuz. Confirmed.
+РТ,national,,,"РТ = Республикаи Тоҷикистон = whole republic → national, targets empty."
+Расулов,district,Jabbor Rasulov,,Ч.Расулов/Пролетарск = Jabbor Rasulov.
+Рашт,district,Rasht,TJ-RA,"Rasht district (former Garm), RRP. Confirmed."
+"Рашт, Таджикобод, Нуробод",multi,,Rasht|Tojikobod|Nurobod,Рашт=Rasht; Таджикобод=Tojikobod; Нуробод=Nurobod. Confirmed.
+Рогун,district,Roghun,TJ-RA,"Roghun district, RRP (in canonical list as district despite city status). Confirmed."
+Ромит,city,Vahdat,Vahdat,"Romit=jamoat/gorge settlement inside Vahdat district, not among the 58; kind=city is the best-fit fallback for a populated place mapped to its parent district. Correct."
+Рошткала,district,Roshtqal'a,TJ-GB,"Roshtqal'a district, GBAO; canonical apostrophe form matches list. Confirmed."
+"Рошткала, Шугнан, Ванч, Хорог",multi,,Roshtqal'a|Shughnon|Vanj,"Three GBAO districts (Рошткала, Шугнан, Ванч=Vanj). Хорог=Khorog is the GBAO city center, not a district in the 58 list, correctly excluded; it only implies TJ-GB which the districts already cover."
+"Рошткала, Шугнан, Рушан,",multi,,Roshtqal'a|Shughnon|Rushon,compound (GBAO)
+"Рошткала, Шугнан, Рушан, ",multi,,Roshtqal'a|Shughnon|Rushon,GBAO: Рошткала=Roshtqal'a; Шугнан=Shughnon; Рушан=Rushon
+Роштќалъа дар дењаи Хабост,district,Roshtqal'a,Roshtqal'a,"'Роштқалъа дар деҳаи Хабост' = Roshtqal'a district, village Khabost (GBAO). Confirmed."
+Рудаки,district,Rudaki,TJ-RA,"Rudaki district (former Leninsky), RRP. Confirmed."
+"Рудаки, Вахдат",multi,,Rudaki|Vahdat,Рудаки=Rudaki (former Leninский); Вахдат=Vahdat. Confirmed.
+Рудакї,district,Rudaki,Rudaki,Rudaki district (RRP). Confirmed.
+Руми,district,Rumi,,Руми/Ҷ.Румӣ (former Колхозобод) → Rumi.
+Рушан/ Хорог/шугнанский/Ишкашимский/,multi,,Rushon|Shughnon|Ishkoshim|TJ-GB,"Хорог=Khorog city (GBAO capital, not a district)→TJ-GB; Рушан/шугнанский/Ишкашимский=Rushon/Shughnon/Ishkoshim. Correct."
+Рушон,district,Rushon,TJ-GB,"Rushon district, GBAO. Confirmed."
+"Рушон, Шугнон, Ишкошим",multi,,Rushon|Shughnon|Ishkoshim,GBAO: Рушон=Rushon; Шугнон=Shughnon; Ишкошим=Ishkoshim. Confirmed.
+Сарбанд,district,Sarband,,Sarband есть в списке 58; без префикса — район приоритетнее. Город Сарбанд/Левакант также→Sarband.
+Сино,city,,TJ-DU,"Сино raion of Dushanbe → kind=city, TJ-DU."
+Сомони,city,,TJ-DU,"Abbreviation of Исмоили Сомонӣ, a raion of Dushanbe city. Empty canonical + TJ-DU is correct per Dushanbe-raion rule."
+Спитамен,district,Spitamen,,Прямое соответствие Spitamen.
+"Спитамен, Ч.Расулов",multi,,Spitamen|Jabbor Rasulov,Спитамен=Spitamen; Ч.Расулов=Ҷ.Расулов=Jabbor Rasulov (former Пролетарск). Confirmed.
+Табошар,city,,TJ-SU,"Табошар — город в Согде (ныне Истиклол), нет в списке 58 → регион TJ-SU. Верно."
+Тавилдара,district,Tavildara,TJ-RA,"Tavildara district, RRP. Confirmed."
+"Таджикабад, Джиргитпль, Нурабад, Рашт, Вахдат, Тавильдара",multi,,Tojikobod|Jirgatol|Nurobod|Rasht|Vahdat|Tavildara,Таджикабад=Tojikobod; Джиргитпль=typo of Джиргиталь=Jirgatol; Нурабад=Nurobod; Рашт=Rasht; Вахдат=Vahdat; Тавильдара=Tavildara. Confirmed.
+"Таджикабад, Рашт",multi,,Tojikobod|Rasht,Таджикабад=Tojikobod; Рашт=Rasht (former Garm). RRP/Rasht valley. Correct.
+Темур Малик,district,Temurmalik,TJ-KT,"Temurmalik district (former Sovetsky), Khatlon; space collapsed to canonical 'Temurmalik'. Confirmed."
+"Темур Малик, Гозималик",multi,,Temurmalik,"Темур Малик=Temurmalik. 'Гозималик' is a jamoat-level locality, not among the 58 districts; leaving it unmapped is the correct conservative choice (adding a low-confidence target would be worse). Correct."
+"Темур Малик, Куляб",multi,,Temurmalik|Kulob,Khatlon (Kulob zone) districts. Correct.
+Тоджикобод,district,Tojikobod,TJ-RA,"Tojikobod district, RRP. Confirmed."
+Турсунзаде,district,Tursunzoda,,Б. Регар = Tursunzoda.
+"Ура-Тюбе, Масчох, Пенджекент, Ашт, Гончи, Шахристан, Расулов",multi,,Istaravshan|Mastchoh|Panjakent|Asht|Ghonchi|Shahriston|Jabbor Rasulov,7 tokens map 1:1. Ура-Тюбе=Istaravshan; Масчох=lowland Mastchoh; Гончи=Ghonchi; Расулов=Jabbor Rasulov (Proletarsk). All Sughd. Correct.
+"Ура-Тюбе, матчинский, Ходжентском, Наусский, Ганчинский, Джаббар-Расуловский, Зафарабадский, Гафуровский",multi,,Istaravshan|Mastchoh|Ghafurov|Spitamen|Ghonchi|Jabbor Rasulov|Zafarobod,8 tokens→7 targets via legitimate dedup: Ходжентском=Khujand→Ghafurov coincides with Гафуровский=Ghafurov. Наусский=Nau→Spitamen (renamed 2003); матчинский=lowland Mastchoh; Ганчинский=Ghonchi. All Sughd. Correct.
+Файзобод,district,Faizobod,TJ-RA,"Faizobod district, RRP. Confirmed."
+Фархор,district,Farkhor,,Фархор = Farkhor в списке 58.
+Фирдавси,city,,TJ-DU,"Фирдавси is a district of Dushanbe city → kind=city, targets=[TJ-DU]. Confirmed."
+"Фирдавси, Сино",city,,TJ-DU,"Firdavsi and Sino are city-districts of Dushanbe→TJ-DU, empty canonical. Correct."
+Фрунзенский,city,,TJ-DU,"Frunzensky raion = former name of the Firdavsi city-district of Dushanbe; per rule all Dushanbe city-districts→kind=city, empty canonical, TJ-DU. Correct."
+Хамадони,district,Hamadoni,,М.А.Хамадони = Hamadoni; прямое соответствие.
+"Хамадони, Фархар",multi,,Hamadoni|Farkhor,Khatlon (Kulob zone) districts. Correct.
+Хисор,district,Hisor,TJ-RA,"Hisor district, RRP. Confirmed."
+Ховалинг,district,Khovaling,TJ-KT,"Khovaling district, Khatlon. Confirmed."
+"Ховалинг, Тавильдара, Таджикобод",multi,,Khovaling|Tavildara|Tojikobod,Ховалинг=Khovaling; Тавильдара=Tavildara; Таджикобод=Tojikobod. Confirmed.
+Ховалинг/Кулоб/Советский/Джиликуль/Фархор,multi,,Khovaling|Kulob|Temurmalik|Jilikul|Farkhor,Советский→Temurmalik; Джиликуль=Jilikul; Фархор=Farkhor. Khatlon. Correct.
+Хорог,city,,TJ-GB,"Khorog, administrative center of GBAO, separate city not in 58; kind=city, TJ-GB. Confirmed."
+"Хорог, р-ны Шугнанский, Ишкошим, Ванч, Дарваз, Рошткала, Рушан, Мургаб",multi,,Shughnon|Ishkoshim|Vanj|Darvoz|Roshtqal'a|Rushon|Murghob|TJ-GB,Хорог=Khorog city→TJ-GB; remainder are the 7 GBAO districts. Correct.
+Худжанд,city,Ghafurov,,"Город обл. значения, нет в списке 58; окружён районом Ghafurov (альт. TJ-SU)."
+Хуросон,district,Khuroson,TJ-KT,"Khuroson district, Khatlon. Confirmed."
+"Хуросон, Джиликуль, Ч.Руми, Бохтар",multi,,Khuroson|Jilikul|Rumi|Bokhtar,"Хуросон=Khuroson; Джиликуль=Jilikul; Ч.Руми=Ҷ.Руми (Jaloliddini Rumi, former Kolkhozobod)=Rumi; Бохтар=Bokhtar. Confirmed."
+"Хуросон,Чиликул,Пяндж, Рашт, Муминобод, Кумсангир",multi,,Khuroson|Jilikul|Panj|Rasht|Muminobod|Qumsangir,Хуросон=Khuroson; Чиликул=Jilikul; Пяндж=Panj; Рашт=Rasht; Муминобод=Muminobod; Кумсангир=Qumsangir. Confirmed.
+Центральный р-н,city,,TJ-DU,Исторический Центральный район Душанбе (→ ныне Фирдавси) → TJ-DU. Наиболее вероятная интерпретация для БД РТ; conf низкая.
+Ш. Душанбе,city,,TJ-DU,Dushanbe city (capital) -> TJ-DU. Confirmed.
+Ш. РОГУН,district,Roghun,Roghun,Ш.=шаҳри but Roghun is in the 58-list as a district (RRP); district priority.
+Шаартуз,district,Shahrtuz,,Шаартуз/Шахритуз = Shahrtuz.
+"Шаартуз, Кабодиен",multi,,Shahrtuz|Qabodiyon,"Два района Хатлона: Шаартуз=Shahrtuz, Кабодиен=Qabodiyon. Верно."
+"Шаартуз, Хисрав, Гозималик, Муминобод",multi,,Shahrtuz|Nosiri Khusrav|Muminobod,"Хисрав=Khusrav→Nosiri Khusrav (former Beshkent). 'Гозималик' jamoat, unmapped. Correct."
+Шаартуз/Кулоб,multi,,Shahrtuz|Kulob,Khatlon districts. Correct.
+Шахринав,district,Sharinav,TJ-RA,"Shahrinav district; canonical string in list is 'Sharinav', RRP. Confirmed."
+Шахристон,district,Shahriston,TJ-SU,"Shahriston district, Sughd. Confirmed."
+Шањри Гулистон.,city,,TJ-SU,"City Guliston (former Kayrakkum), Sughd; not among the 58 districts. Rule: Гулистон(Кайраккум)->TJ-SU."
+Шањри Истиќлол.,city,,TJ-SU,"City Istiqlol (former Taboshar), Sughd; not among the 58 districts. Rule: Истиклол->city TJ-SU."
+Шањри Конибодом,district,Konibodom,,Konibodom is itself in the 58 list; 'шаҳри' prefix is noise → district Konibodom.
+Шањри Норак.,district,Norak,,Norak (Nurek) is in the 58 list → canonical Norak.
+Шањристон,district,Shahriston,Shahriston,Shahriston district (Sughd). Confirmed.
+Шомансур,city,,TJ-DU,Шомансур=Шохмансур — район города Душанбе → TJ-DU. Верно.
+"Шомансур, Сино, Фирдвси",city,,TJ-DU,"Три района города Душанбе: Шохмансур, Сино, Фирдавси → TJ-DU. Верно."
+"Шохмансур, Сино,",city,,TJ-DU,Dushanbe city districts
+"Шохмансур, Сино, ",city,,TJ-DU,Шохмансур and Сино are districts of Dushanbe city → TJ-DU
+"Шугнан, Рошткала, Дарвоз",multi,,Shughnon|Roshtqal'a|Darvoz,GBAO districts. Correct.
+Шугнан/Рушан/Дарваз,multi,,Shughnon|Rushon|Darvoz,GBAO districts. Correct.
+"Шугнанский, Ишкашимский, Мургабский",multi,,Shughnon|Ishkoshim|Murghob,compound (GBAO)
+"Шугнанский, Ишкашимский, Мургабский ",multi,,Shughnon|Ishkoshim|Murghob,GBAO districts: Шугнан=Shughnon; Ишкашим=Ishkoshim; Мургаб=Murghob
+"Шугнанский, Мургабский",multi,,Shughnon|Murghob,GBAO districts. Correct.
+Шугнон,district,Shughnon,TJ-GB,"Shughnon district, GBAO. Confirmed."
+Шуробод,district,Shuro-obod,TJ-KT,"Shuro-obod district, Khatlon; hyphenated canonical form matches list. Confirmed."
+"Шуробод, Хочамастон",multi,,Shuro-obod,"Шуробод=Shuro-obod (now Shamsiddin Shohin; canonical Shuro-obod). 'Хочамастон' jamoat, unmapped. Correct."
+айни,district,Ayni,Ayni,Lowercase Айни=Ayni. Confirmed.
+в. Акмолинск,foreign,,Kazakhstan,"Акмолинск — Казахстан (б. Акмола/Целиноград, ныне Астана) → заграница. Верно."
+в. Краснодар,foreign,,Russia,Краснодар — город РФ. Верно.
+в. Рязан,foreign,,Russia,"Рязань, РФ. Верно."
+в. Рязань,foreign,,Russia,Рязань — город РФ. Верно.
+в. Саратов,foreign,,Russia,Саратов — город/область в РФ → заграница. Верно.
+в. Сугд,region,,TJ-SU,'в. Сугд' = viloyati Sughd = whole Sughd region -> TJ-SU. Confirmed.
+в. Тюмен,foreign,,Russia,"Тюмень, РФ. Верно."
+в. Уфа,foreign,,Russia,Уфа — город в РФ (Башкортостан) → заграница. Верно.
+в. Хатлон,region,,TJ-KT,"в.=вилояти; Khatlon region → kind=region, TJ-KT."
+в. Челябинск,foreign,,Russia,Челябинск — город РФ. Верно.
+в. Чуйск,foreign,,Kyrgyzstan,"Chuy (Чуйск) province/region, Kyrgyzstan; 'в.' = вилояти (province)."
+вахдат,district,Vahdat,Vahdat,Lowercase Вахдат=Vahdat (former Kofarnihon/Ordzhonikidzeabad). Confirmed.
+"вилояти Калуга, нохияи Мещовск",foreign,,Russia,"Калужская область, Мещовский район, РФ — единая заграничная локация (не multi). Верно."
+"г. Куляб, г.Сарбанд, Хуросон, Кубодиен, Шаартуз",multi,,Kulob|Sarband|Khuroson|Qabodiyon|Shahrtuz,г.Куляб=Kulob (district exists in list); г.Сарбанд=Sarband (in list); Хуросон=Khuroson; Кубодиен=Qabodiyon; Шаартуз=Shahrtuz. All confirmed.
+"г. Хорог, р-ны Шугнанский, Рошткалинский, Рушанский, Ванчский, Дарвазский, Ишкашим, Мургаб",multi,,Shughnon|Roshtqal'a|Rushon|Vanj|Darvoz|Ishkoshim|Murghob|TJ-GB,г.Хорог=Khorog city→TJ-GB; remainder are the 7 GBAO districts. Correct.
+г.Истиклол,city,,TJ-SU,"Истиклол is a city in Sughd (former Taboshar/Табошар), not in the 58 district list → kind=city, targets=[TJ-SU]. Confirmed."
+г.Кулоб,district,Kulob,Kulob,"City prefix г., but Kulob is the district center and Kulob exists in the 58 list → district=Kulob. Confirmed."
+"г.Хорог, Рошткала, Шугнон, Ванч, Рушон, Ишкошим",multi,,Roshtqal'a|Shughnon|Vanj|Rushon|Ishkoshim|TJ-GB,г.Хорог=Khorog city→TJ-GB; remainder are GBAO districts. Correct.
+д. Язгулом,city,Vanj,Vanj,"Язгулом — джамоат/долина в Ванҷском р-не ГБАО, в список 58 не входит; относится к Vanj. Прим.: административно село/долина, но за неимением kind=village корректно как city→Vanj."
+дарваз,district,Darvoz,Darvoz,Lowercase Дарваз=Darvoz (GBAO). Confirmed.
+дењањои Баршор ва Баѓуш,district,Ishkoshim,Ishkoshim,"CORRECTED Darvoz->Ishkoshim. Web verification: 'Бағуш'/Baghush is a confirmed village of Ishkoshim district (2021 report: victims were 'жители села Багуш Ишкашимского района'; the Darvoz link was merely a car-crash location, not the village's district). 'Баршор'/Barshor is a village on the Khorog–Ishkoshim road in SW Pamir (known Soviet bus stop 'between Khorog and Ishkashim'), not in Darvoz which lies ~240 km north of Khorog. The two villages are grouped in one record and Baghush anchors to Ishkoshim, so district = Ishkoshim."
+джиликул,district,Jilikul,Jilikul,Lowercase Джиликул=Jilikul. Confirmed.
+истаравшан,district,Istaravshan,Istaravshan,Lowercase Истаравшан=Istaravshan. Confirmed.
+минтакаи Рашт,zone,,TJ-RA,Минтақаи Рашт inter-district zone (spelling variant) → RRP (TJ-RA).
+минтаќаи Рашт,zone,,TJ-RA,Минтақаи Рашт is an inter-district zone → RRP (TJ-RA).
+муминобод,district,Muminobod,Muminobod,Lowercase Муминобод=Muminobod. Confirmed.
+н Айни,district,Ayni,Ayni,Ayni in list. Sughd.
+н Лахш,district,Jirgatol,Jirgatol,Lakhsh = Jirgatol (renamed). RRP.
+н Рудакӣ,district,Rudaki,Rudaki,Рудакӣ (б. Ленинский) = Rudaki (РРП). Верно.
+н. А. Чоми,district,Dzhami,,А. Чоми = Abdurahmoni Jomi = Dzhami (Khatlon).
+н. А.Ҷомӣ,district,Dzhami,Dzhami,Абдурањмони Ҷомӣ = Dzhami (Хатлон). Верно.
+н. Айн 4 тарма,district,Ayni,Ayni,"«Айн» — сокращение Айнӣ = Ayni (Согд). «4 тарма» мусор. Верно, conf medium уместна."
+н. Айни,district,Ayni,TJ-SU,"'н.'=nohiya prefix; Ayni district, Sughd. Confirmed."
+н. Айни 2 сел,district,Ayni,Ayni,Ayni; mudflow noise.
+н. Айнӣ,district,Ayni,TJ-SU,"Tajik spelling 'Айнӣ' with 'н.' prefix; Ayni district, Sughd. Confirmed."
+н. Айнӣ 2 тарма,district,Ayni,,Айнӣ → Ayni; «2 тарма» is garbage.
+н. Айнӣ 4 тарма,district,Ayni,Ayni,Ayni (Sughd); count noise.
+н. Айнӣ 5 тарма,district,Ayni,Ayni,'5 тарма'=noise. Ayni (Sughd). Correct.
+н. Ак- Торпок,foreign,,Kyrgyzstan,"Ак-Торпок, Кыргызстан (по списку). Верно."
+н. Ашт,district,Asht,,Asht district (Sughd).
+н. Б. Гафуров,district,Ghafurov,,B. Ghafurov = Bobojon Ghafurov district (Sughd).
+н. Б. Ғафуров,district,Ghafurov,,B. Ghafurov = Bobojon Ghafurov district (Sughd).
+н. Б.Гафуров,district,Ghafurov,,Б.Гафуров = Bobojon Ghafurov → Ghafurov (Sughd).
+н. Балчувон,district,Baljuvon,,Балҷувон → Baljuvon.
+н. Балҷувон,district,Baljuvon,Baljuvon,Балҷувон=Baljuvon (Хатлон). Верно.
+н. Бохтар,district,Bokhtar,,"Бохтар district (former Кушониён) → Bokhtar, the geoBoundaries key."
+н. Ванч,district,Vanj,,Ванч/Ванҷ → Vanj (GBAO).
+н. Ванҷ,district,Vanj,,"ГБАО, Вандж = Vanj."
+н. Ванҷ 1 тарма,district,Vanj,Vanj,Ванҷ = Vanj (ГБАО). «1 тарма» мусор. Верно.
+н. Ванҷ 2 то,district,Vanj,Vanj,Ванҷ = Vanj; «2 то» — мусор/счётчик. Верно.
+"н. Ванҷ 4 сангрез, н Дарвоз 1 тарма, н. Рушон 7 то",multi,,Vanj|Darvoz|Rushon,Three GBAO districts in one token; counters garbage. All in list.
+н. Варзоб,district,Varzob,TJ-RA,"'н.'=nohiya prefix; Varzob district, RRP. Confirmed."
+н. Варзоб 1 тарма,district,Varzob,Varzob,'1 тарма'=noise. Varzob (RRP). Correct.
+н. Варзоб 15 то тарма,district,Varzob,Varzob,Варзоб=Varzob (РРП). «15 то тарма» — шум. Верно.
+н. Варзоб 17 тарма,district,Varzob,Varzob,Варзоб = Varzob (РРП). «17 тарма» мусор. Верно.
+н. Варзоб 2 сел,district,Varzob,Varzob,Varzob; mudflow noise.
+н. Варзоб 2 тарма,district,Varzob,,"Варзоб → Varzob (RRP); '2 тарма' garbage, ignored."
+н. Варзоб 3 тарма,district,Varzob,,"Варзоб → Varzob; '3 тарма' garbage, ignored."
+н. Варзоб 4 сангрез,district,Varzob,Varzob,Varzob; 'сангрез'=rockfall event noise.
+н. Варзоб 4 тарма,district,Varzob,Varzob,Варзоб=Varzob (РРП). «4 тарма» — шум. Верно.
+н. Варзоб 5 тарма,district,Varzob,Varzob,Varzob; count noise.
+н. Варзоб 51 тарма,district,Varzob,Varzob,Varzob; count noise.
+н. Варзоб 6 тарма,district,Varzob,Varzob,Варзоб = Varzob; «6 тарма» — мусор. Верно.
+н. Варзоб 9 тарма,district,Varzob,Varzob,Varzob (RRP) canonical; count noise.
+"н. Варзоб км 59,320",district,Varzob,Varzob,"Варзоб = Varzob; «км 59,320» — привязка к трассе, мусор. Верно."
+н. Вахш,district,Vakhsh,,Вахш = Vakhsh.
+н. Ваҳдат,district,Vahdat,Vahdat,Vahdat (former Kofarnihon/Ordzhonikidzeabad).
+н. Восеъ,district,Vose',,Восе/Восеъ = Vose'.
+н. Гарм,district,Rasht,,"Garm = former name of Rasht district, RRP."
+н. Дангара,district,Danghara,,Дангара → Danghara.
+н. Данғара,district,Danghara,,Данғара → Danghara.
+н. Дарвоз,district,Darvoz,TJ-GB,"'н.'=nohiya prefix; Darvoz district, GBAO. Confirmed."
+н. Дарвоз 2 тарма,district,Darvoz,Darvoz,Darvoz district; trailing count noise.
+н. Дарвоз 2то тарма,district,Darvoz,Darvoz,Дарвоз=Darvoz (ГБАО). «2то тарма» — шум. Верно.
+н. Дарвоз 3 тарма,district,Darvoz,Darvoz,Darvoz; count noise.
+н. Дарвоз 5 тарма,district,Darvoz,Darvoz,Darvoz (GBAO) is canonical; '5 тарма'=avalanche count noise.
+н. Дарвоз 7 сел,district,Darvoz,Darvoz,Darvoz; mudflow noise.
+н. Дарвоз 7 тарма,district,Darvoz,Darvoz,'7 тарма' garbage. Darvoz in list. GBAO.
+"н. Дарвоз, Рушон 7-то",multi,,Darvoz|Rushon,Two GBAO districts; '7-то' garbage.
+н. Деваштич,district,Ghonchi,,Devashtich = new name of Ghonchi (Sughd).
+н. Дустӣ,city,Qumsangir,Qumsangir,"Dusti = center town of Jayhun (former Qumsangir); Jayhun->Qumsangir per canon; town, not a separate district."
+н. Дӯсти,city,Qumsangir,Qumsangir,"Дӯсти — центр района Qumsangir/Ҷайҳун → city, canonical Qumsangir. Верно."
+н. Зафаробод,district,Zafarobod,,Zafarobod district (Sughd).
+н. И. Сомони,city,,TJ-DU,Исмоили Сомони — район города Душанбе → TJ-DU.
+н. И. Сомонӣ,city,,TJ-DU,Исмоили Сомони — район города Душанбе → TJ-DU.
+н. И.Сомони,city,,TJ-DU,Исмоили Сомони — район города Душанбе → TJ-DU.
+н. И.Сомонӣ,city,,TJ-DU,"Исмоили Сомони — район г. Душанбе → TJ-DU, canonical пусто. Верно."
+н. Истаравшан,district,Istaravshan,,Истаравшан (b. Ura-Tyube) → Istaravshan (Sughd).
+н. Ишкошим,district,Ishkoshim,TJ-GB,"'н.'=nohiya prefix; Ishkoshim district, GBAO. Confirmed."
+н. Ишкошим 14 тарма,district,Ishkoshim,Ishkoshim,Ishkoshim; count noise.
+н. Ишкошим 2 тарма,district,Ishkoshim,Ishkoshim,Ishkoshim district; count noise.
+н. Ишкошим 2 то,district,Ishkoshim,Ishkoshim,Ишкошим = Ishkoshim; «2 то» — мусор. Верно.
+"н. Ишкошим 2 то, н. Ванч 2 то, н. Рушон 3 то",multi,,Ishkoshim|Vanj|Rushon,Three GBAO districts; Ванч=Vanj; counters garbage.
+н. Ишкошим 2то тарма,district,Ishkoshim,Ishkoshim,Ишкошим=Ishkoshim (ГБАО). «2то тарма» — шум. Верно.
+н. Ишкошим 3 тарма,district,Ishkoshim,,Ишкошим → Ishkoshim (GBAO); «3 тарма» is garbage.
+н. Ишкошим 5 тарма,district,Ishkoshim,Ishkoshim,Ишкошим=Ishkoshim (ГБАО). «5 тарма» — шум. Верно.
+н. Ишкошим 6 тарма,district,Ishkoshim,Ishkoshim,Ишкошим = Ishkoshim; «6 тарма» — мусор. Верно.
+н. Ишкошим 7 тарма,district,Ishkoshim,Ishkoshim,Ishkoshim (GBAO); count noise.
+н. Ишкошим 8 тарма,district,Ishkoshim,Ishkoshim,Ишкошим = Ishkoshim; «8 тарма» (лавины) — мусор. Верно.
+н. Ишкошим 9 тарма,district,Ishkoshim,Ishkoshim,Ishkoshim; count noise.
+н. Ишкошим7 тарма,district,Ishkoshim,,"Ishkoshim district, GBAO; '7 тарма' is noise fused to the name."
+н. Конибодом,district,Konibodom,,Конибодом → Konibodom.
+н. Красногвардейский,foreign,,Russia,Krasnogvardeysky is a Russian district [critic fix]
+н. Кухистони Масчох,district,Kuhistoni Mastchoh,,"Кӯҳистони Мастчоҳ (Gorno-Matcha) → Kuhistoni Mastchoh, distinct from lowland Mastchoh."
+н. Кушониён,district,Bokhtar,,Kushoniyon = renamed Bokhtar district (2017); canonical key Bokhtar.
+н. Куҳистони Мастчоҳ,district,Kuhistoni Mastchoh,,Kuhistoni Mastchoh (mountainous Matcha) district (Sughd).
+н. Куҳистони Мастчоҳ 2 сел,district,Kuhistoni Mastchoh,Kuhistoni Mastchoh,Gorno-Matchinsky/Kuhistoni Mastchoh -> Kuhistoni Mastchoh; mudflow noise.
+н. Кўњистони Мастчоњ,district,Kuhistoni Mastchoh,Kuhistoni Mastchoh,Кӯҳистони Мастчоҳ = Горно-Матчинский → Kuhistoni Mastchoh (Согд). Верно.
+н. Лахш,district,Jirgatol,,Лахш = переименованный (2016) Джиргаталь = Jirgatol в каноне.
+н. Лахш 3 тарма,district,Jirgatol,Jirgatol,Лахш = Lakhsh = переименованный Jirgatol. «3 тарма» мусор. Верно.
+н. Леваканд,district,Sarband,Sarband,"Levakant/Levakand = 2016 rename of Sarband; Sarband is in the canonical 58, district prioritized (prefix н.)."
+н. М.А. Хамадони,district,Hamadoni,Hamadoni,М.А. = Мир Саид Алии Ҳамадонӣ = Hamadoni. Верно.
+н. М.С.А. Ҳамадони,district,Hamadoni,Hamadoni,М.С.А. = Мир Саид Алии Ҳамадонӣ = Hamadoni. Верно.
+н. Мастчох,district,Mastchoh,,Plain Мастчоҳ → lowland Mastchoh (not Kuhistoni Mastchoh).
+н. Мастчохи Кухӣ,district,Kuhistoni Mastchoh,Kuhistoni Mastchoh,"Мастчоҳи Кӯҳӣ (горный) = Кӯҳистони Мастчоҳ = Kuhistoni Mastchoh, отличен от равнинного Mastchoh. Верно."
+н. Мастчоҳ,district,Mastchoh,Mastchoh,"Равнинный Мастчоҳ = Mastchoh (Согд), отличен от Кӯҳистони Мастчоҳ. Верно."
+н. Масчоҳ,district,Mastchoh,,"Масчоҳ without «Кӯҳистони» → lowland Mastchoh (Matcha), Sughd."
+н. Масчоҳ 3 сел,district,Mastchoh,Mastchoh,"Maschoh (lowland Matcha) -> Mastchoh; no 'Kuhistoni' prefix, so not the mountain district; mudflow noise."
+н. Муминобод,district,Muminobod,,Муминобод → Muminobod.
+н. Мургоб,district,Murghob,,"ГБАО, Мургаб = Murghob."
+н. Мурғоб,district,Murghob,,Мурғоб → Murghob (GBAO).
+н. Нуробод,district,Nurobod,,Nurobod district (RRP).
+н. Панч,district,Panj,,Панҷ → Panj.
+н. Панҷ,district,Panj,Panj,Panj district (Khatlon). Correct.
+н. Рашт,district,Rasht,TJ-RA,"'н.'=nohiya prefix; Rasht district (former Garm), RRP. Confirmed."
+н. Рашт 2 адад,district,Rasht,Rasht,Rasht (RRP); 'адад'=count noise.
+н. Рашт 3 тарма,district,Rasht,Rasht,Рашт (б. Гарм) = Rasht. «3 тарма» мусор. Верно.
+н. Рашт 3 ҳодиса,district,Rasht,Rasht,Rasht; 'ҳодиса'=incident count noise.
+н. Рошткалъа,district,Roshtqal'a,,Roshtqal'a district (GBAO); apostrophe form matches canonical.
+н. Рошткалъа 2 тарма,district,Roshtqal'a,Roshtqal'a,Рошткалъа spelling variant -> Roshtqal'a; apostrophe form matches canon.
+н. Рошткалъа 3 тарма,district,Roshtqal'a,Roshtqal'a,Roshtqal'a district; count noise.
+н. Роштқалъа,district,Roshtqal'a,,Роштқалъа → Roshtqal'a (GBAO); apostrophe form matches list.
+н. Роштқалъа 3 то,district,Roshtqal'a,Roshtqal'a,н.=ноҳия; '3 то' counter garbage. Roshtqal'a in 58-list. GBAO.
+н. Роштқалъа 4 тарма,district,Roshtqal'a,Roshtqal'a,Cyrillic q variant Roshtqalya -> Roshtqal'a; count noise.
+н. Рудаки,district,Rudaki,TJ-RA,"'н.'=nohiya prefix; Rudaki district, RRP. Confirmed."
+н. Рудакӣ,district,Rudaki,,Б. Ленинский = Rudaki.
+н. Рушон,district,Rushon,TJ-GB,"'н.'=nohiya prefix; Rushon district, GBAO. Confirmed."
+н. Рушон 10 тарма,district,Rushon,Rushon,Rushon; count noise.
+н. Рушон 18 тарма,district,Rushon,Rushon,Rushon; count noise.
+н. Рушон 2 сел,district,Rushon,Rushon,Rushon; 'сел'=mudflow noise.
+н. Рушон 2 тарма,district,Rushon,Rushon,Рушон=Rushon. «2 тарма» — шум. Верно.
+н. Рушон 25 тарма,district,Rushon,Rushon,Rushon; count noise.
+н. Рушон 2то тарма,district,Rushon,,"Рушон → Rushon (GBAO); «2то тарма» is a row-count note/garbage, ignored."
+н. Рушон 3 тарма,district,Rushon,Rushon,Рушон=Rushon (ГБАО). «3 тарма» — шум. Верно.
+н. Рушон 4 тарма,district,Rushon,Rushon,Rushon (GBAO) canonical; count noise.
+н. Рушон 8 тарма,district,Rushon,,"Rushon district, GBAO; '8 тарма' is noise."
+н. Рӯдакӣ,district,Rudaki,Rudaki,"Rudaki (former Leninsky), RRP. Correct."
+н. Сангвор,district,Tavildara,,Сангвор = переименованный (2017) Тавильдара; канон использует старое имя Tavildara.
+н. Сангвор 1 тарма,district,Tavildara,Tavildara,Сангвор → Tavildara. «1 тарма» мусор. Верно.
+н. Сангвор 2 сел,district,Tavildara,Tavildara,"Сангвор (та же территория, что Tavildara — переименование/выделение) нет в 58 → Tavildara. «2 сел» мусор. Верно."
+н. Сангвор 2 тарма,district,Tavildara,Tavildara,"Verified: Tavildara district renamed Sangvor in 2016 (same territory, not a split); canonical/geoBoundaries key is Tavildara. '2 тарма'=noise. Correct."
+н. Сангвор 20 тарма,district,Tavildara,,Sangvor = 2016 rename of Tavildara → canonical Tavildara; '20 тарма' is noise (household/branch count).
+н. Сангвор 3 тарма,district,Tavildara,Tavildara,Сангвор → Tavildara (нет в 58). «3 тарма» мусор. Верно.
+н. Сангвор 4 ҳодиса,district,Tavildara,Tavildara,Sangvor = renamed Tavildara; canonical key Tavildara; count noise.
+н. Сангвор 5 сел,district,Tavildara,Tavildara,Sangvor = 2016/17 rename of Tavildara; canonical key is Tavildara; mudflow noise.
+н. Сино,city,,TJ-DU,"Sino is a city district of Dushanbe despite 'н.' prefix; kind=city, empty canonical, TJ-DU. Confirmed."
+н. Сино 1 ҳодиса; н. И. Сомонӣ 2 ҳодиса,city,,TJ-DU,"Sino and Ismoili Somoni are Dushanbe city districts -> kind=city, targets=[TJ-DU]; counts are noise."
+н. Сино-2,city,,TJ-DU,"Сино-2 — подрайон Душанбе → city, TJ-DU. Верно."
+н. Спитамен,district,Spitamen,,Спитамен → Spitamen (Sughd).
+н. Темурмалик,district,Temurmalik,,Temurmalik (ex-Sovetsky) district (Khatlon).
+н. Точикобод,district,Tojikobod,,Точикобод → Tojikobod (RRP).
+н. Тоҷикобод,district,Tojikobod,,Tojikobod district (RRP).
+н. Тоҷикобод 2 тарма,district,Tojikobod,Tojikobod,н.=nohiya; '2 тарма'=noise. Tojikobod (RRP). Correct.
+н. Тоҷикобод 4 тарма,district,Tojikobod,Tojikobod,Tojikobod; count noise.
+н. Тоҷикобод 5 тарма,district,Tojikobod,Tojikobod,Tojikobod (RRP); count noise.
+н. Файзобод,district,Faizobod,,Faizobod district (RRP).
+н. Фархор,district,Farkhor,,Фархор/Фарҳор → Farkhor (Khatlon).
+н. Фирдавси,city,,TJ-DU,Фирдавси — район города Душанбе → TJ-DU.
+"н. Фирдавси, Сино, И. Сомонӣ",city,,TJ-DU,"Firdavsi/Sino/Ismoili Somoni are Dushanbe city districts -> kind=city, targets=[TJ-DU] per canon (not multi, since they are city sub-districts)."
+н. Фирдавсӣ,city,,TJ-DU,Фирдавси — район города Душанбе → TJ-DU.
+н. Фирдасӣ,city,,TJ-DU,"Опечатка Фирдавсӣ — район Душанбе → city, TJ-DU. Верно."
+н. Ховалинг,district,Khovaling,,Ховалинг → Khovaling (Khatlon).
+н. Хуросон,district,Khuroson,,Хуросон = Khuroson.
+н. Хуросон. Данғара.Ҳисор,multi,,Khuroson|Danghara|Hisor,"Три района в одном токене: Хуросон, Данғара, Ҳисор. Верно."
+н. Ч. Расулов,district,Jabbor Rasulov,Jabbor Rasulov,Ҷ.Расулов = Jabbor Rasulov (б. Пролетарск). Верно.
+н. Ч.Балхи,district,Rumi,Rumi,Ч.Балхи = Ҷалолиддини Балхӣ = б. Руми/Колхозобод → Rumi (Хатлон). Верно.
+н. Ч.Расулов,district,Jabbor Rasulov,,Ч.Расулов/Расулов → Jabbor Rasulov.
+н. Чайхун,district,Qumsangir,Qumsangir,Чайхун/Джайхун — переименованный Кумсангир → Qumsangir. Верно.
+н. Ш. Шохин,district,Shuro-obod,,"Shamsiddin Shohin = renamed Shurobod district (2016), Khatlon."
+н. Ш. Шоҳин,district,Shuro-obod,,Ш. Шоҳин = Shamsiddin Shohin = renamed Shurobod (2018); join key Shuro-obod (Khatlon).
+н. Ш.Шоҳин,district,Shuro-obod,Shuro-obod,Шамсиддини Шоҳин — новое имя Шӯробод = Shuro-obod (Хатлон). Подтверждено. Верно.
+н. Шартуз,district,Shahrtuz,Shahrtuz,Шартуз = Shahrtuz. Верно.
+н. Шахринав,district,Sharinav,,Shahrinav = Sharinav district (RRP).
+н. Шахристон,district,Shahriston,,Шахристон/Шаҳристон → Shahriston (Sughd).
+н. Шахритус,district,Shahrtuz,Shahrtuz,Шаҳритус — опечатка Shahrtuz. Верно.
+н. Шаҳринав,district,Sharinav,,Шаҳринав → Sharinav (RRP); list spelling Sharinav.
+н. Шаҳристон,district,Shahriston,,Shahriston district (Sughd).
+н. Шаҳритуз,district,Shahrtuz,Shahrtuz,Шаҳритуз/Шаартуз = Shahrtuz (Хатлон). Верно.
+н. Шаҳритус,district,Shahrtuz,Shahrtuz,Шаҳритус — вариант написания Shahrtuz. Верно.
+н. Шохин,district,Shuro-obod,Shuro-obod,"Шоҳин = район Шамсиддин Шоҳин, б. Шӯрообод (переименован 2016) → Shuro-obod (Хатлон). Соответствие подтверждено."
+н. Шохмансур,city,,TJ-DU,Шохмансур — район города Душанбе → TJ-DU.
+"н. Шохмансур, И. Сомонӣ, Фирдавсӣ",city,,TJ-DU,"Three Dushanbe city-districts (Shohmansur, Ismoili Somoni, Firdavsi); all resolve to region TJ-DU, so city/TJ-DU is faithful (not multi, since none is in the 58)."
+н. Шоҳмансур,city,,TJ-DU,"Shohmansur = district of Dushanbe city → city, TJ-DU."
+н. Шугнон,district,Shughnon,,Shughnon district (GBAO).
+н. Шугнон 2то тарма,district,Shughnon,Shughnon,"Шугнон=Shughnon (ГБАО). «2то тарма» — счётчик лавин, шум. Верно."
+н. Шугнон 6то тарма,district,Shughnon,Shughnon,Шугнон=Shughnon. «6то тарма» — шум. Верно.
+н. Шуғнон,district,Shughnon,,"ГБАО, Шугнан = Shughnon."
+н. Шуғнон 14 то,district,Shughnon,Shughnon,'14 то' garbage. Shughnon in list. GBAO.
+н. Шуғнон 2 тарма,district,Shughnon,,"Шуғнон → Shughnon (GBAO); '2 тарма' is a garbage fragment, ignored."
+н. Шуғнон 2 то,district,Shughnon,,Шуғнон → Shughnon (GBAO); «2 то» is garbage.
+н. Шуғнон 3 тарма,district,Shughnon,,Same base; '3 тарма' garbage → Shughnon.
+н. Шуғнон 3 то,district,Shughnon,Shughnon,"Shughnon district (GBAO); '3 то' = count noise, ignored. Confirmed."
+н. Шуғнон 4 тарма,district,Shughnon,Shughnon,"Шуғнон=Shughnon (ГБАО). «4 тарма» — счётчик лавин, шум. Верно."
+н. Шуғнон 6 тарма,district,Shughnon,Shughnon,Shughnon (GBAO); count noise.
+н. Шуғнон 7 тарма,district,Shughnon,Shughnon,Shughnon; count noise.
+н. Шуғнон 7 то,district,Shughnon,Shughnon,'7 то' garbage. Shughnon. GBAO.
+н. Шуғнон 9 тарма,district,Shughnon,Shughnon,Shughnon; count noise.
+н. Қубодиён,district,Qabodiyon,Qabodiyon,Qubodiyon -> Qabodiyon (Khatlon) per canon.
+н. Ҳамадонӣ,district,Hamadoni,Hamadoni,"Ҳамадонӣ (б. Московский) = Hamadoni, Хатлон. В списке 58. Верно."
+н. Ҳисор,district,Hisor,Hisor,Hisor district (RRP). Correct.
+н. Ҷ. Балхи,district,Rumi,Rumi,Ҷалолиддини Балхи = переименованный Rumi/Колхозобод; join-ключ Rumi. Верно.
+н. Ҷ. Расудов,district,Jabbor Rasulov,Jabbor Rasulov,Опечатка д↔л: Расудов=Расулов → Ҷаббор Расулов (б. Пролетарск). Верно.
+н. Ҷайҳун,district,Qumsangir,Qumsangir,Ҷайҳун/Джайхун = переименованный Кумсангир → Qumsangir (Хатлон). Историческое соответствие подтверждено.
+н.Бохтар,district,Bokhtar,Bokhtar,Bokhtar in 58-list as a district. Khatlon.
+н.Деваштич,district,Ghonchi,Ghonchi,'н.Деваштич' = Devashtich -> Ghonchi (Sughd). Confirmed.
+н.Рашт,district,Rasht,,"Rasht district, RRP."
+н.Сино,city,,TJ-DU,"Сино — район Душанбе → city, TJ-DU. Верно."
+н.Спитамен,district,Spitamen,Spitamen,Spitamen district (Sughd). Confirmed.
+ноьияи Айни,district,Ayni,Ayni,Typo 'ноьияи' for 'ноҳияи'; Ayni district (Sughd). Confirmed.
+ноњия Варзоб.,district,Varzob,Varzob,Varzob in list. RRP.
+ноњия Нуробод,district,Nurobod,Nurobod,Nurobod (former Komsomolobod/Darband). In list. RRP.
+ноњия Рўдакї,district,Rudaki,Rudaki,Rudaki (former Leninsky). In list. RRP.
+ноњия Тољикобод.,district,Tojikobod,Tojikobod,Тоҷикобод = Tojikobod. Верно.
+ноњияи Ёвон,district,Yovon,Yovon,Ёвон=Yovon (Хатлон). Верно.
+ноњияи Ѓончи,district,Ghonchi,Ghonchi,'Ғончи' = Ghonchi district (Sughd). Confirmed.
+ноњияи Љ.Балхи.,district,Rumi,,Jaloliddini Balkhi = former Rumi/Kolkhozobod → Rumi.
+ноњияи Љ.Балхї.,district,Rumi,,Jaloliddini Balkhi = former Rumi/Kolkhozobod → canonical Rumi.
+ноњияи Љ.Румї,district,Rumi,Rumi,'Ҷ.Румӣ' = Jaloliddini Rumi/Balkhi (former Kolkhozobod). Project crosswalk confirms Rumi=Колхозобод. Canonical Rumi is in the 58 list.
+ноњияи Љайњун.,district,Qumsangir,,Jayhun (Љайњун) is the 2016 rename of Qumsangir District; ruleset maps Джайхун/Љайњун→Qumsangir.
+ноњияи Њисор,district,Hisor,Hisor,Ҳисор=Hisor (РРП). Верно.
+ноњияи Ќордайи вилояти Љамбил,foreign,,Kazakhstan,"'Korday district of Jambyl Region' = Korday, Jambyl Region, Kazakhstan."
+ноњияи Ќубодиён,district,Qabodiyon,Qabodiyon,Qubodiyon = Qabodiyon. In list. Khatlon.
+ноњияи Ќумсангир.,district,Qumsangir,,Qumsangir district (now within Jayhun) → canonical Qumsangir.
+ноњияи А.Љомї,district,Dzhami,Dzhami,А.Ҷомӣ = Абдурањмони Ҷомӣ → Dzhami (Хатлон). Верно.
+ноњияи Айни,district,Ayni,Ayni,Айни=Ayni (Согд). Верно.
+ноњияи Айнї,district,Ayni,,Ayni district (Sughd).
+ноњияи Айнї.,district,Ayni,,Айнӣ → Ayni (Sughd).
+ноњияи Ашт,district,Asht,Asht,Ашт = Asht. Верно.
+ноњияи Ашт.,district,Asht,Asht,ноҳияи Ашт. Asht in list. Sughd.
+ноњияи Б. Ѓафуров,district,Ghafurov,,"B. Ghafurov district, Sughd."
+ноњияи Б. Ѓафуров.,district,Ghafurov,Ghafurov,Б.Ғафуров = Bobojon Ghafurov. In list. Sughd.
+ноњияи Б. Щафуров,district,Ghafurov,,B. Ghafurov; Щ is a garbled Ғ.
+ноњияи Б.Ѓафуров.,district,Ghafurov,Ghafurov,Б.Ѓафуров = Бободжон Гафуров = Ghafurov. Верно.
+ноњияи Балљувон,district,Baljuvon,Baljuvon,Балҷувон=Baljuvon (Хатлон). Верно.
+ноњияи Бохтар.,district,Bokhtar,,Bokhtar rural district (renamed Kushoniyon 2017) → canonical Bokhtar; distinct from Bokhtar city.
+ноњияи Бўстон,city,,TJ-SU,"Buston (former Chkalovsk) is a city in Sughd, not in 58-list → region TJ-SU."
+ноњияи Ванљ,district,Vanj,Vanj,Vanj district (GBAO). Confirmed.
+ноњияи Ванљ.,district,Vanj,,Ванҷ → Vanj (GBAO); trailing dot garbage.
+ноњияи Варзоб,district,Varzob,,ноҳияи Варзоб = Varzob district (RRP).
+ноњияи Варзоб.,district,Varzob,,Варзоб → Varzob (RRP).
+ноњияи Вахш,district,Vakhsh,Vakhsh,Vakhsh in list. Khatlon.
+ноњияи Вахш.,district,Vakhsh,,"Vakhsh district, Khatlon."
+ноњияи Восеъ,district,Vose',,Восеъ → Vose' (with apostrophe as in list).
+ноњияи Восеъ.,district,Vose',,"Vose' district, Khatlon."
+ноњияи Гулистон.,city,,TJ-SU,"Guliston = 2016 rename of Kayrakkum city, Sughd; not among the 58 → region TJ-SU per ruleset."
+ноњияи Данѓара.,district,Danghara,Danghara,Данѓара = Danghara. Верно.
+ноњияи Дарвоз,district,Darvoz,,Дарвоз → Darvoz (GBAO).
+ноњияи Дарвоз.,district,Darvoz,Darvoz,Дарвоз = Darvoz. Верно.
+ноњияи Деваштич,district,Ghonchi,,"Деваштич = new name of Ғончӣ → Ghonchi (join key, Sughd)."
+ноњияи Деваштич.,district,Ghonchi,Ghonchi,Devashtich -> Ghonchi (Sughd). Confirmed.
+ноњияи Деваштиљ,district,Ghonchi,Ghonchi,Devashtich -> Ghonchi (Sughd). Confirmed.
+ноњияи Деваштиљ.,district,Ghonchi,Ghonchi,Devashtich -> Ghonchi (Sughd). Confirmed.
+ноњияи Дўсти,district,Qumsangir,Qumsangir,"Dusti is the administrative center of Jayhun district (former Qumsangir), Khatlon; token 'ноҳияи Дӯсти' -> Qumsangir. Not Jilikul (separate district). District priority applies."
+ноњияи Зафаробод,district,Zafarobod,,Зафаробод → Zafarobod.
+ноњияи Зафаробод.,district,Zafarobod,,Зафаробод → Zafarobod; trailing dot is garbage.
+ноњияи И. Сомонї,city,,TJ-DU,"Исмоили Сомонӣ raion of Dushanbe (space variant) → kind=city, TJ-DU."
+ноњияи И.Сомонї,city,,TJ-DU,"Исмоили Сомонӣ raion of Dushanbe → kind=city, TJ-DU."
+ноњияи И.Сомонї.,city,,TJ-DU,Ismoili Somoni = Dushanbe city-district → TJ-DU.
+ноњияи Исмоили Сомонї,city,,TJ-DU,"Исмоили Сомони — район г. Душанбе → TJ-DU, canonical пусто. Верно."
+ноњияи Ишкошим,district,Ishkoshim,Ishkoshim,Ishkoshim district (GBAO). Confirmed.
+ноњияи Ишкошим.,district,Ishkoshim,Ishkoshim,Ishkoshim in list. GBAO.
+ноњияи К.Мастчоњ,district,Kuhistoni Mastchoh,Kuhistoni Mastchoh,"'К.Мастчоҳ' = Кӯҳистони Мастчоҳ (Gorno-Matcha), Sughd. Distinct from Mastchoh. Confirmed."
+ноњияи Конибодом,district,Konibodom,Konibodom,Konibodom district (Sughd); duplicate token.
+ноњияи Лахш,district,Jirgatol,,Lakhsh = renamed Jirgatol (2016); geoBoundaries key Jirgatol.
+ноњияи Лахш.,district,Jirgatol,,Lakhsh = renamed Jirgatol district (RRP).
+ноњияи Лахш:,district,Jirgatol,Jirgatol,Lakhsh = renamed Jirgatol → canonical Jirgatol. RRP.
+ноњияи М. А Њамадонї,district,Hamadoni,,"M.A. Hamadoni (former Moskovskiy) district, Khatlon."
+ноњияи М.А Њамадонї,district,Hamadoni,Hamadoni,М.А Њамадонї = Мир Саид Алии Ҳамадонӣ = Hamadoni. Верно.
+ноњияи Мастчоњ,district,Mastchoh,,"Lowland Mastchoh district, Sughd (not the highland Kuhistoni Mastchoh)."
+ноњияи Мастчоњ.,district,Mastchoh,,"Lowland Mastchoh district, Sughd."
+ноњияи Масчоњ,district,Mastchoh,,"Maschoh variant → lowland Mastchoh, Sughd."
+ноњияи Масчоњ.,district,Mastchoh,,"Maschoh spelling variant of lowland Mastchoh, Sughd."
+ноњияи Мир Саид Алии Њамадони.,district,Hamadoni,,Full name Mir Said Ali Hamadoni → Hamadoni district.
+ноњияи Мурѓоб,district,Murghob,Murghob,'Мурғоб' = Murghob district (GBAO). Confirmed.
+ноњияи Муъминобод.,district,Muminobod,,"Muminobod district, Khatlon."
+ноњияи Нуробод,district,Nurobod,,Nurobod district (RRP).
+ноњияи Нуробод.,district,Nurobod,,Нуробод (b. Komsomolobod/Darband) → Nurobod (RRP).
+ноњияи Рашт,district,Rasht,,Rasht district (RRP).
+ноњияи Рашт.,district,Rasht,,Рашт (b. Garm) → Rasht (RRP).
+ноњияи Роштќалъ,district,Roshtqal'a,Roshtqal'a,Роштқалъ = typo (missing final а) → Roshtqal'a. GBAO.
+ноњияи Рошќалъа,district,Roshtqal'a,,"Roshtqal'a district, GBAO."
+ноњияи Рошќалъа.,district,Roshtqal'a,,"Roshtqal'a district, GBAO."
+ноњияи Рудакї,district,Rudaki,Rudaki,"Rudaki district (RRP, former Leninский). Confirmed."
+ноњияи Рудакї:,district,Rudaki,,"Rudaki (former Leninskiy) district, RRP."
+ноњияи Рушон.,district,Rushon,,"Rushon district, GBAO."
+ноњияи Рўдакї,district,Rudaki,,Рӯдакӣ → Rudaki (RRP).
+ноњияи Рўдакї.,district,Rudaki,,Рӯдакӣ (b. Leninsky) → Rudaki (RRP).
+ноњияи Рўшон,district,Rushon,Rushon,Rushon district (GBAO). Confirmed.
+ноњияи Сангвор,district,Tavildara,,Сангвор = renamed Tavildara; join key Tavildara.
+ноњияи Сангвор.,district,Tavildara,,Сангвор = renamed Tavildara (2017); geoBoundaries join key Tavildara.
+ноњияи Сино,city,,TJ-DU,"Сино is a raion of Dushanbe city → kind=city, TJ-DU."
+ноњияи Сино.,city,,TJ-DU,"Сино = raion of Dushanbe city; kind=city, canonical empty → TJ-DU."
+ноњияи Спитамен,district,Spitamen,Spitamen,ноҳияи=район; Спитамен=Spitamen (Согд). Верно.
+ноњияи Спитамен.,district,Spitamen,,"Spitamen district (former Nau), Sughd."
+ноњияи Темурмалик,district,Temurmalik,Temurmalik,Temurmalik (former Sovetsky). In list. Khatlon.
+ноњияи Точикобод,district,Tojikobod,Tojikobod,'ноҳияи Тоҷикобод' = Tojikobod district (RRP). Confirmed.
+ноњияи Тољикибод,district,Tojikobod,,"Tojikobod district, RRP; minor spelling variant (Тољикибод)."
+ноњияи Тољикобод,district,Tojikobod,,Tojikobod district (RRP).
+ноњияи Тољикобод.,district,Tojikobod,,Tojikobod district (RRP).
+ноњияи Тољиколбод.,district,Tojikobod,Tojikobod,Опечатка Тољиколбод → Тоҷикобод = Tojikobod. Верно.
+ноњияи Фазобод.,district,Faizobod,,Faizobod (Файзобод) with dropped 'и' typo.
+ноњияи Файзобод,district,Faizobod,,ноҳияи Файзобод → Faizobod.
+ноњияи Файзобод:,district,Faizobod,Faizobod,Faizobod in list. RRP.
+ноњияи Фархор,district,Farkhor,Farkhor,Фархор = Farkhor. Верно.
+ноњияи Фирдавси.,city,,TJ-DU,"Firdavsi is an internal district of Dushanbe → kind=city, TJ-DU."
+ноњияи Фирдавсї,city,,TJ-DU,"Фирдавсӣ is a raion of Dushanbe city → kind=city, TJ-DU."
+ноњияи Фирдавсї.,city,,TJ-DU,Фирдавсӣ = raion of Dushanbe city → TJ-DU.
+ноњияи Хуросон,district,Khuroson,Khuroson,Khuroson in list. Khatlon.
+ноњияи Хуросон.,district,Khuroson,,"Khuroson district, Khatlon."
+ноњияи Ш.Шоњин,district,Shuro-obod,Shuro-obod,Ш.Шоҳин = Shamsiddin Shohin = renamed Shurobod (2018) → canonical Shuro-obod. Khatlon.
+ноњияи Шањринав,district,Sharinav,,Шаҳринав → Sharinav (RRP).
+ноњияи Шањристон,district,Shahriston,,Шаҳристон → Shahriston (Sughd).
+ноњияи Шањристон.,district,Shahriston,Shahriston,Шаҳристон=Shahriston (Согд). Точка — мусор. Верно.
+ноњияи Шоњмансур,city,,TJ-DU,"Shohmansur is an internal district of Dushanbe → kind=city, TJ-DU."
+ноњияи Шоњмансур.,city,,TJ-DU,Shohmansur = Dushanbe city-district → TJ-DU.
+ноњияи Шуѓнон,district,Shughnon,,ноҳияи Шуғнон → Shughnon (GBAO).
+ноњияиРўдакї,district,Rudaki,Rudaki,Missing space; 'ноҳияи Рӯдакӣ' = Rudaki district (RRP). Confirmed.
+ноњияиШањристон,district,Shahriston,Shahriston,Missing space; 'ноҳияи Шаҳристон' = Shahriston district (Sughd). Confirmed.
+ноњояи Ашт.,district,Asht,Asht,Typo 'ноҳояи' for 'ноҳияи'; Asht district (Sughd). Confirmed.
+ноҳияи Балҷувон,district,Baljuvon,Baljuvon,Балҷувон = Baljuvon. Верно.
+ноҳияи Панҷ.,district,Panj,,"Panj district, Khatlon."
+ноҳияи Рўдакӣ,district,Rudaki,,Рӯдакӣ → Rudaki (RRP).
+ноҳияи Шаҳристон,district,Shahriston,Shahriston,Шаҳристон = Shahriston. Верно.
+нуробод,district,Nurobod,Nurobod,Lowercase Нуробод=Nurobod (former Komsomolobod/Darband). Confirmed.
+нњияи Зафаробод,district,Zafarobod,Zafarobod,'нњияи' typo of ноҳияи; Zafarobod in list. Sughd.
+по 13 районам,national,,,"'across 13 districts'=nationwide aggregate, no specific unit. Correct."
+по 23 районам,national,,,'across 23 districts'=nationwide aggregate. Correct.
+по 8 районам,national,,,'across 8 districts'=nationwide aggregate. Correct.
+рашт,district,Rasht,,Рашт → Rasht.
+ховалинг,district,Khovaling,Khovaling,Lowercase Ховалинг=Khovaling. Confirmed.
+хуросон,district,Khuroson,,Хуросон → Khuroson (Khatlon).
+ш. Актюбинск,foreign,,Kazakhstan,"Актюбинск (Актобе), Казахстан. Верно."
+ш. Бохтар,city,Bokhtar,,ш. Бохтар = city (b. Kurgan-Tyube); prompt city-rule Курган-Тюбе/Ќурѓонтеппа→Bokhtar (join key).
+ш. Бустон,city,,TJ-SU,"Бустон (б. Чкаловск) — город в Согде, не район из 58 → TJ-SU. Верно."
+ш. Вахдат,district,Vahdat,,Vahdat is in the 58 list; district priority over city label.
+ш. Вахдат 2 маротиба,district,Vahdat,Vahdat,"ш.=shahri prefix; '2 маротиба'=twice, noise. Vahdat (former Kofarnihon/Ordzhonikidzeabad), RRP. Correct."
+ш. Ваҳдат,district,Vahdat,,Vahdat in 58 list; district priority over city label.
+ш. Волгодонск,foreign,,Russia,Волгодонск — город РФ. Верно.
+ш. Гарм,district,Rasht,,Гарм is the historical name/center of the Rasht (Гармский) district → Rasht.
+ш. Гулистон,city,,TJ-SU,"Guliston = former Kayrakkum, city in Sughd; not in 58 list."
+ш. Державинскии,foreign,,Kazakhstan,"Derzhavinsk (Akmola Region), Kazakhstan; misspelling with trailing -ii; foreign/KZ is the best fit."
+ш. Душанбе,city,,TJ-DU,City of Dushanbe → TJ-DU.
+ш. Истаравшан,district,Istaravshan,,Истаравшан (former Ура-Тюбе) → Istaravshan.
+ш. Истиклол,city,,TJ-SU,"Истиклол (б. Табошар) — город респ. подчинения в Согде, не район из 58 → TJ-SU. Верно."
+ш. Истоклол,city,,TJ-SU,"Истоклол=Истиклол (опечатка) — город в Согде (б. Табошар), нет в списке 58 → регион TJ-SU. Верно."
+ш. Исфара,district,Isfara,,Исфара есть в списке 58 как район; префикс ш. — центр.
+ш. Конибодом,district,Konibodom,,Канибадам есть в списке 58 как район; префикс ш. — центр.
+ш. Кулоб,district,Kulob,,Куляб есть в списке 58 как район; префикс ш. — центр.
+ш. Кургонтеппа,city,Bokhtar,,Курган-Тюбе/Ќурѓонтеппа (renamed Bokhtar city 2018) maps to district Bokhtar.
+ш. Левакант,city,Sarband,,Левакант = city renamed from Sarband; prompt city-rule maps Сарбанд/Левакант→Sarband (join key).
+ш. Москва,foreign,,Russia,Moscow city (labor-migrant death) — not Hamadoni [critic fix]
+ш. Мурғоб,district,Murghob,Murghob,"Несмотря на префикс «ш.», Мурғоб — район в списке 58 (ГБАО); приоритет района. Верно."
+ш. Норак,district,Norak,,Нурек/Норак есть в списке 58 как район; префикс ш. — центр.
+ш. Панжакент,district,Panjakent,Panjakent,"ш.=город, но Панджакент в списке 58 → district Panjakent (Согд). Верно."
+ш. Панчакент,district,Panjakent,,Пенджикент есть в списке 58 как район; префикс ш. — центр.
+ш. Панљакент,district,Panjakent,Panjakent,Panjakent district (Sughd). Confirmed.
+ш. Панҷакент,district,Panjakent,,Пенджикент есть в списке 58 как район; префикс ш. — центр.
+ш. Рогун,district,Roghun,,Roghun in 58 list; district priority over city label.
+ш. Роғун,district,Roghun,,Roghun in the 58 list; district priority over city label.
+ш. Санкт Петербург,foreign,,Russia,"Saint Petersburg, Russia — migration destination."
+ш. Сулюкта,foreign,,Kyrgyzstan,"Sulyukta, Batken Region, Kyrgyzstan."
+ш. Турсунзода,district,Tursunzoda,,Турсунзода есть в списке 58 как район; префикс ш. — центр.
+ш. Хисор,district,Hisor,,"Hisor есть в списке 58 как район; префикс ш. — центр, район приоритетнее."
+ш. Хоруг,city,,TJ-GB,"Khorog = GBAO regional center; separate city, not in 58 list."
+ш. Хоруғ,city,,TJ-GB,"Khorog city, GBAO center; not in 58 list."
+ш. Хучанд,city,Ghafurov,,Худжанд — город обл. значения; окружён районом Ghafurov (альт. TJ-SU).
+ш. Хуҷанд,city,Ghafurov,,"Худжанд — город обл. значения, нет в списке 58; окружён районом Ghafurov (альт. TJ-SU). Правило допускает Ghafurov."
+ш. Ҳисор,district,Hisor,,Гиссар/Хисор есть в списке 58 как район; префикс ш. — центр.
+ш. Ҳисор 2 ҳодиса,district,Hisor,Hisor,Hisor city is center of Hisor district (in canonical 58); district prioritized; count noise.
+ш. Ҳисор.ш. Турсунзода.н. Хуросон,multi,,Hisor|Tursunzoda|Khuroson,"Три района: Ҳисор, Турсунзода, Хуросон. Верно."
+ш.Истиқлол,city,,TJ-SU,"Истиқлол (б. Табошар) — город в Согде, нет в списке 58 → TJ-SU. Верно."
+ш.Конибодом,district,Konibodom,Konibodom,"ш.=город, но Конибодом в списке 58 → district Konibodom (Согд). Верно."
+ш.Хисор,district,Hisor,Hisor,Ҳисор в списке 58; приоритет района над префиксом «ш.». Верно.
+шахри Краногорск,foreign,,Russia,"шаҳри=город; Краногорск=Красногорск (опечатка), город в Московской обл. РФ → заграница. Верно."
+шахри Хисоро,district,Hisor,Hisor,'шаҳри Хисор' = Hisor; Hisor is in the 58 districts -> district (RRP). Confirmed.
+шањри Њисор,district,Hisor,,Hisor is in the 58 list; district takes priority over the city label.
+шањри Њисор.,district,Hisor,Hisor,"Њисор = Hisor; в списке 58, приоритет района. Верно."
+шањри Њисор:,district,Hisor,Hisor,Hisor in 58-list; city Hisor = district center → district priority. RRP.
+шањри Ќурѓонтепа,city,Bokhtar,Bokhtar,"Qurghonteppa (Kurgan-Tyube) = Bokhtar city, center of Bokhtar district → canonical Bokhtar."
+шањри Ќурѓонтеппа,city,Bokhtar,Bokhtar,Ќурѓонтеппа/Курган-Тюбе = город Бохтар; окружающий район Bokhtar. Верно.
+шањри Ќурѓонтеппа.,city,Bokhtar,,Kurgan-Tyube city (Ќурѓонтеппа) → parent district Bokhtar.
+шањри Ќўрѓонтепа,city,Bokhtar,Bokhtar,"Qurghonteppa (Kurgan-Tyube) = Bokhtar city, center of Bokhtar district → canonical Bokhtar."
+шањри Ќўрѓонтепа.,city,Bokhtar,,Kurgan-Tyube city (Ќўрѓонтепа) = former name of Bokhtar city; parent district Bokhtar per ruleset.
+шањри Бўстон,city,,TJ-SU,"Buston (former Chkalovsk) city in Sughd, not in 58-list → TJ-SU."
+шањри Вахдат.,district,Vahdat,Vahdat,Vahdat (former Kofarnihon/Ordzhonikidzeabad) is in the 58 list -> district (RRP). Confirmed.
+шањри Вањдат,district,Vahdat,,City of Vahdat (b. Kofarnihon/Orjonikidzeabad); Vahdat is an in-list ADM2 unit → district.
+шањри Вањдат.,district,Vahdat,Vahdat,"Вањдат = Vahdat (б. Кофарнихон/Орджоникидзеабад); в списке 58, приоритет района. Верно."
+шањри Вањдат:,district,Vahdat,Vahdat,Вањдат = Vahdat; мусорный «:» игнорируется. Верно.
+шањри Гулистон,city,,TJ-SU,"Guliston = former Kayrakkum, city in Sughd; not in 58 list."
+шањри Гулистон.,city,,TJ-SU,"Guliston = city (b. Kayrakkum) in Sughd, not in 58; prompt rule → region TJ-SU."
+шањри Душанбе,city,,TJ-DU,Столица Душанбе = регион TJ-DU.
+"шањри Душанбе, ноњияи Сино",city,,TJ-DU,Sino district of Dushanbe city -> TJ-DU. Confirmed.
+шањри Истаравшан.,district,Istaravshan,Istaravshan,Istaravshan (б. Ура-Тюбе) в списке 58; приоритет района. Верно.
+шањри Истиќлол.,city,,TJ-SU,"City Istiqlol (former Taboshar), Sughd; duplicate of capitalized variant."
+шањри Исфара,district,Isfara,,Isfara is in the 58 list; district takes priority over city label.
+шањри Исфара.,district,Isfara,Isfara,Isfara is in the 58 districts -> district (Sughd). Confirmed.
+шањри Конибодом,district,Konibodom,Konibodom,Konibodom in 58-list; шаҳри center = district. Sughd.
+шањри Конибодом.,district,Konibodom,Konibodom,"Конибодом = Konibodom; в списке 58, приоритет района. Верно."
+шањри Конибодом:,district,Konibodom,Konibodom,Konibodom in 58-list; шаҳри center = district. Sughd.
+шањри Норак,district,Norak,,Норак (=Nurek) is in the 58 list; district takes priority over city label.
+шањри Норак.,district,Norak,Norak,"Норак (Нурек) = Norak; в списке 58, приоритет района. Верно."
+шањри Панљакент,district,Panjakent,,City center of in-list Panjakent district (Sughd) → district.
+шањри Панљакент.,district,Panjakent,,City center of in-list Panjakent district → district.
+шањри Панҷакент,district,Panjakent,Panjakent,"Панҷакент = Panjakent; в списке 58, приоритет района. Верно."
+шањри Роѓун,district,Roghun,,City of Roghun = in-list unit of republican subordination → Roghun.
+шањри Роѓун.,district,Roghun,Roghun,"Роѓун = Roghun; в списке 58, приоритет района. Верно."
+шањри Сарбанд,district,Sarband,Sarband,Sarband is in the 58-list → district priority over шаҳри prefix (city Sarband/Levakant = center). Khatlon.
+шањри Турсунзода,district,Tursunzoda,TJ-RA,city Tursunzoda = center of Tursunzoda district
+шањри Хоруѓ,city,,TJ-GB,"Khorog city, GBAO center; not in 58 list."
+шањри Хоруѓ.,city,,TJ-GB,"Хоруғ is the GBAO center city, not in the 58 list → TJ-GB; trailing dot garbage."
+шањри Хучанд,city,Ghafurov,Ghafurov,Khujand is a city not in 58-list; surrounded by Ghafurov district → canonical Ghafurov (rule permits Ghafurov or TJ-SU). Sughd.
+шањри Хуљанд,city,Ghafurov,TJ-SU,Khujand = Sughd capital surrounded by Ghafurov; prompt rule Ghafurov (окружает) or TJ-SU fallback.
+шањри Хуљанд.,city,Ghafurov,,Khujand city not in 58 list; surrounded by Ghafurov district (Sughd).
+шањриХуљанд,city,Ghafurov,Ghafurov,"'шаҳри Хуҷанд' = Khujand city (Sughd capital), not in 58; mapped to surrounding Ghafurov district per rule (alt TJ-SU acceptable)."
+љамоати дењоти Тавилдара,district,Tavildara,Tavildara,'ҷамоати деҳоти' (rural jamoat) prefix stripped; Tavildara in list. RRP.
+ҶТ,national,,,'ҶТ' = Ҷумҳурии Тоҷикистон = Republic of Tajikistan (nationwide). Confirmed.

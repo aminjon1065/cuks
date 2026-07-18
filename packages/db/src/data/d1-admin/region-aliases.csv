@@ -1,0 +1,72 @@
+raw_token,kind,targets,note
+РРП,region,TJ-RA,Районы республиканского подчинения (RRP) = TJ-RA
+Хатлон,region,TJ-KT,Khatlon province = TJ-KT
+Сугд,region,TJ-SU,Sughd province = TJ-SU
+ГБАО,region,TJ-GB,Gorno-Badakhshan Autonomous Region = TJ-GB
+ВМКБ,region,TJ-GB,ВМКБ = Вилояти Мухтори Кӯҳистони Бадахшон (Tajik for GBAO) = TJ-GB
+в. Суғд,region,TJ-SU,вилояти Суғд = Sughd province = TJ-SU
+НТҶ,region,TJ-RA,НТҶ = Ноҳияҳои тобеи ҷумҳурӣ = districts of republican subordination = TJ-RA
+НТЧ,region,TJ-RA,НТЧ = variant spelling of НТҶ (republican subordination districts) = TJ-RA
+в. Хатлон,region,TJ-KT,вилояти Хатлон = Khatlon province = TJ-KT
+в. Сугд,region,TJ-SU,вилояти Сугд = Sughd province = TJ-SU
+ш. Душанбе,city,TJ-DU,шаҳри Душанбе = city of Dushanbe = TJ-DU
+шахри Душанбе,city,TJ-DU,city of Dushanbe = TJ-DU
+Минтаќаи Рашт,zone,TJ-RA,"Rasht inter-district zone, parent TJ-RA"
+РТ,national,,Республика Таджикистан = whole republic
+ЧТ,national,,ЧТ = variant of ҶТ (Ҷумҳурии Тоҷикистон) = whole republic
+В. Хатлон,region,TJ-KT,вилояти Хатлон = Khatlon province = TJ-KT
+Минтаќаи Њисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+минтақаи Ҳисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+Душанбе,city,TJ-DU,Dushanbe city = TJ-DU
+Шањри Душанбе,city,TJ-DU,city of Dushanbe = TJ-DU
+Вилояти Суѓд,region,TJ-SU,Sughd province = TJ-SU
+вилояти Суѓд,region,TJ-SU,Sughd province = TJ-SU
+минтакаи Рашт,zone,TJ-RA,"Rasht inter-district zone, parent TJ-RA"
+Афганистан,foreign,Afghanistan,Afghanistan (foreign)
+минтаќаи Њисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+в.Сугд,region,TJ-SU,вилояти Сугд = Sughd province = TJ-SU
+минтаќаи Рашт,zone,TJ-RA,"Rasht inter-district zone, parent TJ-RA"
+вилояти Хатлон,region,TJ-KT,Khatlon province = TJ-KT
+ФР,foreign,Russia,ФР = Федератсияи Россия = Russian Federation (foreign)
+шањри Душанбе,city,TJ-DU,city of Dushanbe = TJ-DU
+г. Душанбе,city,TJ-DU,город Душанбе = city of Dushanbe = TJ-DU
+СУГД,region,TJ-SU,Sughd province = TJ-SU
+Федератсия Россия,foreign,Russia,Russian Federation (foreign)
+Минатаќаи Рашт,zone,TJ-RA,"typo of Минтақаи Рашт (Rasht zone), parent TJ-RA"
+Минтакаи Рашт,zone,TJ-RA,"Rasht inter-district zone, parent TJ-RA"
+"Вилояти Суѓд,",region,TJ-SU,Sughd province (trailing comma) = TJ-SU
+М. РАШТ,zone,TJ-RA,"Минтақаи Рашт = Rasht zone, parent TJ-RA"
+шаҳри Душанбе,city,TJ-DU,city of Dushanbe = TJ-DU
+Вилояти Хатлон,region,TJ-KT,Khatlon province = TJ-KT
+минтакаи Кулоб,zone,TJ-KT,"Kulob inter-district zone, parent TJ-KT"
+Минтакаи Хисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+Ҷумҳурии Тоҷикистон,national,,Republic of Tajikistan = whole republic
+Гиссар,district,Hisor,Гиссар = Russian name of Hisor district; ambiguous with Hisor zone but district takes priority
+ҶТ,national,,Ҷумҳурии Тоҷикистон = whole republic
+ҶҚ,foreign,Kazakhstan,ҶҚ = Ҷумҳурии Қазоқистон = Republic of Kazakhstan (foreign)
+Рашт,district,Rasht,Rasht as bare token — district takes priority over zone reading
+рт,national,,РТ lowercase = Республика Таджикистан = whole republic
+Минтаќаи Кўлоб,zone,TJ-KT,"Kulob inter-district zone, parent TJ-KT"
+митаќаи Рашт,zone,TJ-RA,"typo of минтақаи Рашт (Rasht zone), parent TJ-RA"
+ВМБК,region,TJ-GB,ВМБК = transposed ВМКБ (GBAO in Tajik) = TJ-GB
+Минтакаи Хмсор,zone,TJ-RA,"typo of Минтакаи Хисор (Hisor zone), parent TJ-RA"
+Чумхурии Казокистон,foreign,Kazakhstan,Republic of Kazakhstan (foreign)
+Ҷ. Қазоқистон,foreign,Kazakhstan,Ҷумҳурии Қазоқистон = Republic of Kazakhstan (foreign)
+Каратегинский регион,zone,TJ-RA,"Karategin region = historical name of Rasht valley zone, parent TJ-RA"
+Пакистан,foreign,Pakistan,Pakistan (foreign)
+Cугд,region,TJ-SU,Sughd province (Latin C typo) = TJ-SU
+рРП,region,TJ-RA,РРП = republican subordination districts = TJ-RA
+хатлон,region,TJ-KT,Khatlon province (lowercase) = TJ-KT
+Минтаќаи Хисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+"Минтаќаи Кулоб,",zone,TJ-KT,"Kulob inter-district zone (trailing comma), parent TJ-KT"
+Минтақаи Рашт,zone,TJ-RA,"Rasht inter-district zone, parent TJ-RA"
+минтакаи Хисор,zone,TJ-RA,"Hisor inter-district zone, parent TJ-RA"
+"ВМКБ,",region,TJ-GB,"ВМКБ (GBAO in Tajik, trailing comma) = TJ-GB"
+Б М К Б,region,TJ-GB,spaced ВМКБ/БМКБ = GBAO in Tajik = TJ-GB
+ш. Санкт-Питербург РФ,foreign,Russia,"city of Saint Petersburg, Russian Federation (foreign)"
+Федератсияи Русия,foreign,Russia,Russian Federation (Tajik) = foreign Russia
+Љумњурии Ќирѓизистон,foreign,Kyrgyzstan,Republic of Kyrgyzstan (foreign)
+Федератсияи Россия,foreign,Russia,Russian Federation (foreign)
+Ҷ.И. Афғонистон,foreign,Afghanistan,Ҷумҳурии Исломии Афғонистон = Islamic Republic of Afghanistan (foreign)
+Россия,foreign,Russia,Russia (foreign)
+Љумњурии Тоҷикистон,national,,Republic of Tajikistan = whole republic

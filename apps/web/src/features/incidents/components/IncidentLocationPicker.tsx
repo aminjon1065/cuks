@@ -2,13 +2,19 @@ import { useEffect, useRef } from 'react';
 import { Map as MlMap, Marker, NavigationControl, type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { IncidentLocationInput } from '@cuks/shared';
+import { buildStyle, type BasemapFlavor } from '../../map/lib/basemap';
+import { BASEMAP_SOURCE, cssToken } from '../../map/lib/map-config';
+import { makeTransformRequest } from '../../map/lib/tiles';
+import { useTileToken } from '../../map/api/queries';
 
 const DEFAULT_CENTER: [number, number] = [68.787, 38.559];
 
-function token(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function isDark(): boolean {
+  return typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 }
 
+/** Empty, no-network fallback (dev without a basemap, or before the tile token
+ *  resolves): a plain themed background so the marker is never orphaned. */
 function emptyStyle(): StyleSpecification {
   return {
     version: 8,
@@ -17,13 +23,27 @@ function emptyStyle(): StyleSpecification {
       {
         id: 'background',
         type: 'background',
-        paint: { 'background-color': token('--surface-2') },
+        paint: { 'background-color': cssToken('--surface-2') },
       },
     ],
   };
 }
 
-/** Lightweight MapLibre mini-map used for point selection and card overview. */
+/** The Protomaps basemap alone (no `gis.*` overlays): passing only `region` as the
+ *  available source filters every system/registry layer out of `buildStyle`, so the
+ *  card mini-map shows a real, self-hosted map under the incident marker. */
+function basemapStyle(flavor: BasemapFlavor): StyleSpecification {
+  return buildStyle({
+    flavor,
+    token: cssToken,
+    states: {},
+    availableSources: new Set([BASEMAP_SOURCE]),
+  });
+}
+
+/** Lightweight MapLibre mini-map used for point selection and card overview. Shows
+ *  the offline Protomaps basemap once the tile token is available, falling back to a
+ *  plain themed background otherwise. */
 export function IncidentLocationPicker({
   value,
   onChange,
@@ -39,19 +59,32 @@ export function IncidentLocationPicker({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Short-lived tile token (docs/modules/10 §9); read through a ref so the map's
+  // transformRequest always stamps the freshest value without a rebuild.
+  const { data: tokenData } = useTileToken();
+  const token = tokenData?.token ?? null;
+  const tokenRef = useRef<string | null>(token);
+  tokenRef.current = token;
+  const basemapAppliedRef = useRef(false);
+
   useEffect(() => {
     const el = container.current;
     if (!el) return;
+    // Start with the basemap when a token is already cached, else the empty style;
+    // the token effect below upgrades an empty map once the token resolves.
+    const withBasemap = !!tokenRef.current;
+    basemapAppliedRef.current = withBasemap;
     const map = new MlMap({
       container: el,
-      style: emptyStyle(),
+      style: withBasemap ? basemapStyle(isDark() ? 'dark' : 'light') : emptyStyle(),
       center: Number.isFinite(value.longitude) ? [value.longitude, value.latitude] : DEFAULT_CENTER,
       zoom: 8,
       attributionControl: false,
       cooperativeGestures: true,
+      transformRequest: makeTransformRequest(() => tokenRef.current),
     });
     map.addControl(new NavigationControl({ showCompass: false }), 'bottom-right');
-    const primary = token('--primary');
+    const primary = cssToken('--primary');
     const marker = new Marker(primary ? { color: primary } : {})
       .setLngLat([value.longitude, value.latitude])
       .addTo(map);
@@ -69,9 +102,13 @@ export function IncidentLocationPicker({
     mapRef.current = map;
     const resize = new ResizeObserver(() => map.resize());
     resize.observe(el);
-    // MapLibre styles are concrete values, whereas the app theme uses CSS tokens.
-    // Rebuild this tiny no-network style when the document theme changes.
-    const themeObserver = new MutationObserver(() => map.setStyle(emptyStyle()));
+    // Rebuild the style (basemap or empty) when the document theme flips, so the
+    // map follows light/dark. The marker is an overlay and survives setStyle.
+    const themeObserver = new MutationObserver(() => {
+      map.setStyle(
+        basemapAppliedRef.current ? basemapStyle(isDark() ? 'dark' : 'light') : emptyStyle(),
+      );
+    });
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class'],
@@ -84,9 +121,17 @@ export function IncidentLocationPicker({
       mapRef.current = null;
       markerRef.current = null;
     };
-    // Map owns mutable state after initialization; only the marker changes below.
+    // Map owns mutable state after initialization; the effects below drive updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Upgrade an empty map to the basemap the moment the tile token becomes available.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || basemapAppliedRef.current || !token) return;
+    basemapAppliedRef.current = true;
+    map.setStyle(basemapStyle(isDark() ? 'dark' : 'light'));
+  }, [token]);
 
   useEffect(() => {
     markerRef.current?.setLngLat([value.longitude, value.latitude]);

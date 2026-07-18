@@ -25,13 +25,24 @@ BASE="https://github.com/wmgeolab/geoBoundaries/raw/${RELEASE}/releaseData/gbOpe
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-echo "seed-geo: downloading Tajikistan ADM1/ADM2/ADM3 (geoBoundaries ${RELEASE})…"
-for lvl in ADM1 ADM2 ADM3; do
+# ADM1 (regions) and ADM2 (districts) are required. ADM3 (jamoats) is OPTIONAL:
+# the geoBoundaries gbOpen release does NOT publish an ADM3 layer for Tajikistan
+# (the URL 404s), so we must not hard-fail the whole import over it. When a jamoat
+# source becomes available (gbHumanitarian / OCHA COD-AB / GADM), drop it in as
+# ADM3 and this loads it automatically. See docs/plan/DATA-INTEGRATION.md §D1.
+echo "seed-geo: downloading Tajikistan ADM1/ADM2 (required) + ADM3 (optional) — geoBoundaries ${RELEASE}…"
+for lvl in ADM1 ADM2; do
   curl -sL --fail "${BASE}/${lvl}/geoBoundaries-TJK-${lvl}.geojson" -o "${WORK}/${lvl}.geojson"
 done
+LEVELS="ADM1 ADM2"
+if curl -sL --fail "${BASE}/ADM3/geoBoundaries-TJK-ADM3.geojson" -o "${WORK}/ADM3.geojson"; then
+  LEVELS="ADM1 ADM2 ADM3"
+else
+  echo "seed-geo: WARNING — geoBoundaries has no ADM3 (jamoats) for TJK; loading regions+districts only." >&2
+fi
 
-# Load each level into its own staging table (WGS84, MultiPolygon).
-for lvl in ADM1 ADM2 ADM3; do
+# Load each available level into its own staging table (WGS84, MultiPolygon).
+for lvl in $LEVELS; do
   echo "seed-geo: ogr2ogr → gis._imp_${lvl}…"
   ogr2ogr -f PostgreSQL "PG:${DATABASE_URL}" "${WORK}/${lvl}.geojson" \
     -nln "gis._imp_${lvl}" -overwrite \
@@ -51,36 +62,41 @@ begin;
 -- (admin edits, or a supplied names table). On re-import we refresh geometry only
 -- and PRESERVE existing names, so a run never clobbers curated/edited names.
 insert into gis.admin_units (id, level, code, name_ru, name_tg, geom)
-select gen_random_uuid(), 'region', "shapeISO",
-  case "shapeISO"
+select gen_random_uuid(), 'region', shapeiso,
+  case shapeiso
     when 'TJ-SU' then 'Согдийская область'
     when 'TJ-KT' then 'Хатлонская область'
     when 'TJ-GB' then 'Горно-Бадахшанская автономная область'
     when 'TJ-RA' then 'Районы республиканского подчинения'
     when 'TJ-DU' then 'город Душанбе'
-    else "shapeName"
+    else shapename
   end,
-  case "shapeISO"
+  case shapeiso
     when 'TJ-SU' then 'Согдийская область'
     when 'TJ-KT' then 'Хатлонская область'
     when 'TJ-GB' then 'Горно-Бадахшанская автономная область'
     when 'TJ-RA' then 'Районы республиканского подчинения'
     when 'TJ-DU' then 'город Душанбе'
-    else "shapeName"
+    else shapename
   end,
   st_multi(geom)
-from gis._imp_ADM1 where "shapeISO" is not null
+from gis._imp_ADM1 where shapeiso is not null
 on conflict (code) do update set geom = excluded.geom, updated_at = now();
 
 insert into gis.admin_units (id, level, code, name_ru, name_tg, geom)
-select gen_random_uuid(), 'district', "shapeID", "shapeName", "shapeName", st_multi(geom)
+select gen_random_uuid(), 'district', shapeid, shapename, shapename, st_multi(geom)
 from gis._imp_ADM2
 on conflict (code) do update set geom = excluded.geom, updated_at = now();
 
-insert into gis.admin_units (id, level, code, name_ru, name_tg, geom)
-select gen_random_uuid(), 'jamoat', "shapeID", "shapeName", "shapeName", st_multi(geom)
-from gis._imp_ADM3
-on conflict (code) do update set geom = excluded.geom, updated_at = now();
+-- ADM3 (jamoats) only when the optional layer was actually loaded.
+do $$ begin
+  if to_regclass('gis._imp_ADM3') is not null then
+    insert into gis.admin_units (id, level, code, name_ru, name_tg, geom)
+    select gen_random_uuid(), 'jamoat', shapeid, shapename, shapename, st_multi(geom)
+    from gis._imp_ADM3
+    on conflict (code) do update set geom = excluded.geom, updated_at = now();
+  end if;
+end $$;
 
 -- Parent = the higher-level unit whose polygon contains this unit's centroid.
 update gis.admin_units d
@@ -95,7 +111,7 @@ from gis.admin_units d
 where j.level = 'jamoat' and d.level = 'district'
   and st_contains(d.geom, st_pointonsurface(j.geom));
 
-drop table if exists gis."_imp_ADM1", gis."_imp_ADM2", gis."_imp_ADM3";
+drop table if exists gis._imp_adm1, gis._imp_adm2, gis._imp_adm3;
 commit;
 SQL
 

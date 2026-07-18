@@ -317,6 +317,15 @@ const DICTIONARIES: readonly DictSeed[] = [
     nameRu: 'Туман',
     sort: 8,
   },
+  // Гроза/молния — по факту в историческом реестре КЧС встречаются смертельные
+  // случаи от удара молнии (тадж. «раъду барқ»); метеорологическая опасность.
+  {
+    type: 'incident_type',
+    code: 'nat.meteo.lightning',
+    parentCode: 'nat.meteo',
+    nameRu: 'Гроза, удар молнии',
+    sort: 9,
+  },
 
   // Техногенные → группы
   {
@@ -419,6 +428,33 @@ const DICTIONARIES: readonly DictSeed[] = [
     parentCode: 'biosocial',
     nameRu: 'Массовое отравление',
     sort: 4,
+  },
+
+  // Происшествия (несчастные случаи) — 4-я ветвь. Исторический реестр КЧС —
+  // всехазардный: помимо природных/техногенных ЧС он фиксирует происшествия, на
+  // которые реагировали спасатели. Крупнейшая категория данных — утопления.
+  // Решение заказчика (docs/plan/DATA-INTEGRATION.md §D2): расширить справочник.
+  { type: 'incident_type', code: 'accident', nameRu: 'Происшествие', sort: 4 },
+  {
+    type: 'incident_type',
+    code: 'accident.drowning',
+    parentCode: 'accident',
+    nameRu: 'Утопление',
+    sort: 1,
+  },
+  {
+    type: 'incident_type',
+    code: 'accident.electrocution',
+    parentCode: 'accident',
+    nameRu: 'Поражение электротоком',
+    sort: 2,
+  },
+  {
+    type: 'incident_type',
+    code: 'accident.other',
+    parentCode: 'accident',
+    nameRu: 'Прочее происшествие',
+    sort: 3,
   },
 ];
 

@@ -92,6 +92,7 @@ export default tseslint.config(
       '**/*.config.{ts,mts}',
       '**/seed*.ts',
       '**/scripts/**',
+      '**/import/**',
       '**/e2e/**',
     ],
     rules: {

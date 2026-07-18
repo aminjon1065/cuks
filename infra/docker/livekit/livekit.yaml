@@ -12,6 +12,11 @@ rtc:
   udp_port: 7882
   # Dev runs on localhost; don't probe or advertise a public IP.
   use_external_ip: false
+  # Docker Desktop: without this LiveKit advertises its container-network IP
+  # (172.x.x.x) as the ICE candidate, which the host browser cannot reach — the
+  # room joins over WS but media never connects (endless spinner). Advertise
+  # loopback instead; the published 7881/7882 ports forward it into the container.
+  node_ip: 127.0.0.1
 
 redis:
   address: redis:6379

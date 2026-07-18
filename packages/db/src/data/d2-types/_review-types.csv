@@ -1,0 +1,6 @@
+raw_token,primary_code,freq,note
+прорыв,nat.hydro.flood,13,"прорыв воды/дамбы — неоднозначно, дефолт наводнение [manual]"
+СБ,accident.other,5,"неясная аббревиатура → прочее [manual, review]"
+баҳсу муноқишаи байнисарҳадӣ,accident.other,2,"трансграничный конфликт — вне таксономии природных/техно ЧС [manual, review]"
+қубури магистрали,tech.utilities,2,магистральный трубопровод — авария ЖКХ [manual]
+Сб,accident.other,1,"неясная аббревиатура → прочее [manual, review]"

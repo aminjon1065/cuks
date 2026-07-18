@@ -1,0 +1,378 @@
+raw_token,primary_code,secondary_codes,verified,freq,note
+гаркшуда,accident.drowning,,yes,393,"гарқшуда = утонул/утопление. Прямое соответствие, вода подразумевается. High."
+сели,nat.geo.mudflow,,yes,372,тадж. мн. от сел = сель. High.
+"дожди, сели",nat.geo.mudflow,nat.meteo.downpour,yes,313,"Составное; правило сель>дождь: сель primary, дождь secondary. High."
+землетрясение,nat.geophys.earthquake,,yes,265,Прямое соответствие. High.
+оползень,nat.geo.landslide,,yes,203,Прямое соответствие. High.
+дожди,nat.meteo.downpour,,yes,199,Дождь/ливень. High.
+тарма,nat.geo.avalanche,,yes,196,тарма = лавина (по словарю). High.
+подъем уровня воды,nat.hydro.flood,,yes,184,Подъём уровня воды → наводнение/подъём воды. High.
+сел,nat.geo.mudflow,,yes,157,сел = сель. High.
+ветер,nat.meteo.windstorm,,yes,137,Единственный ветровой код — сильный/ураганный ветер; запись как тип ЧС подразумевает поражающий фактор. High.
+садамаи наклиёт,tech.transport.road,,yes,110,садамаи нақлиёт = транспортное происшествие; дефолт — ДТП/дорога. High.
+сухтор,tech.fire_explosion,,yes,84,По правилу сухтор без контекста = бытовой пожар. Нет пометки лес/природа → не nat.fire. Medium.
+СЕЛ,nat.geo.mudflow,,yes,79,Сель (капс). High.
+лавина,nat.geo.avalanche,,yes,73,Прямое соответствие. High.
+ТАРМА,nat.geo.avalanche,,yes,67,тарма = лавина (капс). High.
+Гаркшави,accident.drowning,,yes,65,Гарқшавӣ = утопление. High.
+снегопады,nat.meteo.snowfall,,yes,64,Снегопад (мн.). High.
+Гарқшавӣ,accident.drowning,,yes,62,Утопление (тадж.). High.
+заминчунби,nat.geophys.earthquake,,yes,58,заминчунбӣ = землетрясение. High.
+"снегопады, морозы",nat.meteo.snowfall,nat.meteo.frost,yes,53,"Составное без явной иерархии; снегопад как более разрушительный/основной фактор → primary, мороз → secondary. Проверил обратный вариант — менее обоснован. Medium."
+"дожди, ветер",nat.meteo.downpour,nat.meteo.windstorm,yes,52,"Составное без явной иерархии; дождь перечислен первым → primary, ветер → secondary. Medium."
+сангрез,nat.geo.rockfall,,yes,52,сангрез(а) = камнепад/обвал. High.
+"дожди, поднятие уровня воды",nat.hydro.flood,nat.meteo.downpour,yes,51,"Составное; правило наводнение>дождь: наводнение primary, дождь secondary. High."
+кушодани дарҳо,accident.other,,yes,49,"Букв. «открывание дверей» — неясный артефакт; по правилу primary = accident.other, гипотеза в note. Low."
+Заминљунбї,nat.geophys.earthquake,,yes,48,Заминљунбӣ = землетрясение. High.
+ҳодисаи нохуш,accident.other,,yes,43,несчастный случай → прочее происшествие (по словарю). High.
+шамоли сахт,nat.meteo.windstorm,,yes,42,шамоли сахт = сильный ветер. High.
+Заминларза,nat.geophys.earthquake,,yes,39,заминларза = землетрясение. High.
+лавины,nat.geo.avalanche,,yes,38,Лавина (мн.). High.
+"ходисаи нохуш, беэхтиёти",accident.other,,yes,36,"Несчастный случай + неосторожность — оба маппятся в accident.other, отдельного secondary нет. High."
+БАЛАНДШАВИИ ОБ,nat.hydro.flood,,yes,35,баландшавии об = подъём воды → наводнение (капс). High.
+"дождь, град, сель",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,yes,33,"Составное; сель доминирует, дождь и град → secondary. Все компоненты учтены. High."
+"дожди, град",nat.meteo.downpour,nat.meteo.hail,yes,32,"Составное без явной иерархии; дождь первым → primary, град → secondary. Medium."
+высокие уровни воды,nat.hydro.flood,,yes,31,Высокие уровни воды → наводнение/подъём воды. High.
+баландшавии сатҳи об,nat.hydro.flood,,yes,31,баландшавии сатҳи об = подъём уровня воды → наводнение. High.
+засуха,nat.meteo.drought,,yes,30,Прямое соответствие. High.
+"дожди, град, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,yes,28,"Составное; сель доминирует, дождь и град → secondary. High."
+Землетрясение,nat.geophys.earthquake,,yes,28,Прямое соответствие. High.
+ёфтани ҷасад,accident.other,,yes,27,"По правилу: обнаружение тела без указания воды → accident.other (не drowning), хотя возможен исход утопления. Medium."
+заминларза,nat.geophys.earthquake,,yes,26,заминларза = землетрясение. High.
+сель,nat.geo.mudflow,,yes,25,Прямое соответствие. High.
+камнепад,nat.geo.rockfall,,yes,24,Камнепад/обвал. High.
+баландшавии сатхи об,nat.hydro.flood,,yes,24,Орфовариант (х вместо ҳ) баландшавии сатҳи об → наводнение. High.
+ярч,nat.geo.landslide,,yes,24,"По словарю кодов ярч = сход грунта → оползень. Скептич. замечание: ярч также «овраг/промоина», но правило явно фиксирует landslide. High."
+Баландшави сатхи об,nat.hydro.flood,,yes,23,Орфовариант баландшавии сатҳи об → наводнение. High.
+"дожди, град, ветер",nat.meteo.downpour,nat.meteo.hail|nat.meteo.windstorm,yes,22,"Составное чисто метео без разрушительной доминанты (нет селя/лавины/наводнения). Дождь ведущий, град+ветер вторичны. Согласен, medium оправдан."
+"снегопады, лавины",nat.geo.avalanche,nat.meteo.snowfall,yes,22,"Правило прямо: лавина > снегопад. Лавина primary, снегопад secondary. high корректно."
+боришоти борон аз меъёр зиёд,nat.meteo.downpour,,yes,22,"«осадки дождя выше нормы» = ливень/дождь. Одиночное, high корректно."
+подтопление,nat.hydro.waterlogging,,yes,21,Прямое соответствие подтопление = nat.hydro.waterlogging. high.
+"дожди, сели, ветер",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,yes,21,Сель — доминанта (сель > дождь). Дождь и ветер вторичны. high корректно.
+Лавина,nat.geo.avalanche,,yes,21,Прямое соответствие лавина = nat.geo.avalanche. high.
+Сел,nat.geo.mudflow,,yes,20,сел = сель = nat.geo.mudflow. high.
+Сангрези,nat.geo.rockfall,,yes,19,сангрез(а)/сангрези = обвал/камнепад = nat.geo.rockfall. high.
+ЯРЧ,nat.geo.landslide,,yes,18,«ярч» = сход грунта → оползень по прямому правилу в списке кодов. high.
+садамаи наклиёти,tech.transport.road,,yes,17,садамаи нақлиёт = ДТП = tech.transport.road. high.
+садамаи нақлиёт,tech.transport.road,,yes,16,ДТП = tech.transport.road. high.
+обвал,nat.geo.rockfall,,yes,14,обвал = nat.geo.rockfall. high.
+кушодани дар,accident.other,,yes,14,"«открывание двери(ей)» — неясно; по правилу «кушодани дар(ҳо)» → accident.other, confidence=low, гипотеза бытового происшествия. Согласен."
+Шамоли сахт,nat.meteo.windstorm,,yes,14,шамоли сахт = сильный ветер = nat.meteo.windstorm. high.
+ғарқшуда,accident.drowning,,yes,14,ғарқшуда = утонувший = accident.drowning. high.
+прорыв,nat.hydro.flood,,no,13,"прорыв воды/дамбы — неоднозначно, дефолт наводнение [manual]"
+"Град, сели",nat.geo.mudflow,nat.meteo.hail,yes,13,"Сель — доминанта, град вторичен. high корректно."
+"дожди, снегопады",nat.meteo.downpour,nat.meteo.snowfall,yes,13,"Составное метео без разрушительной доминанты; дождь ведущий, снегопад вторичен. medium оправдан."
+"снегопады, лавины, мороз",nat.geo.avalanche,nat.meteo.snowfall|nat.meteo.frost,yes,13,лавина > снегопад; мороз вторичен. high корректно.
+ходисаи нохуш,accident.other,,yes,13,ходисаи нохуш = несчастный случай = accident.other. high.
+сильный ветер,nat.meteo.windstorm,,yes,12,Прямое соответствие = nat.meteo.windstorm. high.
+Сухтор,tech.fire_explosion,,yes,12,«сухтор» без контекста = бытовой пожар → tech.fire_explosion по правилу. medium корректно (при явном лесном был бы nat.fire).
+"дождь, град",nat.meteo.downpour,nat.meteo.hail,yes,11,"Составное метео; дождь ведущий, град вторичен. high приемлемо."
+"подъем уровня воды, сели",nat.geo.mudflow,nat.hydro.flood,yes,11,Сель наиболее разрушителен → primary; подъём уровня воды (наводнение) вторичен. medium оправдан.
+"дожди, оползень",nat.geo.landslide,nat.meteo.downpour,yes,10,"Оползень разрушительнее дождя (аналогично сель>дождь). Оползень primary, дождь вторичен. high приемлемо."
+боришоти борн аз меъёр зиёд (сел),nat.geo.mudflow,nat.meteo.downpour,yes,10,"Ливень выше нормы, вызвавший сель (явно указан «сел»); сель — доминанта, ливень вторичен. high корректно."
+"дожди, сели, наводнения",nat.geo.mudflow,nat.meteo.downpour|nat.hydro.flood,yes,9,Сель — доминанта; дождь и наводнение вторичны. medium оправдан из-за составности.
+гроза,nat.meteo.lightning,,yes,9,гроза = гроза/удар молнии = nat.meteo.lightning. high.
+Шамол,nat.meteo.windstorm,,yes,9,шамол = ветер → nat.meteo.windstorm. high.
+Садамаи наклёт ба дарё афтида,tech.transport.road,accident.drowning,yes,9,"ДТП с падением транспорта в реку; primary — ДТП, вероятный исход утопление secondary. medium корректно."
+боришоти барф аз меъёр зиёд,nat.meteo.snowfall,,yes,9,«осадки снега выше нормы» = снегопад = nat.meteo.snowfall. high.
+"осадки, сели, оползни",nat.geo.mudflow,nat.geo.landslide|nat.meteo.downpour,yes,8,"Сель — доминанта; осадки→ливень, оползни вторичны. medium оправдан."
+Сильный ветер,nat.meteo.windstorm,,yes,8,Прямое соответствие = nat.meteo.windstorm. high.
+наводнение,nat.hydro.flood,,yes,8,наводнение/подъём воды = nat.hydro.flood. high.
+Садамаи наклёт,tech.transport.road,,yes,8,наклёт = нақлиёт → ДТП = tech.transport.road. high.
+"дожди, град, сели, ветер",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,yes,7,"Сель — доминанта; дождь, град, ветер вторичны. high корректно."
+"Сели, оползень",nat.geo.mudflow,nat.geo.landslide,yes,7,"Сель — доминанта, оползень вторичен. high корректно."
+"сель, наводнение",nat.geo.mudflow,nat.hydro.flood,yes,7,Сель наиболее разрушителен → primary; наводнение вторично. medium оправдан.
+"сильные дожди,сели",nat.geo.mudflow,nat.meteo.downpour,yes,7,"Сель — доминанта, ливень вторичен. high корректно."
+Садамаи ниқлётӣ,tech.transport.road,,yes,7,ниқлётӣ = нақлиёт → ДТП = tech.transport.road. high.
+"ветер, град",nat.meteo.windstorm,nat.meteo.hail,yes,6,"Составное метео без разрушительной доминанты; ветер ведущий, град вторичен. medium оправдан."
+Обвал,nat.geo.rockfall,,yes,6,обвал = nat.geo.rockfall. high.
+морозы,nat.meteo.frost,,yes,6,морозы = мороз = nat.meteo.frost. high.
+Ветер,nat.meteo.windstorm,,yes,6,ветер → сильный/ураганный ветер = nat.meteo.windstorm. high.
+"дождь, наводнение",nat.hydro.flood,nat.meteo.downpour,yes,6,"Правило прямо: наводнение > дождь. Наводнение primary, дождь вторичен. high корректно."
+таркиши балони газ,tech.fire_explosion,,yes,6,Взрыв газового баллона = взрыв/пожар в быту/здании. Верно.
+раъду барк,nat.meteo.lightning,,yes,6,раъду барқ прямо указан в списке как гроза/удар молнии. Верно.
+афтидани снаряд,accident.other,,yes,6,"Падение снаряда; спец. кода для боеприпасов/военных ЧП нет → прочее происшествие. accident.other точнее, чем UNKNOWN (текст читаем и понятен)."
+СУХТОР,tech.fire_explosion,,yes,6,"сухтор без контекста = бытовой пожар (по правилу). Природный/лесной был бы nat.fire, но контекста нет. Верно."
+Боридани борон,nat.meteo.downpour,,yes,6,боридани борон = выпадение дождя. Верно.
+ГАРКШАВИ,accident.drowning,,yes,6,гаркшавӣ = утопление (в списке). Верно.
+дарёфти лавозимоти ҳарбӣ,accident.other,,yes,6,Обнаружение военного снаряжения/боеприпасов; спец. кода нет → прочее происшествие.
+сангреза,nat.geo.rockfall,,yes,6,сангреза = камнепад/обвал (в списке rockfall). Верно.
+садамаи нақлиёти,tech.transport.road,,yes,6,садамаи нақлиёт = ДТП. Верно.
+град,nat.meteo.hail,,yes,5,град. Верно.
+СБ,accident.other,,no,5,"неясная аббревиатура → прочее [manual, review]"
+"дождь, ветер, сель",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,yes,5,Составное; сель доминирует (сель > дождь). Верно.
+"дожди, сели, оползни",nat.geo.mudflow,nat.geo.landslide|nat.meteo.downpour,yes,5,"Составное; сель принят доминирующим. Сель vs оползень спорно (оба гео), но сель — более протяжённый разрушительный поток; согласен."
+"дождь, град, ветер, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,yes,5,Составное; сель доминирует. Все токены покрыты. Верно.
+"дождь, град, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,yes,5,Составное; сель доминирует. Верно.
+"дожди, град, ветер, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,yes,5,Составное; сель доминирует. Верно.
+"оползень, сель",nat.geo.mudflow,nat.geo.landslide,yes,5,"Сель принят доминирующим над оползнем — спорно, но приемлемо; согласен."
+"дожди, сели, ветер, наводнения",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour|nat.meteo.windstorm,yes,5,"Составное; сель доминирует над наводнением/дождём/ветром (правило: сель>дождь, наводнение>дождь; сель — локально самый разрушительный). Согласен."
+Садамаи наклёти,tech.transport.road,,yes,5,Опечатка садамаи нақлиёт = ДТП. Верно.
+Садамаи ниқлётӣ дар даё,tech.transport.road,accident.drowning,yes,5,"ДТП в реке (дар дарё); drowning как водный элемент/вероятный исход — спекулятивно, но обоснованно флагирует утопление. Согласен, уверенность низкая."
+худкуши,accident.other,,yes,5,худкушӣ = самоубийство; спец. кода нет → прочее происшествие. Верно.
+шикасти дарахтҳо,nat.meteo.windstorm,,yes,5,"Поломка деревьев — обычно следствие сильного ветра; альт. мокрый снег/налипание льда. Согласен, уверенность низкая."
+"дожди, снегопады, ветер",nat.meteo.downpour,nat.meteo.snowfall|nat.meteo.windstorm,yes,4,"Чисто метео-комбо без гео/гидро; primary по ведущему токену. Скептически: ветер мог бы быть primary как более разрушительный, но однозначного ранга нет — согласен при низкой уверенности."
+"дождь, град, ветер",nat.meteo.downpour,nat.meteo.hail|nat.meteo.windstorm,yes,4,"Метео-комбо; дождь ведущий. Град/ветер также кандидаты в primary; согласен, уверенность средняя/низкая."
+"дождь, сель, ветер",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,yes,4,Составное; сель доминирует. Верно.
+"снегопады, ветер",nat.meteo.snowfall,nat.meteo.windstorm,yes,4,Снегопад с ветром (буран); снегопад ведущий. Верно.
+ливневые дожди,nat.meteo.downpour,,yes,4,Ливневые дожди. Верно.
+дождь со снегом,nat.meteo.downpour,nat.meteo.snowfall,yes,4,Дождь со снегом; снег вторично. Верно.
+боришоти борон,nat.meteo.downpour,,yes,4,боришоти борон = осадки дождя (в списке). Верно.
+бедаракгашта,accident.other,,yes,4,бедарак гашта = пропал без вести → прочее происшествие. Верно.
+Кандашавии куҳпора,nat.geo.rockfall,,yes,4,кандашавии кӯҳпора = обвал горной породы (кӯҳпора в списке rockfall). Верно.
+ЛАГЖИШИ ЗАМИН,nat.geo.landslide,,yes,4,лагжиши замин = оползень (в списке). Верно.
+Садамаи ниқлётӣ ба ҷари афтида,tech.transport.road,,yes,4,ДТП с падением в овраг/пропасть (ба ҷар афтида). Верно.
+ихроҷи газ,tech.utilities,,yes,4,"Утечка/выброс газа → вероятно авария газоснабжения (ЖКХ); при токсичном выбросе — tech.chemical, при возгорании — tech.fire_explosion. Согласен, уверенность низкая."
+аз беэҳтиёти,accident.other,,yes,4,беэхтиётӣ прямо перечислен в списке accident.other; 'по неосторожности' → прочее происшествие. Верно.
+илтиҳоби шуш,accident.other,,yes,4,"илтиҳоби шуш = воспаление лёгких; болезнь/причина смерти, не ЧС; catch-all accident.other; при вспышке — bio.epidemic. Согласен, уверенность низкая."
+туман,nat.meteo.fog,,no,3,Туман.
+"дожди, град, снег",nat.meteo.downpour,nat.meteo.hail|nat.meteo.snowfall,no,3,"Составное: дождь+град+снегопад; геособытий нет, доминанта не выражена — primary=дождь (ведущий)."
+шамол,nat.meteo.windstorm,,no,3,шамол=ветер.
+яхбанди,nat.meteo.frost,,no,3,"яхбандӣ/яхбандон=мороз, гололёд."
+Садамаи наклёт дар об,tech.transport.road,accident.drowning,no,3,садамаи нақлиёт дар об=транспортное происшествие в воде; спецкода водного транспорта нет → road; вероятный исход — утопление.
+Таркиши мина,tech.fire_explosion,,no,3,"таркиши мина=взрыв мины; точного кода нет, отнесено к взрыву; альтернатива accident.other."
+Садамаи ниқлётӣ дар об,tech.transport.road,accident.drowning,no,3,"То же, что 'садамаи нақлиёт дар об' (опечатка ниқлётӣ)."
+Сухтори автомобил,tech.fire_explosion,,no,3,сӯхтори автомобил=возгорание автомобиля → техногенный пожар.
+боришоти борон аз меъёр зиёд (ярч),nat.geo.landslide,nat.meteo.downpour,no,3,Избыточные осадки + ярч(сход грунта=оползень); геособытие доминирует над дождём.
+боришоти борн аз меъёр зиёд (ярч),nat.geo.landslide,nat.meteo.downpour,no,3,"Опечатка 'борн'; то же, что предыдущий токен."
+"дожди, таяние снега",nat.hydro.freshet,nat.meteo.downpour,yes,3,Дожди + снеготаяние → паводок; снеготаяние = драйвер паводка (freshet). Верно.
+"Дожди, сели, наводнения",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour,yes,3,Составное; сель доминирует; наводнение присутствует. Верно.
+"дождь, снег",nat.meteo.downpour,nat.meteo.snowfall,yes,3,Дождь и снег; дождь ведущий. Верно.
+изменение русла реки,nat.hydro.flood,,yes,3,Изменение русла (боковая эрозия/переформирование) — точного листа нет; ближайший гидро-лист. Слабое сопоставление; альт. nat.geo.landslide (обрушение берега). Согласен при низкой уверенности.
+мороз,nat.meteo.frost,,yes,3,мороз. Верно.
+"землетрясение, дожди, сели",nat.geophys.earthquake,nat.geo.mudflow|nat.meteo.downpour,yes,3,Составное; землетрясение наиболее разрушительно → primary. Верно.
+"Сели, сильный ветер",nat.geo.mudflow,nat.meteo.windstorm,yes,3,Составное; сель доминирует. Верно.
+"сильные осадки, лавины",nat.geo.avalanche,nat.meteo.snowfall,yes,3,Лавина > снегопад (правило); 'сильные осадки' в контексте лавин = снегопад. Верно.
+камнепады,nat.geo.rockfall,,yes,3,камнепады = камнепад/обвал. Верно.
+"ветер, подъем уровня воды",nat.hydro.flood,nat.meteo.windstorm,no,2,Подъём уровня воды=наводнение; доминирует над ветром.
+"Снегопады, лавины",nat.geo.avalanche,nat.meteo.snowfall,no,2,Правило: лавина>снегопад.
+"дождь, ветер, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,no,2,Правило: сель>дождь; сель доминирует.
+"дожди, сель, ветер",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,no,2,Сель доминирует.
+"дожди, град, наводнение",nat.hydro.flood,nat.meteo.downpour|nat.meteo.hail,no,2,Правило: наводнение>дождь.
+Град,nat.meteo.hail,,no,2,Град.
+"дожди, снегопады, лавины, сели",nat.geo.mudflow,nat.geo.avalanche|nat.meteo.downpour|nat.meteo.snowfall,no,2,"Два геособытия; сель как наиболее разрушительное — primary, лавина в secondary."
+провал земли,nat.geo.subsidence,,no,2,Провал/просадка грунта.
+"дождь, град, наводнение",nat.hydro.flood,nat.meteo.downpour|nat.meteo.hail,no,2,Наводнение>дождь.
+"сели, ветер",nat.geo.mudflow,nat.meteo.windstorm,no,2,Сель доминирует.
+"дожди, сели, град",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,no,2,Сель доминирует.
+"дожди, паводки",nat.hydro.freshet,nat.meteo.downpour,no,2,Паводок доминирует над дождём.
+Провал участка земли,nat.geo.subsidence,,no,2,Провал участка грунта → просадка.
+"дождь, сель, наводнение",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour,no,2,Сель (селевой поток) как наиболее разрушительное — primary; наводнение в secondary.
+"дождь, град, сель, наводнение",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour|nat.meteo.hail,no,2,Сель доминирует; наводнение/дождь/град в secondary.
+"дожди, град, сель, оползень",nat.geo.mudflow,nat.geo.landslide|nat.meteo.downpour|nat.meteo.hail,no,2,"Два геособытия; сель — primary, оползень в secondary."
+"лавины, камнепады",nat.geo.avalanche,nat.geo.rockfall,no,2,Лавина как более масштабное — primary; камнепад в secondary.
+"сильные дожди,сели, оползень",nat.geo.mudflow,nat.geo.landslide|nat.meteo.downpour,no,2,Сель доминирует; оползень в secondary.
+"сильные дожди, снег",nat.meteo.downpour,nat.meteo.snowfall,no,2,Без геособытий; сильные дожди — ведущий фактор.
+"сильные дожди, снег, лавина",nat.geo.avalanche,nat.meteo.downpour|nat.meteo.snowfall,no,2,Лавина>снегопад; лавина — primary.
+"Сильные дожди, град",nat.meteo.downpour,nat.meteo.hail,no,2,Дождь ведущий; град в secondary.
+"дожди, град, сель",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,no,2,Сель доминирует.
+аз кувваи барк,accident.electrocution,,no,2,аз қуввати барқ=поражение электротоком.
+шахсияташ номаълум,accident.other,,no,2,'личность неизвестна' — неопознанное лицо/тело; без указания воды → accident.other.
+гирифтори касалии гепотит,bio.epidemic,,no,2,Заболевание гепатитом — инфекционная болезнь → эпидемическая категория.
+боришоти барфи зиёд,nat.meteo.snowfall,,no,2,Обильный снегопад.
+сабаби нуќсони техникї,accident.other,,no,2,"'по причине технической неисправности' — описание причины, а не тип ЧС; событие неясно."
+саг газида,accident.other,,no,2,Укус собаки → несчастный случай.
+таркиш ё лағжиши кишри замин,nat.geophys.earthquake,,no,2,'разрыв или сдвиг земной коры' → сейсмика; возможна путаница с оползнем (лағжиш).
+лагжиши замин,nat.geo.landslide,,no,2,лағжиши замин=оползень.
+ихрочи газ (хлор),tech.chemical,,no,2,Выброс газа (хлор) → ХОВ.
+сухтор аз гармии хаво,tech.fire_explosion,,no,2,Пожар из-за жары; по умолчанию бытовой; возможен природный/травяной → nat.fire.
+садамаи хавои,tech.transport.aviation,,no,2,садамаи ҳавоӣ=авиапроисшествие.
+таркиши газ,tech.fire_explosion,,no,2,Взрыв газа → взрыв/пожар.
+ЗЕРИ БАРФ МОНДА,nat.geo.avalanche,,no,2,'остался под снегом' — вероятно засыпан лавиной; возможен снегозанос/снегопад → nat.meteo.snowfall.
+АЗ ЧАРИ АФТИДА,accident.other,,no,2,Tajik 'аз ҷарӣ афтида' = fell from a ravine/cliff; a fall (падение) → other incident.
+Садамаи наклиёти,tech.transport.road,,no,2,'садамаи нақлиёт' = transport/road accident (ДТП).
+Садамаи наклиёти дар об,tech.transport.road,accident.drowning,no,2,"Transport accident 'in water'; drowning outcome inferred from 'дар об', kept as secondary."
+садамаи наклиёти ба ҷари афтида,tech.transport.road,,no,2,"Transport accident, vehicle fell into a ravine; the fall is inherent to the crash."
+Садамаи нақлётӣ,tech.transport.road,,no,2,Transport accident (typo of нақлиётӣ) → ДТП.
+Сухтори табии,nat.fire,,no,2,'сӯхтори табиӣ' = natural/wildfire.
+захролудшави аз хурок,bio.poisoning,,no,2,'заҳролудшавӣ аз хӯрок' = food poisoning.
+таркиш,tech.fire_explosion,,no,2,'таркиш' = explosion → взрыв.
+яхбандӣ,nat.meteo.frost,,no,2,'яхбандӣ' = frost/icing (яхбандон).
+баҳсу муноқишаи байнисарҳадӣ,accident.other,,no,2,"трансграничный конфликт — вне таксономии природных/техно ЧС [manual, review]"
+заҳролудшавии одамон,bio.poisoning,,no,2,'poisoning of people'; source unspecified (food/chemical).
+кашидани об аз таҳхона,nat.hydro.waterlogging,,no,2,'pumping water out of a basement' — response to basement flooding → подтопление/waterlogging.
+боришоти борон аз меъёр зиёд (сел),nat.geo.mudflow,nat.meteo.downpour,no,2,"Above-norm rainfall causing mudflow; сель dominant, rain secondary."
+боришоти борн аз меъёр зиёд,nat.meteo.downpour,,no,2,Above-norm rainfall (typo 'борн'); no secondary hazard named.
+қубури магистрали,tech.utilities,,no,2,магистральный трубопровод — авария ЖКХ [manual]
+шамоли барфтуда,nat.meteo.windstorm,nat.meteo.snowfall,yes,1,"Подтверждаю. шамол=ветер (главное слово в изафете), барфтӯда=снежный занос/метель. Буран: доминирует ветер → windstorm primary, снег → secondary snowfall. Confidence medium — пограничность со snowfall."
+боришоти борон аз меъёр зиёд(баландшави сатҳи дарё),nat.hydro.flood,nat.meteo.downpour,yes,1,"Подтверждаю. Осадки выше нормы (ливень) → подъём уровня реки=наводнение. Правило наводнение>дождь: flood primary, downpour secondary. High."
+зидди жола (3 адад),nat.meteo.hail,,yes,1,"Подтверждаю. зидди жола=противоградовое мероприятие (3 ед.), базовый хазард — жола=град. Классифицируем по хазарду → hail. Note: операция противодействия. High."
+зидди жола (2 адад),nat.meteo.hail,,yes,1,"Подтверждаю. зидди жола=противоградовая защита (2 ед.), хазард — град. High."
+зиди жола (32),nat.meteo.hail,,yes,1,"Подтверждаю. зиди=опечатка зидди; жола=град. Противоградовое мероприятие (32 ед.), хазард — град. High."
+зиди жола (80),nat.meteo.hail,,yes,1,"Подтверждаю. зиди=опечатка зидди; жола=град. Противоградовое мероприятие (80 ед.), хазард — град. High."
+садамаи найлиёти,tech.transport.road,,yes,1,Подтверждаю. найлиёти=опечатка нақлиёт; садамаи нақлиёт=транспортное происшествие=ДТП. Вид транспорта не уточнён → по умолчанию дорожный. High.
+наҷоти ҳайвонҳо,accident.other,,yes,1,"Подтверждаю. наҷоти ҳайвонҳо=спасение животных — ПСР-операция, а не вид ЧС. bio.epizootic не подходит (не эпизоотия). Fallback — прочее происшествие. Low; альтернатива UNKNOWN, но запись читаема, поэтому accident.other."
+боришоти борн аз меъёр зиёд (баландашави сатҳи оби дарёи Ёхсу),nat.hydro.flood,nat.meteo.downpour,yes,1,"Подтверждаю. борн=опечатка борон. Осадки выше нормы → подъём уровня воды р. Яхсу=наводнение. Наводнение>дождь: flood primary, downpour secondary. High."
+раду барқ,nat.meteo.lightning,,yes,1,Подтверждаю. раду барқ=раъду барқ (пропущен ъ)=гроза/удар молнии. High.
+бемори руҳи,accident.other,,yes,1,"Подтверждаю с оговоркой. бемории рӯҳӣ=психическое заболевание. Ни хазард, ни био-код (про инфекции) не подходят; вероятно происшествие с психически больным. Fallback — прочее происшествие. Low; возможен UNKNOWN, но запись читаема → accident.other."
+шамоли сахт ва раду барқ,nat.meteo.windstorm,nat.meteo.lightning,yes,1,"Подтверждаю. Составное: шамоли сахт=сильный ветер + раъду барқ=гроза/молния. Доминанта — более разрушительный сильный ветер → windstorm primary, lightning secondary. Medium."
+худкуши (ғаркшави),accident.drowning,,yes,1,"Подтверждаю. худкушӣ=суицид, механизм — ғарқшавӣ=утопление, вода указана явно. Кода суицида нет; классифицируем по механизму → drowning. Note: обстоятельство — самоубийство. Medium."
+бе назардошти волидайн (ғаркшави),accident.drowning,,yes,1,Подтверждаю. бе назардошти волидайн=без присмотра родителей + ғарқшавӣ=утопление. Утопление ребёнка без надзора → drowning. High.
+боришоти борн аз меъёр зиёд(сангреза),nat.geo.rockfall,nat.meteo.downpour,yes,1,"Подтверждаю. борн=опечатка борон. Осадки выше нормы (триггер) + сангреза=камнепад/обвал (nat.geo.rockfall). Гео-эффект доминирует → rockfall primary, downpour secondary. Medium (сангреза=каменный сход, не сель)."
+боришоти борн аз меъёр зиёд(сел),nat.geo.mudflow,nat.meteo.downpour,yes,1,"Подтверждаю. борн=опечатка борон. Осадки выше нормы + сел=сель. Правило сель>дождь: mudflow primary, downpour secondary. High."
+"дожди, сели, резкое похолодание",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.frost,yes,1,Составное. Сель доминирует (разрушительнее дождя/похолодания). 'резкое похолодание'→ближайший лист мороз. Все 3 токена покрыты. high.
+"дожди, сели, подъем почвенных вод",nat.geo.mudflow,nat.meteo.downpour|nat.hydro.waterlogging,yes,1,Сель доминирует; 'подъём почвенных вод'=подтопление грунтовыми водами; дождь вторично. high.
+инфильтрация воды из канала,nat.hydro.waterlogging,,yes,1,"Просачивание из канала→подтопление, не паводок/наводнение (нет русла реки). medium."
+"интенсивное таяние снега,",nat.hydro.freshet,,yes,1,"Снеготаяние→паводок (половодье). Запятая — артефакт, одиночный токен. medium."
+"Сели, ветер",nat.geo.mudflow,nat.meteo.windstorm,yes,1,Сель доминирует; ветер вторично. high.
+"Сильный ветер, град",nat.meteo.windstorm,nat.meteo.hail,yes,1,"Оба метео; акцент 'сильный'→ветер primary, град вторично. Доминант условен. medium."
+"Обильные дожди, снегопад",nat.meteo.downpour,nat.meteo.snowfall,yes,1,"Нет гео/гидро-опасности; обильные дожди primary, снегопад вторично. medium."
+"землетрясение, сильные дожди",nat.geophys.earthquake,nat.meteo.downpour,yes,1,Землетрясение — наиболее разрушительное; дожди вторично. high.
+"дождь, сель, лавина",nat.geo.mudflow,nat.geo.avalanche|nat.meteo.downpour,yes,1,"Сель и лавина оба разрушительны; сель доминант (иерархия сель>лавина по проекту), дождь-триггер вторично. medium."
+"сильный дождь, таяние снега",nat.hydro.freshet,nat.meteo.downpour,yes,1,Снеготаяние→паводок как доминирующий процесс; дождь вторично. medium.
+"дожди, паводки, ветер",nat.hydro.freshet,nat.meteo.downpour|nat.meteo.windstorm,yes,1,Паводки явно→freshet доминант; дожди и ветер вторично. high.
+"дожди, град, сели, наводнения",nat.geo.mudflow,nat.hydro.flood|nat.meteo.hail|nat.meteo.downpour,yes,1,Сель доминант над наводнением; град и дождь вторично. Все 4 покрыты. medium.
+"дождь, град, сель, ветер",nat.geo.mudflow,nat.meteo.hail|nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Сель доминирует; град, ветер, дождь вторично. high."
+"дождь, наводнение, сель",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour,yes,1,Сель доминант над наводнением (политика проекта); дождь вторично. medium.
+"дожди, снижение температуры воздуха",nat.meteo.downpour,nat.meteo.frost,yes,1,Дожди primary; снижение температуры→мороз (ближайший лист) вторично. medium.
+"дожь, сель, ветер",nat.geo.mudflow,nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Опечатка 'дожь'=дождь. Сель доминирует; ветер, дождь вторично. high."
+"доджди, понижение температуры воздуха",nat.meteo.downpour,nat.meteo.frost,yes,1,Опечатка 'доджди'=дожди. Дожди primary; понижение температуры→мороз вторично. medium.
+"дожди, сель, наводнение",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour,yes,1,Сель доминант над наводнением; дождь вторично. medium.
+"Наводнения, дождь, сель, ветер",nat.geo.mudflow,nat.hydro.flood|nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Сель доминант; наводнение, ветер, дождь вторично. Все 4 покрыты. medium."
+Сели и оползни,nat.geo.mudflow,nat.geo.landslide,yes,1,Обе гео-опасности; сель выбран доминантом для консистентности проекта (спорно — оползень тоже разрушителен). medium.
+"дождь, снег, оползень",nat.geo.landslide,nat.meteo.snowfall|nat.meteo.downpour,yes,1,Оползень — наиболее разрушительный (сели нет); снег и дождь (триггеры) вторично. medium.
+"Лавина, сель",nat.geo.mudflow,nat.geo.avalanche,yes,1,Сель доминант над лавиной (консистентно); лавина вторично. medium.
+"дожди, резкие похолодание и потепление, наводнения",nat.hydro.flood,nat.meteo.downpour|nat.meteo.frost,yes,1,Наводнение доминирует; дожди и похолодание(мороз) вторично. 'потепление' не кодируется (не жара). medium.
+Камнепад,nat.geo.rockfall,,yes,1,Камнепад/обвал — прямое соответствие. high.
+Оползень/землетрясение,nat.geophys.earthquake,nat.geo.landslide,yes,1,Слэш=неопределённость. Землетрясение primary как наиболее разрушительное; оползень (возможно сейсмогенный) вторично. medium.
+"ветер, землетрясение",nat.geophys.earthquake,nat.meteo.windstorm,yes,1,Землетрясение доминирует; ветер вторично. high.
+"дожди, понижение температуры воздуха",nat.meteo.downpour,nat.meteo.frost,yes,1,Дожди primary; понижение температуры→мороз вторично. medium.
+"дождь, сели, наводнение",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour,yes,1,Сель доминант над наводнением; дождь вторично. medium.
+трещины в земле,nat.geo.subsidence,,yes,1,"Трещины грунта→вероятно просадка; возможен предвестник оползня, точный лист неопределён. low."
+Просадка грунта,nat.geo.subsidence,,yes,1,Прямое соответствие. high.
+Лавины,nat.geo.avalanche,,yes,1,Прямое соответствие. high.
+"снегопады, дождь, подъем грунтовых вод, проседание грунта",nat.geo.subsidence,nat.hydro.waterlogging|nat.meteo.downpour|nat.meteo.snowfall,yes,1,"Проседание грунта — итоговое повреждение (доминант); подъём грунтовых вод=подтопление, дождь, снегопад вторично. Все 4 покрыты. medium."
+"снегопад, дождь, подъем грунтовых вод",nat.hydro.waterlogging,nat.meteo.downpour|nat.meteo.snowfall,yes,1,"Подъём грунтовых вод=подтопление (доминирующий гидропроцесс); дождь, снегопад вторично. medium."
+"лавины, сели",nat.geo.mudflow,nat.geo.avalanche,yes,1,Сель доминант (консистентно); лавина вторично. medium.
+"снегопад, дождь, лавина",nat.geo.avalanche,nat.meteo.snowfall|nat.meteo.downpour,yes,1,Правило лавина>снегопад: лавина доминирует; снегопад и дождь вторично. high.
+просадка грунта,nat.geo.subsidence,,yes,1,Прямое соответствие. high.
+"дождь, снегопад, наводнение",nat.hydro.flood,nat.meteo.snowfall|nat.meteo.downpour,yes,1,Правило наводнение>дождь: наводнение доминирует; снегопад и дождь вторично. high.
+"дожди, сель, снегопады, мороз",nat.geo.mudflow,nat.meteo.snowfall|nat.meteo.frost|nat.meteo.downpour,yes,1,"Сель доминирует; снегопады, мороз, дожди вторично. Все 4 покрыты. high."
+"дождь, град, ветерсели",nat.geo.mudflow,nat.meteo.hail|nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Слипшийся токен 'ветерсели'=ветер+сели. Сель доминирует; град, ветер, дождь вторично. medium."
+"дожди, грозы, наводнения, сели, заморозки",nat.geo.mudflow,nat.hydro.flood|nat.meteo.lightning|nat.meteo.frost|nat.meteo.downpour,yes,1,"Сель доминант над наводнением; грозы→гроза/молния, заморозки→мороз, дожди вторично. Все 5 покрыты. medium."
+"гроза, дождь, землетрясение",nat.geophys.earthquake,nat.meteo.lightning|nat.meteo.downpour,yes,1,Землетрясение доминирует; гроза и дождь вторично. high.
+"дожди, снегопады, землетрясение",nat.geophys.earthquake,nat.meteo.snowfall|nat.meteo.downpour,yes,1,Землетрясение доминирует; снегопады и дожди вторично. high.
+"дождь, снег, ветер, мороз",nat.meteo.snowfall,nat.meteo.windstorm|nat.meteo.frost|nat.meteo.downpour,yes,1,Зимний метео-комплекс; наличие мороза→осадки как снег→снегопад primary. Ветер/мороз/дождь вторично. Доминант условен (альтернатива — ветер). low.
+дождь снег,nat.meteo.downpour,nat.meteo.snowfall,yes,1,"Смешанные осадки; дождь primary (первый), снег вторично. Доминант условен. low."
+"дожди, лавины",nat.geo.avalanche,nat.meteo.downpour,yes,1,Лавина — наиболее разрушительна; дожди вторично. high.
+"дожди, перелив канала",nat.hydro.waterlogging,nat.meteo.downpour,yes,1,"Согласен, medium. Перелив канала → подтопление прилегающих земель (доминанта), дожди — вторичный фактор. Подтопление точнее наводнения для разлива; отдельного кода ирригации нет."
+"дождь, подъем уровня воды",nat.hydro.flood,nat.meteo.downpour,yes,1,"Согласен, high. Подъём уровня воды = наводнение (правило наводнение>дождь); дожди вторично."
+перелив канала,nat.hydro.waterlogging,,yes,1,"Согласен, medium. Перелив → подтопление; спец. кода ирригации нет. Осмысленно отличается от 'прорыв канала' (авария инфраструктуры → hydrodynamic)."
+"дожди, град, сели, ветер, обвалы",nat.geo.mudflow,nat.geo.rockfall|nat.meteo.hail|nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Согласен, high. Доминанта — сель; обвалы→камнепад/обвал, град, ветер, дожди вторичны."
+подмыв берега,nat.hydro.flood,,yes,1,"Согласен, но low. Подмыв/эрозия берега — водная переработка берега; точного кода эрозии нет. Гидро-код (наводнение) — наименее плохой; альтернатива — паводок (nat.hydro.freshet)."
+"дожди,снегопады,ветер",nat.meteo.snowfall,nat.meteo.downpour|nat.meteo.windstorm,yes,1,"Согласен, medium. Зимний микс без явного разрушительного маркера; снегопад как доминанта выбран условно (допустим и ветер)."
+"дожди,повышение уровня воды",nat.hydro.flood,nat.meteo.downpour,yes,1,"Согласен, high. Повышение уровня воды = наводнение (доминанта); дожди вторично."
+"сильные дожди,оползень",nat.geo.landslide,nat.meteo.downpour,yes,1,"Согласен, high. Оползень — доминанта; сильные дожди — вторичный триггер."
+"камнепад, ополозень",nat.geo.landslide,nat.geo.rockfall,yes,1,"Согласен, medium. 'ополозень'=оползень (опечатка); оползень доминанта (крупнее/разрушительнее), камнепад вторично."
+сильные ветер,nat.meteo.windstorm,,yes,1,"Согласен, high. Опечатка согласования = сильный ветер."
+"град, дожди",nat.meteo.hail,nat.meteo.downpour,yes,1,"Согласен, medium. Град значимее по ущербу; дождь вторично."
+"Сильный ветер, дождь, град",nat.meteo.windstorm,nat.meteo.hail|nat.meteo.downpour,yes,1,"Согласен, medium. 'Сильный ветер' явно акцентирован и стоит первым → доминанта; град и дождь вторичны."
+продолжительные сильные дождья,nat.meteo.downpour,,yes,1,"Согласен, high. Опечатка 'дождья' = дожди (продолжительные сильные)."
+"сильный ветер, снегопад",nat.meteo.windstorm,nat.meteo.snowfall,yes,1,"Согласен, medium. Буран: 'сильный ветер' акцентирован → доминанта, снегопад вторично. Согласуется с п.6, где ветер без 'сильный' не доминировал."
+отравления людей,bio.poisoning,,yes,1,"Согласен, high. Отравление людей."
+обвал скалы,nat.geo.rockfall,,yes,1,"Согласен, high. Обвал скалы = обвал/камнепад."
+"лавина, сель",nat.geo.mudflow,nat.geo.avalanche,yes,1,"Согласен, но near-tie (low/medium). Правила лавина-vs-сель нет; оба крайне разрушительны. Сель как сигнатурная угроза — допустимая доминанта, но лавина не менее валидна."
+"сель, оползень",nat.geo.mudflow,nat.geo.landslide,yes,1,"Согласен, high. Сель (текучий поток, дальнобойнее) — доминанта; оползень вторично."
+"дождь, сель",nat.geo.mudflow,nat.meteo.downpour,yes,1,"Согласен, high. Правило сель>дождь."
+"дожди, наводнение",nat.hydro.flood,nat.meteo.downpour,yes,1,"Согласен, high. Правило наводнение>дождь."
+прорыв плотины водосборника,tech.hydrodynamic,,yes,1,"Согласен, high. Прорыв плотины/дамбы водосборника = гидродинамическая авария."
+"дождь, сель, оползень",nat.geo.mudflow,nat.geo.landslide|nat.meteo.downpour,yes,1,"Согласен, high. Сель — доминанта; оползень и дождь вторичны."
+прорыв канала,tech.hydrodynamic,,yes,1,"Согласен, medium. Прорыв (разрушение водоудерживающей структуры) ближе к гидродинамической аварии, в отличие от 'перелива' (→ подтопление). Отдельного кода канала нет."
+"ветер, дождт, снег",nat.meteo.snowfall,nat.meteo.windstorm|nat.meteo.downpour,yes,1,"Согласен, medium. Опечатка 'дождт'=дождь; зимний микс, снег условно доминанта (как п.6)."
+гололед,nat.meteo.frost,,yes,1,"Согласен, medium. Гололёд/обледенение; отдельного кода нет → мороз/яхбандон."
+авария на ж/д,tech.transport.railway,,yes,1,"Согласен, high. Железнодорожная авария."
+"камнепады, лавины",nat.geo.avalanche,nat.geo.rockfall,yes,1,"Согласен, medium. Лавины крупнее/разрушительнее → доминанта; камнепады вторично."
+"снегопады, гололедица на дорогах",nat.meteo.snowfall,nat.meteo.frost,yes,1,"Согласен, medium. Снегопад доминанта; гололедица→мороз/обледенение (нет отд. кода). Согласуется с п.25."
+снегопад,nat.meteo.snowfall,,yes,1,"Согласен, high. Снегопад."
+разрушение канала,tech.hydrodynamic,,yes,1,"Согласен, low. Разрушение ирригации → гидродинамическая, но истинная причина (сель/землетрясение/износ) неясна — отсюда низкая уверенность."
+туман на дорогах,nat.meteo.fog,,yes,1,"Согласен, high. Туман."
+"сель, град",nat.geo.mudflow,nat.meteo.hail,yes,1,"Согласен, high. Сель — доминанта; град вторично."
+cел,nat.geo.mudflow,,yes,1,"Согласен, high. 'cел' (латинская c, опечатка) = сель."
+лед,nat.meteo.frost,,yes,1,"Согласен, low. 'лед' неоднозначно (наледь/обледенение/лёд на реке); отд. кода нет → мороз/яхбандон."
+лесной пожар,nat.fire,,yes,1,"Согласен, high. Лесной пожар = природный пожар."
+1- резиши санг,nat.geo.rockfall,,yes,1,"Согласен, high. тадж. 'рехиши/резиши санг' = сход/падение камней → камнепад."
+2 - кандашавии кухпора,nat.geo.rockfall,,yes,1,"Согласен, high. 'кандашавии кӯҳпора' = откол/обрушение скальной массы → обвал/камнепад."
+3 - афтодани куњпора,nat.geo.rockfall,,yes,1,"Согласен, high. 'афтодани кӯҳпора' = падение скальной массы → обвал/камнепад."
+4 - санг фаромад.,nat.geo.rockfall,,yes,1,"Согласен, high. 'санг фаромад' = камень сошёл/упал → камнепад."
+5 - санг фаромад.,nat.geo.rockfall,,yes,1,"Согласен, high. 'санг фаромад' = камень сошёл/упал → камнепад."
+6 - санг фаромад.,nat.geo.rockfall,,yes,1,"Согласен, high. 'санг фаромад' = камень сошёл/упал → камнепад."
+7- кандашавии пирях,nat.geo.rockfall,,yes,1,"Согласен, low. 'кандашавии пирях' = откол/обвал ледника → 'ледовый обвал' (термин 'обвал' входит в код rockfall). Альтернатива — ледовая лавина (nat.geo.avalanche), если масса сошла потоком. Точного ледникового кода нет."
+8 - лаѓжиши куњпора,nat.geo.rockfall,,yes,1,"Согласен, medium. 'лағжиши кӯҳпора' = сползание скальной массы ≈ санглағж (входит в код rockfall). Возможен скальный оползень (nat.geo.landslide)."
+САДАМА ДАР ШАХТА,accident.other,,yes,1,"Согласен, low. 'садама дар шахта' = авария в шахте; спец. кода горных аварий нет. tech.collapse = только 'обрушение здания', точно не подходит → прочее происшествие."
+Садамаи наклёт дар ҷари афтида,tech.transport.road,,yes,1,"Согласен, high. 'садамаи нақлиёт, дар ҷарӣ афтида' = ДТП, транспорт упал в ущелье/овраг."
+отложение мокрого снега,nat.meteo.snowfall,,no,1,Wet-snow accretion/deposition (icing/snow load); closest leaf is snowfall.
+самовозгорание угля,tech.fire_explosion,,no,1,"Spontaneous combustion of coal — a technogenic fire; no dedicated leaf, mapped to fire/explosion."
+"Град, дождь, сильный ветер",nat.meteo.windstorm,nat.meteo.hail|nat.meteo.downpour,no,1,Pure-meteo combo; 'сильный ветер' flagged as severe → primary; hail+rain secondary.
+"Град, сели, наводнение",nat.geo.mudflow,nat.hydro.flood|nat.meteo.hail,no,1,Mudflow taken as most destructive over flood/hail.
+"Сели, обвалы, камнепады",nat.geo.mudflow,nat.geo.rockfall,no,1,обвалы+камнепады both → rockfall; сель dominant.
+"снегопады, ветер, лавина",nat.geo.avalanche,nat.meteo.snowfall|nat.meteo.windstorm,no,1,Rule лавина>снегопад; avalanche primary.
+"снегопады, сели, обвалы, оползни, камнепады",nat.geo.mudflow,nat.geo.rockfall|nat.geo.landslide|nat.meteo.snowfall,no,1,"сель dominant; обвалы+камнепады→rockfall, оползни→landslide, снегопады→snowfall."
+"дожди, снегопад, землетрясение",nat.geophys.earthquake,nat.meteo.downpour|nat.meteo.snowfall,no,1,Earthquake most destructive → primary.
+"дожди,ветер",nat.meteo.downpour,nat.meteo.windstorm,no,1,"Heavy rains leading, plain 'ветер' secondary; borderline vs windstorm."
+"Сели, ураг.ветер",nat.geo.mudflow,nat.meteo.windstorm,no,1,сель dominant; 'ураг.ветер'=hurricane wind → windstorm secondary.
+"дождь, снег, ветер, землетрясение",nat.geophys.earthquake,nat.meteo.downpour|nat.meteo.snowfall|nat.meteo.windstorm,no,1,Earthquake dominant; снег→snowfall.
+"дожди, ветер, сели, заморозки",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm|nat.meteo.frost,no,1,сель dominant; заморозки→frost.
+"дожди, град, оползень",nat.geo.landslide,nat.meteo.downpour|nat.meteo.hail,no,1,"Landslide is the geo hazard, dominant over rain/hail."
+"Сели, наводнения, оползень",nat.geo.mudflow,nat.hydro.flood|nat.geo.landslide,no,1,сель dominant over flood/landslide.
+"Дожди, сели, град",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail,no,1,сель dominant.
+"дожди, гроза, град, ветер, сели",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.lightning|nat.meteo.hail|nat.meteo.windstorm,no,1,сель dominant; гроза→lightning.
+"дожди, град, ветер, сели, наводнения",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,no,1,сель dominant over flood and meteo triggers.
+"дожди, град, ветер, сель",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,no,1,сель dominant.
+"дождь, сели, наводнение, ветер",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour|nat.meteo.windstorm,no,1,сель dominant over flood/rain/wind.
+Сб,accident.other,,no,1,"неясная аббревиатура → прочее [manual, review]"
+"дожди, резкое потепление, наводнения",nat.hydro.flood,nat.meteo.downpour|nat.hydro.freshet,no,1,"Flood explicit and dominant; 'резкое потепление'=rapid thaw → snowmelt (freshet driver), no exact leaf."
+"Дожди, сель, ветер",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.windstorm,no,1,сель dominant.
+"дождь, ветер, снегопад, мороз",nat.meteo.snowfall,nat.meteo.downpour|nat.meteo.windstorm|nat.meteo.frost,no,1,"Winter complex, no geo/flood hazard; snowfall taken as dominant; borderline vs windstorm."
+"дождь, град, сели, наводнения",nat.geo.mudflow,nat.hydro.flood|nat.meteo.downpour|nat.meteo.hail,no,1,сель dominant over flood/rain/hail.
+"дождь, снегопад",nat.meteo.snowfall,nat.meteo.downpour,no,1,"Mixed precipitation; snowfall taken as dominant, borderline vs rain."
+"дождь, ветер, снег, мороз",nat.meteo.snowfall,nat.meteo.downpour|nat.meteo.windstorm|nat.meteo.frost,no,1,"Winter complex; snowfall taken as dominant (снег→snowfall); same pattern as 'дождь, ветер, снегопад, мороз'."
+"дожди, землетрясение",nat.geophys.earthquake,nat.meteo.downpour,no,1,Earthquake dominant.
+"град, ветер, сели",nat.geo.mudflow,nat.meteo.hail|nat.meteo.windstorm,no,1,сель dominant.
+"дожди, град, ветер, сели,",nat.geo.mudflow,nat.meteo.downpour|nat.meteo.hail|nat.meteo.windstorm,no,1,сель dominant (trailing comma ignored).
+сильное таяние снега,nat.hydro.freshet,,no,1,'intense snowmelt' → snowmelt flood (паводок/freshet).
+Истеъмоли хуролка,bio.poisoning,,yes,1,"истеъмоли хӯрока = приём пищи; в реестре ЧС такой токен = событие пищевого отравления → bio.poisoning. Confidence low: терсно, альтернатива — поперхивание (accident.other). Согласен."
+Садамаи наклёт дар ҷуйбор афтида,tech.transport.road,,yes,1,садамаи нақлиёт + афтода в арык/ручей (ҷуйбор) = ДТП. High. Согласен.
+Садамаи наклёт Чапашави,tech.transport.road,,yes,1,ДТП с опрокидыванием (чаппашавӣ). High. Согласен.
+АЗ ДУДИ АНГИШТ,bio.poisoning,,yes,1,аз дуди ангишт = от угольного дыма → отравление угарным газом. Единственная корзина отравлений — bio.poisoning (несмотря на префикс bio). Medium. Согласен.
+БА ДОР ОВЕХТА,accident.other,,yes,1,ба дор овехта = повешение (суицид); специального кода нет → accident.other. Medium. Согласен.
+Садамаи наклёт ба ҷари афтида,tech.transport.road,,yes,1,ДТП: падение в овраг/пропасть (ҷар). High. Согласен.
+"ТАРМА , сангрез",nat.geo.avalanche,nat.geo.rockfall,yes,1,"Составное: лавина (тарма, первая/наиболее разрушительная) + камнепад (сангрез). Primary=лавина. High. Согласен."
+Дарёфти часад,accident.other,,yes,1,"дарёфти ҷасад = обнаружение тела без указания воды → accident.other (правило, НЕ drowning). Medium. Согласен."
+МАВОДИ ТАРКАНДА,tech.fire_explosion,,yes,1,"маводи тарканда = взорвавшееся ВВ (тарканда — от таркидан, взрыв произошёл) → tech.fire_explosion. Контраст с «нотаркида» (не взорвалось). Medium. Согласен."
+ёфтани часад,accident.other,,yes,1,ёфтани ҷасад = обнаружение тела без контекста воды → accident.other (правило). Medium. Согласен.
+Боридани барфи зиёд,nat.meteo.snowfall,,yes,1,боридани барфи зиёд = обильный снегопад. High. Согласен.
+САДАМИ КАТОРА,tech.transport.railway,,yes,1,садамаи қатора (қатора=поезд) = ж/д авария. High. Согласен.
+Садамаи наклёти ба ҷари афтида,tech.transport.road,,yes,1,ДТП: падение в овраг (ҷар). High. Согласен.
+Сухтор дар трансформатор,tech.power,tech.fire_explosion,yes,1,"Пожар в трансформаторе = отказ энергооборудования (не «в здании»), поэтому primary=tech.power, вторично пожар. Medium. Согласен, хотя допустима и обратная приоритетность."
+Гаркшави (дарёти часад),accident.drowning,,yes,1,гаркшавӣ = утопление явно указано (гарқ); тело найдено. Вода явна → drowning (в отличие от «ёфтани ҷасад»). High. Согласен.
+Ҳамлаи гург,accident.other,,yes,1,ҳамлаи гург = нападение волка; кода для нападения животных нет → accident.other. Low. Согласен.
+Садамаи ниқлётӣ чаппашавӣ,tech.transport.road,,yes,1,ДТП с опрокидыванием (чаппашавӣ). High. Согласен.
+Кандашавии пирях,nat.geo.avalanche,,yes,1,кандашавии пирях = отрыв ледника → ледовая лавина/обвал; ближайший код nat.geo.avalanche. Low: возможны nat.geo.rockfall (обвал) или nat.hydro.glof. Согласен с оговоркой.
+Таркиши газ,tech.fire_explosion,,yes,1,таркиши газ = взрыв газа (бытовой). High. Согласен.
+дар сандуќи сохтмонї дармемонанд.,accident.other,,yes,1,застряли в строительном ящике/бадье (сандуқи сохтмонӣ); ситуация неясна → accident.other. Low. Согласен.
+Дар ҳоҷатхона афтида,accident.other,,yes,1,"падение в выгребную яму/туалет (ҳоҷатхона); нет явного «ғарқ» → accident.other, НЕ drowning. Medium. Согласен."
+Зери хок монда,accident.other,,yes,1,"зери хок монда = засыпан землёй — исход, не причина; возможны оползень/обрушение траншеи. Контекста нет → accident.other. Low. Согласен."
+Аз шамоли ҳавопаймо,accident.other,,yes,1,от воздушной струи самолёта (реактивный поток) — не природный ветер и не авиакатастрофа. Редкий случай → accident.other. Low. Согласен.
+Бадор овехта,accident.other,,yes,1,ба дор овехта (слитно) = повешение → accident.other. Medium. Согласен.
+Садамаи ниқлётӣ ба дарахт,tech.transport.road,,yes,1,ДТП: наезд на дерево (ба дарахт). High. Согласен.
+Таркиши балони газ,tech.fire_explosion,,yes,1,таркиши балони газ = взрыв газового баллона. High. Согласен.
+садамаи нактиёт,tech.transport.road,,yes,1,садамаи нақлиёт (опечатка) = ДТП. High. Согласен.
+фурўравии замин,nat.geo.subsidence,,yes,1,фурӯравии замин = просадка/проседание грунта → nat.geo.subsidence. High. Согласен.
+баровардани об аз таххона,nat.hydro.waterlogging,,yes,1,откачка воды из подвала (таххона) = подтопление. Medium; возможна авария ЖКХ (tech.utilities). Согласен.
+садама дар корхонаи нафтӣ,tech.chemical,tech.fire_explosion,yes,1,"авария на нефтепредприятии, тип не указан; нефть=опасное вещество → tech.chemical, вторично пожар/взрыв. Low: fire_explosion как primary равновероятен. Согласен, оставляю low."
+"3 то сангрез, тарма",nat.geo.rockfall,nat.geo.avalanche,yes,1,"Составное: 3 камнепада (сангрез, первый + количество 3) + лавина. Primary по первому/доминированию — камнепад. Medium. Согласен (принцип «первый/численно преобладающий» согласуется с ТАРМА,сангрез)."
+тарма ва яхпора,nat.geo.avalanche,nat.geo.rockfall,yes,1,"лавина (тарма, первая) + ледяная глыба (яхпора); падение льда ≈ обвал → secondary nat.geo.rockfall. Medium. Согласен."
+"сел, 2 ярч",nat.geo.mudflow,nat.geo.landslide,yes,1,Составное: сель (доминирует) + 2 оползня (ярч=сход грунта). Primary=сель. High. Согласен.
+заҳролудшавӣ,bio.poisoning,,yes,1,заҳролудшавӣ = отравление людей (заҳр=яд); тип не уточнён → bio.poisoning. Medium. Согласен.
+"сел, сангрез",nat.geo.mudflow,nat.geo.rockfall,yes,1,Составное: сель (доминирует) + камнепад (сангрез). Primary=сель. High. Согласен.
+"сел, баландшавии сатҳи об",nat.geo.mudflow,nat.hydro.flood,yes,1,Составное: сель (доминирует) + подъём уровня воды (баландшавии сатҳи об = наводнение). Primary=сель. High. Согласен.
+раъду барқ,nat.meteo.lightning,,yes,1,раъду барқ = гроза/удар молнии → nat.meteo.lightning. High. Согласен.
+касалии сирояткунанда,bio.epidemic,,yes,1,"касалии сирояткунанда = инфекционное заболевание (люди) → bio.epidemic. Medium; если бы скот — epizootic, но контекст людской. Согласен."
+4 сел,nat.geo.mudflow,,yes,1,4 селя → nat.geo.mudflow. High. Согласен.
+фуруравии замин,nat.geo.subsidence,,yes,1,фурӯравии замин = просадка грунта (дубликат «фурўравии замин»). High. Согласен.
+канда шудани пирях,nat.geo.avalanche,,yes,1,канда шудани пирях = отрыв ледника → ледовая лавина/обвал; дубликат «Кандашавии пирях». Low: альтернативы rockfall/glof. Согласен с оговоркой.
+кашидани об аз таххона,nat.hydro.waterlogging,,yes,1,откачка воды из подвала (таххона) = подтопление; дубликат «баровардани об аз таххона». Medium; возможна tech.utilities. Согласен.
+садамаи ҳавоӣ,tech.transport.aviation,,yes,1,садамаи ҳавоӣ = авиационная авария → tech.transport.aviation. High. Согласен.
+садамаи нақлиёти (қатора),tech.transport.railway,,yes,1,транспортная авария с уточнением қатора (поезд) → ж/д. High. Согласен.
+ёфтани муҳимоти но таркида,accident.other,,yes,1,ёфтани муҳимоти нотаркида = обнаружение неразорвавшегося боеприпаса; взрыва не было → accident.other (в отличие от «маводи тарканда»). Medium. Согласен.
+қубури магистралӣ,tech.utilities,,no,0,"'main pipeline' (likely water/heat trunk main burst); could be gas — ambiguous, no explicit event word."
