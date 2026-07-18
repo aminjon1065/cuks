@@ -24,9 +24,37 @@
   height: 100%;
 }
 
-/* The ephemeral room-chat prefab blends into the design-system side panel. */
+/* The ephemeral room-chat prefab blends into the design-system side panel.
+ * The upstream stylesheet sizes .lk-chat with `width: clamp(200px, 55ch, 60ch)`
+ * (~430px) — wider than the w-72 panel, so it spilled past the viewport edge in
+ * Chrome; at ≤600px it even flips to a position:fixed overlay. Pin it to the
+ * panel instead. */
+.meet-chat {
+  overflow: hidden; /* never let prefab internals spill past the panel */
+}
 .meet-chat .lk-chat {
+  position: static; /* defuse the upstream ≤600px position:fixed overlay */
   height: 100%;
+  width: 100%; /* overrides the upstream clamp(200px, 55ch, 60ch) escape */
+  min-width: 0;
   background: transparent;
   border: 0;
+  /* Two rows (messages + form): the prefab header is hidden below, and keeping
+   * the stock 3-row template would auto-place the message list into the 69px
+   * header row. */
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+/* Duplicate hard-coded English "Messages" header whose close button is wired to
+ * the LayoutContext toggle — dead here, panel visibility is our own state. */
+.meet-chat .lk-chat-header {
+  display: none;
+}
+.meet-chat .lk-chat-messages {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+.meet-chat .lk-chat-form {
+  max-height: none; /* drop the fixed 69px control-bar-height cap */
 }

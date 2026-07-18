@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MoreVertical, Pencil, Users, Video, X } from 'lucide-react';
+import { Link2, MoreVertical, Pencil, Users, Video, X } from 'lucide-react';
 import type { MeetingDto } from '@cuks/shared';
 import {
   Button,
@@ -14,6 +14,7 @@ import {
 } from '@cuks/ui';
 import { ApiError } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/format';
+import { copyText, roomUrl } from '../lib/share';
 import { useUpdateMeeting } from '../api/queries';
 
 /** One meeting in the «Встречи» list (docs/modules/14 §2). */
@@ -73,6 +74,26 @@ export function MeetingCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {!cancelled ? (
+            <button
+              type="button"
+              aria-label={t('room.copyLink')}
+              title={t('room.copyLink')}
+              onClick={() => {
+                const url = roomUrl(meeting.slug);
+                void copyText(url).then((ok) =>
+                  toast(
+                    ok
+                      ? { title: t('toast.linkCopied') }
+                      : { title: t('toast.linkCopyFailed', { url }), tone: 'danger' },
+                  ),
+                );
+              }}
+              className="flex size-8 items-center justify-center rounded-md text-text-muted hover:bg-surface-2 hover:text-text"
+            >
+              <Link2 className="size-4" />
+            </button>
+          ) : null}
           {joinable ? (
             <Button
               size="sm"

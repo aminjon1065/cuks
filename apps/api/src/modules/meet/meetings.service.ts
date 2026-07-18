@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import { meetRooms, meetings, positions, userPositions, users, type Database } from '@cuks/db';
 import {
@@ -105,7 +105,14 @@ export class MeetingsService {
           ? and(alive, ne(meetings.status, 'cancelled'), gte(meetings.startsAt, end))
           : and(
               alive,
-              or(inArray(meetings.status, ['done', 'cancelled']), lt(meetings.startsAt, start)),
+              or(
+                inArray(meetings.status, ['done', 'cancelled']),
+                lt(meetings.startsAt, start),
+                // Time-based safety net: a meeting whose room was never opened
+                // gets no room_finished webhook and stays `scheduled`; once its
+                // scheduled window has elapsed it still belongs in «Прошедшие».
+                sql`${meetings.startsAt} + make_interval(mins => coalesce(${meetings.durationMin}, 0)) < now()`,
+              ),
             );
     const order = range === 'past' ? desc(meetings.startsAt) : asc(meetings.startsAt);
 

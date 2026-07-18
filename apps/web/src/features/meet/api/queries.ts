@@ -110,8 +110,12 @@ export function useStartRecording() {
 }
 
 export function useStopRecording() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (roomId: string) => api.post<void>(`/v1/meet/rooms/${roomId}/recording/stop`),
+    // The ws `meet.recording.state` event also updates the list, but only for
+    // participants with the recordings page mounted — invalidate like start does.
+    onSuccess: () => qc.invalidateQueries({ queryKey: recordingsKey }),
   });
 }
 

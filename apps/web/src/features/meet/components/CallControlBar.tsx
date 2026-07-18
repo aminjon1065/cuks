@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   MediaDeviceMenu,
   useIsRecording,
+  useParticipants,
   useRoomContext,
   useTrackToggle,
 } from '@livekit/components-react';
@@ -9,6 +10,7 @@ import { Track } from 'livekit-client';
 import {
   Circle,
   Hand,
+  Link2,
   MessageSquare,
   Mic,
   MicOff,
@@ -27,6 +29,7 @@ import { ApiError } from '@/lib/api-client';
 import { useCan } from '@/lib/ability';
 import { usePushToTalk } from '../hooks/usePushToTalk';
 import { useRaiseHand } from '../hooks/useRaiseHand';
+import { copyText, roomUrl } from '../lib/share';
 import { useStartRecording, useStopRecording } from '../api/queries';
 
 export type CallPanel = 'participants' | 'chat' | null;
@@ -83,20 +86,53 @@ export function CallControlBar(props: Props): React.JSX.Element {
   const screen = useTrackToggle({ source: Track.Source.ScreenShare });
   const ptt = usePushToTalk();
   const hand = useRaiseHand();
+  const participants = useParticipants();
+  const handsUp = participants.filter((p) => p.attributes?.handRaised === '1').length;
   const isRecording = useIsRecording();
   const canRecord = useCan('meet.record') && props.room.myRole === 'host';
   const startRec = useStartRecording();
   const stopRec = useStopRecording();
+
+  const toggleHand = (): void => {
+    // setAttributes waits for the SFU echo; a rejection means nobody saw the
+    // hand — surface it instead of a button that silently lies.
+    hand.toggle().catch(() => toast({ title: t('toast.actionFailed'), tone: 'danger' }));
+  };
+
+  const copyLink = (): void => {
+    const url = roomUrl(props.room.slug);
+    void copyText(url).then((ok) =>
+      toast(
+        ok
+          ? { title: t('toast.linkCopied') }
+          : { title: t('toast.linkCopyFailed', { url }), tone: 'danger' },
+      ),
+    );
+  };
+
+  /** Recording errors carry stable codes (docs/04 §errors); the raw server
+   *  message is a fallback for codes this map does not know. */
+  const recordingErrorTitle = (err: unknown): string => {
+    if (!(err instanceof ApiError)) return t('toast.actionFailed');
+    switch (err.code) {
+      case 'meet.recording.start_failed':
+      case 'meet.unavailable':
+        return t('toast.recordUnavailable');
+      case 'meet.recording.already':
+        return t('toast.recordBusy');
+      case 'meet.recording.slots_full':
+        return t('toast.recordSlotsFull');
+      default:
+        return err.message;
+    }
+  };
 
   const toggleRecording = (): void => {
     // Ignore repeat clicks while a start/stop is in flight — a duplicate start would spin up a second
     // egress for the same room (the server also rejects it, but don't even fire the request).
     if (startRec.isPending || stopRec.isPending) return;
     const onError = (err: unknown): void => {
-      toast({
-        title: err instanceof ApiError ? err.message : t('toast.actionFailed'),
-        tone: 'danger',
-      });
+      toast({ title: recordingErrorTitle(err), tone: 'danger' });
     };
     if (isRecording) stopRec.mutate(props.room.id, { onError });
     else startRec.mutate(props.room.id, { onError });
@@ -132,7 +168,7 @@ export function CallControlBar(props: Props): React.JSX.Element {
         icon={Hand}
         label={hand.raised ? t('room.lowerHand') : t('room.raiseHand')}
         active={hand.raised}
-        onClick={hand.toggle}
+        onClick={toggleHand}
       />
 
       <Popover>
@@ -164,18 +200,32 @@ export function CallControlBar(props: Props): React.JSX.Element {
 
       <span className="mx-1 h-6 w-px bg-border" />
 
-      <ControlButton
-        icon={Users}
-        label={t('room.participants')}
-        active={props.panel === 'participants'}
-        onClick={() => props.onTogglePanel('participants')}
-      />
+      <div className="relative">
+        <ControlButton
+          icon={Users}
+          label={
+            handsUp > 0
+              ? `${t('room.participants')} · ${t('room.handsRaised', { count: handsUp })}`
+              : t('room.participants')
+          }
+          active={props.panel === 'participants'}
+          onClick={() => props.onTogglePanel('participants')}
+        />
+        {/* Raised hands must be visible with the roster CLOSED — the panel is
+            the only other place a hand shows (docs/modules/14 acceptance §hand). */}
+        {handsUp > 0 ? (
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-fg">
+            {handsUp}
+          </span>
+        ) : null}
+      </div>
       <ControlButton
         icon={MessageSquare}
         label={t('room.chat')}
         active={props.panel === 'chat'}
         onClick={() => props.onTogglePanel('chat')}
       />
+      <ControlButton icon={Link2} label={t('room.copyLink')} onClick={copyLink} />
       <ControlButton
         icon={VideoOff}
         label={props.audioOnly ? t('room.enableIncomingVideo') : t('room.disableIncomingVideo')}

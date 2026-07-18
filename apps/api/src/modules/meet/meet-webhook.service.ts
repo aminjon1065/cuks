@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
-import { meetRooms, recordings, type Database } from '@cuks/db';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { meetRooms, meetings, recordings, type Database } from '@cuks/db';
 import { wsRooms } from '@cuks/shared';
 import { EgressStatus } from 'livekit-server-sdk';
 import type { WebhookEvent } from 'livekit-server-sdk';
@@ -78,6 +78,29 @@ export class MeetWebhookService {
         active: false,
       });
     }
+    if (room) {
+      // Meeting lifecycle (docs/modules/14 §5): nothing else ever advances a
+      // scheduled meeting, so without this a meeting that finished TODAY never
+      // reaches the «Прошедшие» tab until the Dushanbe midnight boundary.
+      await this.db
+        .update(meetings)
+        .set({ status: 'done', updatedAt: new Date() })
+        .where(and(eq(meetings.roomId, room.id), inArray(meetings.status, ['scheduled', 'live'])));
+      // Recording rows stuck in `processing` with NO egress id are start-crash
+      // orphans (the start RPC died between the insert and the id update); once
+      // the room is finished no webhook will ever complete them — they would
+      // hold a global recording slot and 409-block this room forever.
+      await this.db
+        .update(recordings)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(
+          and(
+            eq(recordings.roomId, room.id),
+            eq(recordings.status, 'processing'),
+            isNull(recordings.egressId),
+          ),
+        );
+    }
   }
 
   /** Egress finished — complete the recording row and tell participants (docs/modules/14 §4/§6). */
@@ -96,7 +119,7 @@ export class MeetWebhookService {
           updatedAt: new Date(),
         }
       : { status: 'failed' as const, updatedAt: new Date() };
-    const [row] = await this.db
+    let [row] = await this.db
       .update(recordings)
       .set(patch)
       .where(eq(recordings.egressId, info.egressId))
@@ -106,6 +129,23 @@ export class MeetWebhookService {
         startedBy: recordings.startedBy,
         participants: recordings.participants,
       });
+    if (!row && file) {
+      // Race window: an egress that dies instantly can deliver egress_ended
+      // BEFORE the start path stored its egressId. The object key is derived
+      // from the recording id at start, so match the still-`processing` row by
+      // file key instead of silently dropping the webhook (which left the row
+      // `processing` forever, occupying a global slot and 409-blocking the room).
+      [row] = await this.db
+        .update(recordings)
+        .set(patch)
+        .where(and(eq(recordings.fileKey, file.filename), eq(recordings.status, 'processing')))
+        .returning({
+          id: recordings.id,
+          roomId: recordings.roomId,
+          startedBy: recordings.startedBy,
+          participants: recordings.participants,
+        });
+    }
     if (!row) return;
     for (const userId of new Set([...(row.participants ?? []), row.startedBy].filter(Boolean))) {
       this.realtime.emitToUser(userId as string, 'meet.recording.state', {
