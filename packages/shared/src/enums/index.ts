@@ -249,6 +249,41 @@ export const DOCUMENT_ACTIONS = [
 ] as const;
 export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
 
+// --- Incoming process: resolution proposals + acquaintance gate (docs/modules/11 §12.11) ---
+
+/** What a resolution type asks its executor to do. */
+export const RESOLUTION_ACTION_KINDS = ['execute', 'acknowledge', 'reply', 'review'] as const;
+export type ResolutionActionKind = (typeof RESOLUTION_ACTION_KINDS)[number];
+
+/**
+ * A draft resolution's lifecycle (plan §6.5). Kept separate from `resolutions.status`: a
+ * proposal is a request for a decision, an issued resolution is an instruction being
+ * executed, and collapsing the two would make «rejected» ambiguous.
+ */
+export const RESOLUTION_PROPOSAL_STATUSES = [
+  'draft',
+  'pending',
+  'approved',
+  'rejected',
+  'cancelled',
+] as const;
+export type ResolutionProposalStatus = (typeof RESOLUTION_PROPOSAL_STATUSES)[number];
+
+/** Why a set of acquaintances exists (plan §6.6). */
+export const ACQUAINTANCE_BATCH_KINDS = ['route', 'pre_execution', 'distribution'] as const;
+export type AcquaintanceBatchKind = (typeof ACQUAINTANCE_BATCH_KINDS)[number];
+
+/** Why the gate opened — recorded so the history explains itself (plan §6.6). */
+export const ACQUAINTANCE_RELEASE_REASONS = ['all_acknowledged', 'timeout', 'manual'] as const;
+export type AcquaintanceReleaseReason = (typeof ACQUAINTANCE_RELEASE_REASONS)[number];
+
+/** A single reader's state within a batch. `expired` means the gate opened without them. */
+export const ACQUAINTANCE_STATUSES = ['pending', 'acknowledged', 'expired', 'cancelled'] as const;
+export type AcquaintanceStatus = (typeof ACQUAINTANCE_STATUSES)[number];
+
+/** Default pre-execution gate (docs/modules/11 §12.3): four hours, per the external TZ. */
+export const ACQUAINTANCE_GATE_HOURS = 4;
+
 /** Confidentiality grade (docs/modules/11 §3). `dsp` = restricted (allow-list only). */
 export const DOCUMENT_CONFIDENTIALITY = ['normal', 'dsp'] as const;
 export type DocumentConfidentiality = (typeof DOCUMENT_CONFIDENTIALITY)[number];

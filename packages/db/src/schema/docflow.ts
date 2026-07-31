@@ -12,6 +12,9 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import {
+  ACQUAINTANCE_BATCH_KINDS,
+  ACQUAINTANCE_RELEASE_REASONS,
+  ACQUAINTANCE_STATUSES,
   CERTIFICATE_KINDS,
   DOC_CLASSES,
   DOCUMENT_COLLABORATOR_ROLES,
@@ -21,6 +24,8 @@ import {
   DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
+  RESOLUTION_ACTION_KINDS,
+  RESOLUTION_PROPOSAL_STATUSES,
   RESOLUTION_STATUSES,
   ROUTE_ASSIGNEE_TYPES,
   ROUTE_STATUSES,
@@ -479,6 +484,136 @@ export const routeTemplates = appSchema.table(
  * on the control view. Sub-resolutions nest via `parent_id`. `report`/`done_at` record
  * execution. Task 3.4.
  */
+/**
+ * app.resolution_types — the kinds of instruction a signer may issue (plan §6.4). A typed
+ * dictionary rather than a free-text label, because the type decides what the executor
+ * owes: whether a deadline is required, whether an outgoing answer is expected, whether it
+ * lands under control. Retired by `is_active`, never deleted — issued resolutions must stay
+ * explainable.
+ */
+export const resolutionTypes = appSchema.table(
+  'resolution_types',
+  {
+    id: primaryId(),
+    code: text('code').notNull(),
+    nameRu: text('name_ru').notNull(),
+    nameTj: text('name_tj').notNull(),
+    actionKind: text('action_kind', { enum: RESOLUTION_ACTION_KINDS }).notNull().default('execute'),
+    requiresDueAt: boolean('requires_due_at').notNull().default(false),
+    requiresExecutor: boolean('requires_executor').notNull().default(true),
+    requiresOutgoingResponse: boolean('requires_outgoing_response').notNull().default(false),
+    defaultControl: boolean('default_control').notNull().default(false),
+    /** ISO-8601-ish hours; null means «no default», not «immediately». */
+    defaultDueHours: integer('default_due_hours'),
+    isActive: boolean('is_active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('resolution_types_code_uq').on(t.code),
+    index('resolution_types_pick_idx').on(t.isActive, t.sortOrder),
+  ],
+);
+
+/**
+ * app.acquaintance_batches — a pre-execution reading gate (docs/modules/11 §12.3). The
+ * executors of the resolution this batch guards do not see their instruction until the gate
+ * opens: either everyone acknowledged, or the timeout expired.
+ *
+ * `released_at` is the idempotency anchor — the worker and a final acknowledgement race for
+ * it, and whoever writes it first owns the release.
+ */
+export const acquaintanceBatches = appSchema.table(
+  'acquaintance_batches',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    resolutionId: uuid('resolution_id').references((): AnyPgColumn => resolutions.id, {
+      onDelete: 'cascade',
+    }),
+    routeStepId: uuid('route_step_id').references(() => routeSteps.id, { onDelete: 'set null' }),
+    kind: text('kind', { enum: ACQUAINTANCE_BATCH_KINDS }).notNull(),
+    /** When the gate opens by itself; null for a batch that gates nothing. */
+    releaseAt: timestamp('release_at', { withTimezone: true }),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    releasedReason: text('released_reason', { enum: ACQUAINTANCE_RELEASE_REASONS }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('acquaintance_batches_document_idx').on(t.documentId),
+    // The worker sweep: batches whose timeout has come and which nobody has released yet.
+    index('acquaintance_batches_release_idx')
+      .on(t.releaseAt)
+      .where(sql`${t.releasedAt} is null and ${t.releaseAt} is not null`),
+  ],
+);
+
+/**
+ * app.resolution_proposals — a draft resolution awaiting a signer's decision (plan §6.5).
+ * Deliberately NOT a status on `resolutions`: a proposal is a request for a decision, an
+ * issued resolution is an instruction being executed, and merging them would make
+ * «rejected» mean two different things.
+ */
+export const resolutionProposals = appSchema.table(
+  'resolution_proposals',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    resolutionTypeId: uuid('resolution_type_id').references(() => resolutionTypes.id, {
+      onDelete: 'restrict',
+    }),
+    text: text('text').notNull(),
+    /** The one person who may decide this proposal. */
+    signerId: uuid('signer_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    responsibleExecutorId: uuid('responsible_executor_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    coExecutorIds: uuid('co_executor_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    /** Who must read the document BEFORE the executors get their instruction. */
+    acquaintUserIds: uuid('acquaint_user_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    isControl: boolean('is_control').notNull().default(false),
+    status: text('status', { enum: RESOLUTION_PROPOSAL_STATUSES }).notNull().default('draft'),
+    proposedBy: uuid('proposed_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    /** The principal a deputy decided «за» (docs/05 §6); null for a self decision. */
+    decidedFor: uuid('decided_for').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionComment: text('decision_comment'),
+    /** The resolution an approval produced — the link that makes the decision auditable. */
+    resolutionId: uuid('resolution_id').references((): AnyPgColumn => resolutions.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    index('resolution_proposals_document_idx').on(t.documentId),
+    // The signer's queue: what is waiting for MY decision.
+    index('resolution_proposals_signer_idx')
+      .on(t.signerId, t.status)
+      .where(sql`${t.deletedAt} is null`),
+  ],
+);
+
 export const resolutions = appSchema.table(
   'resolutions',
   {
@@ -505,12 +640,23 @@ export const resolutions = appSchema.table(
     status: text('status', { enum: RESOLUTION_STATUSES }).notNull().default('active'),
     report: text('report'),
     doneAt: timestamp('done_at', { withTimezone: true }),
+    /** When the executors may actually see this instruction (docs/modules/11 §12.3). Null
+     *  means «right away»; a future value means a pre-execution reading gate is still shut.
+     *  Enforced in the queue query, not only in the UI. */
+    availableAt: timestamp('available_at', { withTimezone: true }),
+    /** Explicit acceptance / return of the executor's result. */
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
+    returnedAt: timestamp('returned_at', { withTimezone: true }),
+    returnComment: text('return_comment'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index('resolutions_document_idx').on(t.documentId),
     index('resolutions_executor_idx').on(t.executorId, t.status),
+    // «Мои поручения» skips instructions still behind a gate.
+    index('resolutions_available_idx').on(t.availableAt),
     // The «Мои поручения» queue also matches co-executors (uuid[] containment).
     index('resolutions_co_executors_idx').using('gin', t.coExecutors),
   ],
@@ -638,6 +784,16 @@ export const acquaintances = appSchema.table(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
     acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+    /** The gate this line belongs to (docs/modules/11 §12.11); null for a plain route
+     *  acknowledgement that gates nothing. */
+    batchId: uuid('batch_id').references((): AnyPgColumn => acquaintanceBatches.id, {
+      onDelete: 'cascade',
+    }),
+    /** `expired` records that the gate opened without this reader — NOT that they read it
+     *  (docs/modules/11 §12.3). Conflating the two would let a timeout be reported as
+     *  compliance. */
+    status: text('status', { enum: ACQUAINTANCE_STATUSES }).notNull().default('pending'),
+    notifiedAt: timestamp('notified_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [

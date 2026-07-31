@@ -24,6 +24,7 @@ import {
   fsNodes,
   journals,
   orgUnits,
+  resolutionProposals,
   resolutions,
   routeSteps,
   routes,
@@ -409,6 +410,27 @@ export class DocumentsService {
     return row.id;
   }
 
+  /**
+   * Whether this user has been asked to decide a proposal on the document. Not narrowed to
+   * `pending`: having decided is lasting participation, exactly as it is for a route step
+   * assignee who already acted — a signer whose view vanished the instant they pressed
+   * «вернуть» could not read their own decision.
+   */
+  private async isProposalSigner(documentId: string, userId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: resolutionProposals.id })
+      .from(resolutionProposals)
+      .where(
+        and(
+          eq(resolutionProposals.documentId, documentId),
+          eq(resolutionProposals.signerId, userId),
+          isNull(resolutionProposals.deletedAt),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  }
+
   /** Count what the document still owes: active route steps, live resolutions, unread
    *  acquaintances (plan этап 1D). Read inside the caller's locked transaction. */
   private async openObligations(tx: Database, documentId: string): Promise<DocumentObligations> {
@@ -605,7 +627,10 @@ export class DocumentsService {
         // An assigned collaborator is a participant: without this the role is inert —
         // a preparer could be given a document they cannot open (plan этап 2). Reached
         // only for NON-ДСП documents; the ДСП branch above already returned.
-        (await collaboratorRolesOf(this.db, id, user.id)).length > 0;
+        (await collaboratorRolesOf(this.db, id, user.id)).length > 0 ||
+        // So is the signer of a proposal awaiting their decision: being asked to approve a
+        // document you cannot open is not a workflow (plan этап 5).
+        (await this.isProposalSigner(id, user.id));
       if (!participant) {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
@@ -1200,7 +1225,15 @@ export class DocumentsService {
         and dc.user_id = ${user.id}::uuid
         and dc.deleted_at is null
     )`;
-    const mine = or(eq(documents.authorId, user.id), onAccessList, isCollaborator);
+    // A proposal's signer must be able to FIND the document they were asked to decide on,
+    // not only open it by link (plan этап 5).
+    const isPendingSigner = sql`exists (
+      select 1 from ${resolutionProposals} rp
+      where rp.document_id = ${documents.id}
+        and rp.signer_id = ${user.id}::uuid
+        and rp.deleted_at is null
+    )`;
+    const mine = or(eq(documents.authorId, user.id), onAccessList, isCollaborator, isPendingSigner);
 
     // ДСП guard (docs/09-security.md §3): a ДСП document surfaces in ANY list/search only to its
     // author, or — when the caller holds docflow.confidential.view — to access-list members. This

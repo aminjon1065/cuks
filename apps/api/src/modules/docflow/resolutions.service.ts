@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, arrayContains, asc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, arrayContains, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { documents, resolutionExtensions, resolutions, users, type Database } from '@cuks/db';
 import type {
   CreateResolutionInput,
@@ -48,6 +48,10 @@ export class ResolutionsService {
       .where(
         and(
           eq(resolutions.status, 'active'),
+          // An instruction behind a shut pre-execution gate is not yet the executor's to
+          // see (docs/modules/11 §12.3). Enforced HERE, in the queue query, not only in the
+          // UI: hiding a card while the API still serves it is not a gate.
+          sql`(${resolutions.availableAt} is null or ${resolutions.availableAt} <= now())`,
           or(
             eq(resolutions.executorId, userId),
             // `@>` (arrayContains) so the co_executors GIN index is usable; `= ANY()` is not.

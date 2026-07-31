@@ -18,6 +18,9 @@ import { DocflowNumberingService } from './docflow-numbering.service';
 import { DocumentCollaboratorsService } from './document-collaborators.service';
 import { DocumentTemplatesController } from './document-templates.controller';
 import { DocumentTemplatesService } from './document-templates.service';
+import { AcquaintanceGateService } from './acquaintance-gate.service';
+import { ResolutionProposalsController } from './resolution-proposals.controller';
+import { ResolutionProposalsService } from './resolution-proposals.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
@@ -47,6 +50,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentTemplatesController,
     RoutesController,
     ResolutionsController,
+    ResolutionProposalsController,
     SignaturesController,
     AcknowledgementsController,
     DocumentLinksController,
@@ -66,6 +70,8 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentTemplatesService,
     RoutesService,
     ResolutionsService,
+    ResolutionProposalsService,
+    AcquaintanceGateService,
     CaService,
     SignaturesService,
     AcknowledgementsService,

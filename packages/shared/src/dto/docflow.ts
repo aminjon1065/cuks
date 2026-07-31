@@ -11,6 +11,8 @@ import {
   ROUTE_ASSIGNEE_TYPES,
   DOCUMENT_COLLABORATOR_ROLES,
   ROUTE_STEP_KINDS,
+  type AcquaintanceReleaseReason,
+  type AcquaintanceStatus,
   type AvStatus,
   type ControlSeverity,
   type DocumentAction,
@@ -22,6 +24,8 @@ import {
   type DocumentFileKind,
   type DocumentStatus,
   type JournalSeqReset,
+  type ResolutionActionKind,
+  type ResolutionProposalStatus,
   type ResolutionStatus,
   type RouteAssigneeType,
   type RouteStatus,
@@ -996,4 +1000,91 @@ export interface DisciplineReportDto {
   to: string;
   groups: DisciplineGroupDto[];
   totals: DisciplineTotals;
+}
+
+// --- Resolution proposals + acquaintance gate (docs/modules/11 §12.11) ---
+
+export const createResolutionProposalSchema = z.object({
+  text: z.string().min(1).max(5000),
+  signerId: z.string().uuid(),
+  resolutionTypeId: z.string().uuid().nullish(),
+  responsibleExecutorId: z.string().uuid().nullish(),
+  coExecutorIds: z.array(z.string().uuid()).max(50).default([]),
+  /** Who must read the document BEFORE the executors get their instruction. */
+  acquaintUserIds: z.array(z.string().uuid()).max(200).default([]),
+  dueAt: z.string().datetime().nullish(),
+  isControl: z.boolean().default(false),
+});
+export type CreateResolutionProposalInput = z.infer<typeof createResolutionProposalSchema>;
+
+export const updateResolutionProposalSchema = createResolutionProposalSchema.partial();
+export type UpdateResolutionProposalInput = z.infer<typeof updateResolutionProposalSchema>;
+
+/** A rejection must say why — the author has to know what to fix (docs/modules/11 §12.11). */
+export const rejectResolutionProposalSchema = z.object({ comment: z.string().min(1).max(2000) });
+export type RejectResolutionProposalInput = z.infer<typeof rejectResolutionProposalSchema>;
+
+export const approveResolutionProposalSchema = z.object({
+  comment: z.string().max(2000).nullish(),
+});
+export type ApproveResolutionProposalInput = z.infer<typeof approveResolutionProposalSchema>;
+
+export interface AcquaintanceLineDto {
+  userId: string;
+  userName: string | null;
+  status: AcquaintanceStatus;
+  acknowledgedAt: string | null;
+}
+
+/** The pre-execution gate's live state, as the card shows it. */
+export interface AcquaintanceGateDto {
+  id: string;
+  releaseAt: string | null;
+  releasedAt: string | null;
+  releasedReason: AcquaintanceReleaseReason | null;
+  lines: AcquaintanceLineDto[];
+}
+
+export interface ResolutionProposalDto {
+  id: string;
+  documentId: string;
+  text: string;
+  status: ResolutionProposalStatus;
+  signerId: string;
+  signerName: string | null;
+  resolutionTypeId: string | null;
+  responsibleExecutorId: string | null;
+  responsibleExecutorName: string | null;
+  coExecutorIds: string[];
+  acquaintUserIds: string[];
+  dueAt: string | null;
+  isControl: boolean;
+  proposedByName: string | null;
+  submittedAt: string | null;
+  decidedByName: string | null;
+  /** The principal a deputy decided «за»; null for a self decision. */
+  decidedForName: string | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+  resolutionId: string | null;
+  /** Whether THIS caller may decide it — the signer or their active deputy. */
+  canDecide: boolean;
+  /** The gate the approval created, once it exists. */
+  gate: AcquaintanceGateDto | null;
+  createdAt: string;
+}
+
+export interface ResolutionTypeDto {
+  id: string;
+  code: string;
+  nameRu: string;
+  nameTj: string;
+  actionKind: ResolutionActionKind;
+  requiresDueAt: boolean;
+  requiresExecutor: boolean;
+  requiresOutgoingResponse: boolean;
+  defaultControl: boolean;
+  defaultDueHours: number | null;
+  isActive: boolean;
+  sortOrder: number;
 }
