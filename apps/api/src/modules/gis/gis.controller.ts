@@ -18,6 +18,7 @@ import {
   createGisImportSchema,
   createGisLayerSchema,
   gisFeaturesQuerySchema,
+  gisPlacesSearchQuerySchema,
   patchGisFeatureSchema,
   patchGisLayerSchema,
   type CreateGisExportInput,
@@ -30,6 +31,8 @@ import {
   type GisFeaturesQuery,
   type GisImportDto,
   type GisLayerDto,
+  type GisPlacesSearchQuery,
+  type GisPlacesSearchResponse,
   type IncidentMapFilterOptionsResponse,
   type IncidentScopeResponse,
   type PatchGisFeatureInput,
@@ -47,6 +50,7 @@ import { GisExportsService } from './gis-exports.service';
 import { GisFeaturesService } from './gis-features.service';
 import { GisImportsService } from './gis-imports.service';
 import { GisLayersService } from './gis-layers.service';
+import { GisPlacesService } from './gis-places.service';
 import { TileTokenService } from './tile-token.service';
 import { IncidentMapOptionsService } from './incident-map-options.service';
 
@@ -92,6 +96,7 @@ export class GisController {
   constructor(
     private readonly tiles: TileTokenService,
     private readonly mapOptions: IncidentMapOptionsService,
+    private readonly places: GisPlacesService,
     private readonly layers: GisLayersService,
     private readonly features: GisFeaturesService,
     private readonly imports: GisImportsService,
@@ -106,6 +111,17 @@ export class GisController {
   @ApiOkResponse({ description: 'Incident type and region options' })
   incidentFilterOptions(): Promise<IncidentMapFilterOptionsResponse> {
     return this.mapOptions.getOptions();
+  }
+
+  /** Jump-to search for the map explorer (admin units + facilities by name). */
+  @Get('places/search')
+  @RequirePermission('gis.view')
+  @ApiOperation({ summary: 'Search places (admin units and facilities) for the map' })
+  @ApiOkResponse({ description: 'Matching places with WGS84 bounds' })
+  searchPlaces(
+    @Query(new ZodValidationPipe(gisPlacesSearchQuerySchema)) query: GisPlacesSearchQuery,
+  ): Promise<GisPlacesSearchResponse> {
+    return this.places.search(query);
   }
 
   /** The caller's incident territory scope, so the map can default/lock its region

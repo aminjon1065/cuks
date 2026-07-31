@@ -14,6 +14,8 @@ export interface IncidentFilterBarProps {
   /** For a territory-confined user (task 2.13): the region select is pinned to these
    *  and cannot be cleared, since incident tiles for other regions are denied. */
   lockedRegionIds: readonly string[] | null;
+  /** Duty mode: status is fixed to «open» (non-closed); hide the status select. */
+  statusLocked?: boolean;
   onChange: (value: IncidentFilterState) => void;
   onReset: () => void;
   onRetry: () => void;
@@ -31,6 +33,7 @@ export function IncidentFilterBar({
   error,
   panelCollapsed,
   lockedRegionIds,
+  statusLocked = false,
   onChange,
   onReset,
   onRetry,
@@ -51,7 +54,7 @@ export function IncidentFilterBar({
     [lockedRegionIds, options],
   );
   const chips = useMemo(() => {
-    const result: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    const result: Array<{ key: string; label: string; onRemove?: () => void }> = [];
     const type = options?.types.find((item) => item.code === value.typeCode);
     const region = options?.regions.find((item) => item.id === value.regionId);
     if (type) {
@@ -61,7 +64,13 @@ export function IncidentFilterBar({
         onRemove: () => onChange({ ...value, typeCode: '' }),
       });
     }
-    if (value.status) {
+    if (value.status === 'open' || statusLocked) {
+      result.push({
+        key: 'status',
+        label: t('filters.statuses.open'),
+        ...(statusLocked ? {} : { onRemove: () => onChange({ ...value, status: '' as const }) }),
+      });
+    } else if (value.status) {
       result.push({
         key: 'status',
         label: t(`filters.statuses.${value.status}`),
@@ -76,12 +85,12 @@ export function IncidentFilterBar({
       });
     }
     return result;
-  }, [lockedRegionIds, onChange, options, t, tajik, value]);
+  }, [lockedRegionIds, onChange, options, statusLocked, t, tajik, value]);
 
   return (
     <div
       className={cn(
-        'absolute right-16 top-3 z-10 rounded border border-border bg-surface p-2 shadow-[var(--shadow-2)]',
+        'absolute right-52 top-3 z-10 rounded border border-border bg-surface p-2 shadow-[var(--shadow-2)]',
         panelCollapsed ? 'left-16' : 'left-3 md:left-80',
       )}
       data-testid="incident-filter-bar"
@@ -130,24 +139,31 @@ export function IncidentFilterBar({
             ))}
           </select>
 
-          <label className="sr-only" htmlFor="incident-status-filter">
-            {t('filters.status')}
-          </label>
-          <select
-            id="incident-status-filter"
-            className={cn(selectClass, 'w-full md:w-40')}
-            value={value.status}
-            onChange={(event) =>
-              onChange({ ...value, status: event.target.value as IncidentFilterState['status'] })
-            }
-          >
-            <option value="">{t('filters.allStatuses')}</option>
-            {INCIDENT_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {t(`filters.statuses.${status}`)}
-              </option>
-            ))}
-          </select>
+          {!statusLocked && (
+            <>
+              <label className="sr-only" htmlFor="incident-status-filter">
+                {t('filters.status')}
+              </label>
+              <select
+                id="incident-status-filter"
+                className={cn(selectClass, 'w-full md:w-40')}
+                value={value.status === 'open' ? '' : value.status}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    status: event.target.value as IncidentFilterState['status'],
+                  })
+                }
+              >
+                <option value="">{t('filters.allStatuses')}</option>
+                {INCIDENT_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {t(`filters.statuses.${status}`)}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <label className="sr-only" htmlFor="incident-region-filter">
             {t('filters.region')}

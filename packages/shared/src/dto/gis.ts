@@ -265,3 +265,27 @@ export const createGisExportSchema = z
     path: ['layerId'],
   });
 export type CreateGisExportInput = z.infer<typeof createGisExportSchema>;
+
+// --- Place search (docs/modules/10 §4: geocode by admin_units + facilities + coords) ---
+
+/** `GET /gis/places/search?q=` — jump-to for the map explorer. */
+export const gisPlacesSearchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+export type GisPlacesSearchQuery = z.infer<typeof gisPlacesSearchQuerySchema>;
+
+/** One hit the map can fly to. `bounds` is `[west, south, east, north]` (WGS84). */
+export interface GisPlaceHitDto {
+  kind: 'admin_unit' | 'facility';
+  id: string;
+  label: string;
+  /** Present for admin units. */
+  level?: 'region' | 'district' | 'jamoat';
+  bounds: [number, number, number, number];
+  center: [number, number];
+}
+
+export interface GisPlacesSearchResponse {
+  items: GisPlaceHitDto[];
+}

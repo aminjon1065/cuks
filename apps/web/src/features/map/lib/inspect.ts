@@ -76,18 +76,28 @@ function asString(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
 }
 
+export interface InspectableOptions {
+  /** Source-layer names that stay visible but do not open the inspector (e.g.
+   *  admin boundaries as a non-clickable background in duty mode). */
+  excludeSourceLayers?: ReadonlySet<string>;
+}
+
 /** The MapLibre layer ids the inspector queries, bottom-up. Cluster bubbles are
  *  excluded: clicking one zooms in instead of opening a card. */
 export function inspectableLayerIds(
   defs: readonly MapLayerDef[],
   drawnDefs: readonly MapLayerDef[] = [],
+  options: InspectableOptions = {},
 ): string[] {
   const skip = new Set([
     INCIDENT_CLUSTERS_LAYER_ID,
     INCIDENT_CLUSTER_COUNT_LAYER_ID,
     INCIDENT_PULSE_LAYER_ID,
   ]);
-  return [...defs, ...drawnDefs].flatMap((def) => sublayerIds(def).filter((id) => !skip.has(id)));
+  const excluded = options.excludeSourceLayers;
+  return [...defs, ...drawnDefs]
+    .filter((def) => !excluded?.has(def.sourceLayer))
+    .flatMap((def) => sublayerIds(def).filter((id) => !skip.has(id)));
 }
 
 /**

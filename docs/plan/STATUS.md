@@ -5,8 +5,7 @@
 ## Текущее состояние
 
 - **Фаза**: 7 (Hardening) — **ЗАВЕРШЕНА** (7.1–7.8). Все фазы 0–7 реализованы; открыт финальный ОК заказчика.
-- **Последняя сессия**: 2026-07-17 — настройка GeoServer (WMS/WFS: workspace/datastore + публикация
-  admin_units) и базовой подложки Martin (region.pmtiles, Таджикистан); карта рендерит подложку+границы+ЧС
+- **Последняя сессия**: 2026-07-29 — карта: шаринг вида через URL (шаг D, docs/modules/10 §4)
 - **Ветка**: main
 
 ## Прогресс по фазам
@@ -27,6 +26,141 @@
 ## Журнал сессий
 
 <!-- Новые записи СВЕРХУ. -->
+
+### 2026-07-29 — Карта: шаринг вида (шаг D)
+
+Permalink вида карты (docs/modules/10 §4):
+
+- Кнопка «ссылка» в `MapToolsBar` → `?view=1&mode&basemap&c&z&layers&status…`
+  в буфер + replace в адресной строке (`export=` сохраняется).
+- Открытие ссылки восстанавливает режим, подложку, камеру, слои, фильтры ЧС.
+- `lib/map-view-url.ts` + unit-тесты; map suite **127** зелёных; web typecheck OK.
+
+### 2026-07-28 — Карта: измерение + PNG (шаг C)
+
+Инструменты карты (docs/modules/10 §4 / docs/06 §1), доступны в **Дежурство** и **ГИС**:
+
+- Линейка / площадь: клики по карте → геодезические м / м² через `@turf/length` +
+  `@turf/area` (одобрено docs/02); HUD снизу; Esc сбрасывает режим.
+- PNG вида: `canvasContextAttributes.preserveDrawingBuffer` + `canvas.toBlob` → скачивание
+  `cuks-map-YYYYMMDD-HHmm.png`.
+- UI: `MapToolsBar` справа (под подложкой); draw-toolbar сдвинут вниз (`top-44`).
+- i18n `map.tools.*` (ru + tg); map suite **120** зелёных; web typecheck OK.
+
+**Зависимости**: `@turf/helpers`, `@turf/length`, `@turf/area` (модульный turf из docs/02).
+
+### 2026-07-28 — Карта: поиск мест/координат (шаг B)
+
+Поиск на карте (docs/modules/10 §4) поверх режима «Дежурство»:
+
+- API `GET /gis/places/search?q=` — admin_units (RU/TG/code) + active facilities →
+  bounds/center WGS84 (`GisPlacesService`).
+- Клиент: парсер координат (`lat,lon` / `lon,lat` / N/E) + `MapSearch` сверху карты →
+  `fitBounds` по выбору.
+- i18n `map.search.*` (ru + tg); unit-тесты place-search + gis-places.
+- Map suite 109 зелёных; api/web typecheck OK.
+
+### 2026-07-28 — Карта: режим «Дежурство» (шаг A)
+
+Упрощение UX карты для дежурного (docs/06 §1, modules/10 §4) без снятия ГИС-стека:
+
+- Переключатель **Дежурство | ГИС** (`MapModeSwitcher`, localStorage `cuks-map-mode`).
+- **Дежурство (по умолчанию):** фильтр ЧС `status=open` (все незакрытые, без окна дат —
+  как дашборд); таймлайн скрыт; зоны риска вкл., facilities выкл.; границы видны, но
+  **не кликабельны**; скрыты рисование / импорт / экспорт / WMS / gis-access.
+- **ГИС:** прежние 30 дней + полный тулбар (draw/import/publish/timeline).
+- Миграция `0046_incidents_mvt_open_status`: MVT принимает `status=open` → `status <> 'closed'`.
+- Тесты map 104 зелёные; web typecheck OK; миграция применена.
+
+### 2026-07-27 — GeoServer: публикация WMS/WFS (остаток D5)
+
+На Windows-dev GeoServer был поднят, но workspace отсутствовал (WMS 404). Через REST
+(`admin`/`geoserver`): workspace `cuks` + PostGIS-datastore `gis` → опубликованы
+`admin_units`, `risk_zones`, `l_ledniki`. `gis.layers.ledniki` → `is_published_wms=true`,
+`geoserver_layer=cuks:l_ledniki`.
+
+Проверка: WMS GetCapabilities 200 (слои видны); WFS hits —
+**admin_units=63**, **risk_zones=1657**, **l_ledniki=6238**. Страница
+`/app/map/gis-access` должна показывать готовые WMS/WFS URL.
+
+### 2026-07-27 — D5: слой «Ледники» (6238)
+
+`load-map-layers.sh` из той же папки КАРТА (analyticsES) через GDAL-контейнер →
+`gis.l_ledniki` (**6238** MultiPolygon) + запись в `gis.layers` (slug=`ledniki`, kind=imported,
+цвет `#67b7dc`). 13 невалидных геометрий починены `ST_MakeValid`. Martin restart — тайлится через
+`imported_mvt`, виден в панели слоёв. Дороги/реки/озёра из .gdb по-прежнему не грузим (дубль PMTiles).
+
+### 2026-07-27 — Базовая подложка Martin (`region.pmtiles`) на Windows
+
+Собран офлайн-basemap для карты (D5-остаток / шаг после 2A):
+
+- `pmtiles` CLI v1.31.2 скачан в `.tools/` (добавлен в `.gitignore`).
+- `pmtiles extract` из `https://build.protomaps.com/20260726.pmtiles`, bbox `67.0,36.5,75.5,41.2`
+  → `infra/basemap/region.pmtiles` (**308.5 МБ**, PMTiles v3 MVT, zoom 0–15, ~570k tiles).
+- `docker restart cuks-dev-martin-1` → каталог содержит источник **`region`**; тайл
+  `/region/0/0/0` → 200 (~93 КБ).
+
+Карта в UI должна показывать схему/города РТ + ранее загруженные ЧС/зоны риска.
+
+### 2026-07-27 — D4: зоны риска из «КАРТА СТИХИЙНЫХ БЕДСТВИЙ РТ»
+
+Источник найден: `C:\codes\analyticsES\стихийных бедствий Р.Т- 01.07.2024\КАРТА СТИХИЙНЫХ БЕДСТВИЯ РТ 01,07,2024`.
+`load-risk-zones.sh` в GDAL-контейнере (`cuks-dev_default`, SRC=/src) → **1657** зон в
+`gis.risk_zones`: сейсмика 7 + ЗСБ 1162 + 1-я степень 488. По видам: сель 1319 · оползень 162 ·
+лавина 73 · наводнение 65 · камнепад 18 · подтопление 13 · землетрясение 7. Martin restart.
+Временный helper `_run-d4-tmp.sh` удалён после прогона.
+
+**Итог данных 2A на Windows-dev:** районы 58 + ист. ЧС 4641 + жертвы D6 + зоны риска 1657.
+
+### 2026-07-27 — Данные 2A: D1 районы + D3 исторические ЧС (+D6 жертвы)
+
+Продолжение после подъёма Windows-dev. Исходные Excel не нужны — `stg-incidents.csv` и
+кросс-волки уже в репо. Сырой каталог «КАРТА СТИХИЙНЫХ БЕДСТВИЙ РТ» на машине **не найден** → D4 отложен.
+
+**D1 (выполнено):**
+- `seed-geo.sh` в `ghcr.io/osgeo/gdal:alpine-normal-latest` (сеть `cuks-dev_default`) →
+  **5 регионов + 58 районов** (ADM3 у geoBoundaries нет — ожидаемо).
+- `pnpm --filter @cuks/db load:crosswalk` → RU/TG имена районов; `stg.admin_alias` **705/778**
+  резолвятся (foreign/national/unknown — by design).
+
+**D3 (выполнено):** `load:incidents` → **4641** исторических + 4641 отчёт (пропуск 40); гео
+4512→админ-единица, 129→центроид РТ; всего в БД **4720** инцидентов (с demo/e2e). API
+`GET /incidents` total=4720.
+
+**D6 (бонусом):** `load:casualties` → 595 строк; инцидентов с погибшими **657**, Σ dead **1283**.
+
+**D4 (блокер):** нет папки `КАРТА СТИХИЙНЫХ БЕДСТВИЯ РТ 01,07,2024` с `Бальность_region.shp` и
+`Зона повышеной опасности .gdb`. Скрипт готов: `infra/scripts/load-risk-zones.sh`. Нужен путь SRC
+от заказчика (или скопировать данные на машину).
+
+Martin restart; каталог содержит `incidents_mvt` / `admin_units` / `risk_zones` (таблица пуста).
+
+### 2026-07-27 — Dev-окружение на Windows (win32)
+
+Задача: шаг 1 — поднять и проверить локальный стек на новой Windows-машине. Кода фаз не трогал.
+
+**Сделано:**
+
+- `.env` из `.env.example`; Docker Desktop запущен; `pnpm install` (lockfile up to date);
+  `pnpm infra:up` — 8 контейнеров (postgres/redis/minio/martin/clamav/maildev/geoserver healthy;
+  livekit running).
+- `pnpm db:migrate` OK; `pnpm db:seed:demo` — идемпотентно (20 demo-юзеров, 50 ЧС + ранее
+  накопленные e2e-слои); Martin restart.
+- `pnpm dev`: web `:5173`, api `:3000`, worker онлайн.
+- Смоук: `/api/health` ok; `/api/health/ready` postgres/redis/minio **up**; login
+  `nazarova.n`/`Demo!2026` → cookies + `/auth/me` (permissions); реестр ЧС 79 записей;
+  analytics/summary OK; `/gis/access-info` отдаёт WMS/WFS; Martin `/catalog` 200
+  (incidents_mvt, admin_units, risk_zones…); UI `/login` рендерится.
+
+**Состояние данных на этой машине (не Mac-сессия 07-17):** `admin_units=5` (только регионы),
+`risk_zones=0`, исторических D3-инцидентов нет — только demo/e2e. `infra/basemap/region.pmtiles`
+отсутствует → базовая подложка пустая (слои ЧС/границы работают без неё).
+
+**Замечания:** Node **v24.16.0** при engines `>=22 <23` — warning pnpm; пока работает, для
+совпадения с CI лучше Node 22 LTS (fnm/nvm).
+
+**Следующий шаг (по выбору заказчика):** данные (D1 районы / D3–D4 импорт / pmtiles) или
+приёмка/V2.
 
 ### 2026-07-17 — Настройка GeoServer (WMS/WFS) и базовой подложки Martin
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { MapPinned, TriangleAlert } from 'lucide-react';
-import { Button, ConfirmDialog, EmptyState, Skeleton, toast } from '@cuks/ui';
+import { Button, ConfirmDialog, EmptyState, Skeleton, cn, toast } from '@cuks/ui';
 import type { GeoJsonGeometry } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
 import { useSocketEvent } from '@/lib/socket';
@@ -33,6 +33,7 @@ import {
 } from '../lib/layers';
 import {
   buildIncidentTileQuery,
+  defaultDutyIncidentFilters,
   defaultIncidentFilters,
   type IncidentFilterState,
 } from '../lib/incident-filters';
@@ -40,9 +41,21 @@ import { modeToOverride, type BasemapMode } from '../lib/basemap';
 import { geometriesBounds, sameGeometry } from '../lib/geo';
 import type { DrawTool } from '../lib/draw';
 import type { InspectedFeature } from '../lib/inspect';
+import { readStoredMapMode, storeMapMode, type MapExplorerMode } from '../lib/map-mode';
+import type { MeasureMode, MeasureReading } from '../lib/measure';
+import {
+  coalesceMapFilters,
+  mergeLayerStates,
+  parseMapViewSearchParams,
+  writeMapViewSearchParams,
+} from '../lib/map-view-url';
 import { MapView, type EditingFeature, type MapViewHandle } from '../components/MapView';
 import { LayersPanel } from '../components/LayersPanel';
 import { BasemapSwitcher } from '../components/BasemapSwitcher';
+import { MapModeSwitcher } from '../components/MapModeSwitcher';
+import { MapSearch } from '../components/MapSearch';
+import { MapToolsBar } from '../components/MapToolsBar';
+import { MeasureHud } from '../components/MeasureHud';
 import { IncidentFilterBar } from '../components/IncidentFilterBar';
 import { IncidentTimeline } from '../components/IncidentTimeline';
 import { MapInspector } from '../components/MapInspector';
@@ -55,6 +68,16 @@ const PANEL_KEY = 'cuks-map-panel-collapsed';
 const DEFAULT_DRAW_COLOR = '#15803d';
 /** `gisFeaturesQuerySchema` caps a page at 1000 features. */
 const FEATURE_PAGE_MAX = 1000;
+/** Admin boundaries stay visible but are not clickable in duty mode. */
+const DUTY_EXCLUDE_INSPECT = new Set(['admin_units']);
+
+function filtersForMode(
+  mode: MapExplorerMode,
+  lockedRegionIds: readonly string[] | null,
+): IncidentFilterState {
+  const base = mode === 'duty' ? defaultDutyIncidentFilters() : defaultIncidentFilters();
+  return lockedRegionIds ? { ...base, regionId: lockedRegionIds[0]! } : base;
+}
 
 /** A stored `[west, south, east, north]` extent (imported layer style). */
 function isBounds(value: unknown): value is [number, number, number, number] {
@@ -112,11 +135,31 @@ export function MapPage(): React.JSX.Element {
   if (tokenQuery.data) tokenRef.current = tokenQuery.data.token;
   const getToken = useCallback(() => tokenRef.current, []);
 
-  const [states, setStates] = useState<Record<string, LayerState>>(() => defaultLayerStates());
-  const [basemapMode, setBasemapMode] = useState<BasemapMode>('auto');
-  const [incidentFilters, setIncidentFilters] = useState<IncidentFilterState>(() =>
-    defaultIncidentFilters(),
-  );
+  // Shared-view hydrate (docs/modules/10 §4). Parsed once on mount so later
+  // filter/layer edits do not re-read a stale address bar.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sharedViewRef = useRef(parseMapViewSearchParams(searchParams));
+  const sharedView = sharedViewRef.current;
+  const sharedLayersAppliedRef = useRef(false);
+  const sharedCameraAppliedRef = useRef(false);
+
+  const [states, setStates] = useState<Record<string, LayerState>>(() => {
+    const base = defaultLayerStates();
+    return sharedView ? mergeLayerStates(base, sharedView.layers) : base;
+  });
+  const [basemapMode, setBasemapMode] = useState<BasemapMode>(() => sharedView?.basemap ?? 'auto');
+  const [explorerMode, setExplorerMode] = useState<MapExplorerMode>(() => {
+    if (sharedView) {
+      storeMapMode(sharedView.mode);
+      return sharedView.mode;
+    }
+    return readStoredMapMode();
+  });
+  const [incidentFilters, setIncidentFilters] = useState<IncidentFilterState>(() => {
+    const mode = sharedView?.mode ?? readStoredMapMode();
+    const defaults = filtersForMode(mode, null);
+    return sharedView ? coalesceMapFilters(sharedView.filters, defaults) : defaults;
+  });
   const [incidentRevision, setIncidentRevision] = useState(0);
   const incidentTileQuery = useMemo(
     () => `${buildIncidentTileQuery(incidentFilters)}&revision=${incidentRevision}`,
@@ -127,11 +170,8 @@ export function MapPage(): React.JSX.Element {
     useCallback(() => setIncidentRevision((value) => value + 1), []),
   );
   const resetIncidentFilters = useCallback(() => {
-    setIncidentFilters({
-      ...defaultIncidentFilters(),
-      ...(lockedRegionIds ? { regionId: lockedRegionIds[0] } : {}),
-    });
-  }, [lockedRegionIds]);
+    setIncidentFilters(filtersForMode(explorerMode, lockedRegionIds));
+  }, [explorerMode, lockedRegionIds]);
 
   // Pin a confined user's region as soon as their scope loads (and keep it pinned
   // if they somehow land on a foreign region), so incident tiles stay in scope.
@@ -165,6 +205,10 @@ export function MapPage(): React.JSX.Element {
   const drawnDefs = registryDefs;
   const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
   const [tool, setTool] = useState<DrawTool>('none');
+  const [measureMode, setMeasureMode] = useState<MeasureMode>('none');
+  const [measureReading, setMeasureReading] = useState<MeasureReading | null>(null);
+  const [exportingPng, setExportingPng] = useState(false);
+  const [sharingView, setSharingView] = useState(false);
   const [drawnRevision, setDrawnRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -177,7 +221,6 @@ export function MapPage(): React.JSX.Element {
   // is presigned on demand, so it cannot live in a permanent notification href).
   // react-router's params, not window.location: the link works even when the map is
   // already open (no remount).
-  const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkExportId = searchParams.get('export');
   const clearDeepLinkExport = useCallback(() => {
     setSearchParams(
@@ -194,6 +237,24 @@ export function MapPage(): React.JSX.Element {
   const [selected, setSelected] = useState<InspectedFeature | null>(null);
   const [editing, setEditing] = useState<EditingFeature | null>(null);
   const [pendingGeometry, setPendingGeometry] = useState<GeoJsonGeometry | null>(null);
+
+  const applyExplorerMode = useCallback(
+    (mode: MapExplorerMode) => {
+      setExplorerMode(mode);
+      storeMapMode(mode);
+      setStates(defaultLayerStates());
+      setIncidentFilters(filtersForMode(mode, lockedRegionIds));
+      if (mode === 'duty') {
+        setActiveLayerId(null);
+        setTool('none');
+        setMeasureMode('none');
+        setMeasureReading(null);
+        setEditing(null);
+        setPendingGeometry(null);
+      }
+    },
+    [lockedRegionIds],
+  );
 
   const createFeature = useCreateGisFeature();
   const patchFeature = usePatchGisFeature();
@@ -429,24 +490,94 @@ export function MapPage(): React.JSX.Element {
     document.title = t('title');
   }, [t]);
 
-  // Escape backs out one step at a time: the geometry edit, then the drawing tool,
+  // Re-apply shared layer toggles once registry layers load (system layers were
+  // merged on init; drawn/imported ids arrive later).
+  useEffect(() => {
+    const overlay = sharedViewRef.current?.layers;
+    if (!overlay || !layersQuery.data || sharedLayersAppliedRef.current) return;
+    setStates((prev) => mergeLayerStates(prev, overlay));
+    sharedLayersAppliedRef.current = true;
+  }, [layersQuery.data]);
+
+  // Jump the camera once MapView is ready.
+  useEffect(() => {
+    const camera = sharedViewRef.current?.camera;
+    if (
+      !camera ||
+      sharedCameraAppliedRef.current ||
+      tokenQuery.isPending ||
+      catalogQuery.isPending ||
+      tokenQuery.isError ||
+      catalogQuery.isError
+    ) {
+      return;
+    }
+    const tryApply = (): boolean => {
+      if (mapRef.current?.setCamera(camera)) {
+        sharedCameraAppliedRef.current = true;
+        return true;
+      }
+      return false;
+    };
+    if (tryApply()) return;
+    const timer = window.setInterval(() => {
+      if (tryApply()) window.clearInterval(timer);
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [tokenQuery.isPending, catalogQuery.isPending, tokenQuery.isError, catalogQuery.isError]);
+
+  const shareMapView = useCallback(async () => {
+    const camera = mapRef.current?.getCamera();
+    if (!camera) {
+      toast({ title: t('tools.shareFailed'), tone: 'danger' });
+      return;
+    }
+    setSharingView(true);
+    try {
+      const snapshot = {
+        version: 1 as const,
+        mode: explorerMode,
+        basemap: basemapMode,
+        camera,
+        layers: states,
+        filters: incidentFilters,
+      };
+      const params = writeMapViewSearchParams(searchParams, snapshot);
+      setSearchParams(params, { replace: true });
+      const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: t('tools.shareDone'), tone: 'success' });
+      } catch {
+        toast({ title: t('tools.shareFallback'), description: url, duration: 10_000 });
+      }
+    } finally {
+      setSharingView(false);
+    }
+  }, [basemapMode, explorerMode, incidentFilters, searchParams, setSearchParams, states, t]);
+
+  // Escape backs out one step at a time: the geometry edit, then measure/draw,
   // then the inspector.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       if (editing) cancelEdit();
-      else if (tool !== 'none') setTool('none');
+      else if (measureMode !== 'none') {
+        setMeasureMode('none');
+        setMeasureReading(null);
+      } else if (tool !== 'none') setTool('none');
       else if (selection.length > 0) closeInspector();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [cancelEdit, closeInspector, editing, selection.length, tool]);
+  }, [cancelEdit, closeInspector, editing, measureMode, selection.length, tool]);
 
   if (!canView) return <ForbiddenPage />;
 
   const loading = tokenQuery.isPending || catalogQuery.isPending;
   const mapFailed = tokenQuery.isError || catalogQuery.isError;
-  const showToolbar = activeLayer !== null;
+  const gisTools = explorerMode === 'gis';
+  const showToolbar = gisTools && activeLayer !== null;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-background">
@@ -484,23 +615,27 @@ export function MapPage(): React.JSX.Element {
             incidentTileQuery={incidentTileQuery}
             drawnDefs={drawnDefs}
             drawnRevision={drawnRevision}
-            tool={tool}
+            tool={gisTools && measureMode === 'none' ? tool : 'none'}
             drawColor={drawColor}
-            editing={editing}
-            pendingGeometry={pendingGeometry}
+            editing={gisTools ? editing : null}
+            pendingGeometry={gisTools ? pendingGeometry : null}
             onDrawFinish={onDrawFinish}
             onEditGeometry={onEditGeometry}
             onInspect={onInspect}
+            measureMode={measureMode}
+            onMeasureReading={setMeasureReading}
+            {...(!gisTools ? { excludeInspectSources: DUTY_EXCLUDE_INSPECT } : {})}
           />
           <LayersPanel
             states={states}
             availableSources={catalogQuery.data}
             drawnDefs={drawnDefs}
-            activeLayerId={activeLayerId}
+            activeLayerId={gisTools ? activeLayerId : null}
             canCreateLayer={canManageLayers}
             canImport={canImport}
             canExport={canExport}
             canPublish={canPublish}
+            gisTools={gisTools}
             editLocked={editing !== null}
             layersLoading={layersQuery.isPending}
             layersError={layersQuery.isError}
@@ -529,13 +664,57 @@ export function MapPage(): React.JSX.Element {
             onTogglePublish={togglePublish}
             onDeleteLayer={(def) => setPendingDelete({ kind: 'layer', def })}
           />
+          <MapModeSwitcher value={explorerMode} onChange={applyExplorerMode} />
           <BasemapSwitcher value={basemapMode} onChange={setBasemapMode} />
+          <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3">
+            <div
+              className={cn(
+                'pointer-events-auto w-full max-w-sm',
+                panelCollapsed ? 'md:ml-14' : 'md:ml-72',
+                'md:mr-56',
+              )}
+            >
+              <MapSearch
+                onGoTo={(target) => {
+                  mapRef.current?.fitBounds(target.bounds);
+                }}
+              />
+            </div>
+          </div>
+          <MapToolsBar
+            measureMode={measureMode}
+            onMeasureModeChange={(mode) => {
+              setMeasureMode(mode);
+              setMeasureReading(null);
+              if (mode !== 'none') setTool('none');
+            }}
+            canClear={(measureReading?.pointCount ?? 0) > 0}
+            onClear={() => mapRef.current?.clearMeasure()}
+            exporting={exportingPng}
+            onExportPng={() => {
+              setExportingPng(true);
+              void mapRef.current
+                ?.exportPng()
+                .then(() => toast({ title: t('tools.pngDone'), tone: 'success' }))
+                .catch(() => toast({ title: t('tools.pngFailed'), tone: 'danger' }))
+                .finally(() => setExportingPng(false));
+            }}
+            sharing={sharingView}
+            onShareView={() => void shareMapView()}
+          />
+          <MeasureHud reading={measureReading} hint={measureMode === 'none' ? null : measureMode} />
           {showToolbar && (
             <DrawToolbar
               layerTitle={activeLayer.title}
               geometryType={activeLayer.geometryType}
               value={tool}
-              onChange={setTool}
+              onChange={(next) => {
+                setTool(next);
+                if (next !== 'none') {
+                  setMeasureMode('none');
+                  setMeasureReading(null);
+                }
+              }}
               locked={editing !== null}
             />
           )}
@@ -547,7 +726,7 @@ export function MapPage(): React.JSX.Element {
             editing={editing !== null}
             dirty={pendingGeometry !== null}
             busy={busy}
-            offsetRight={showToolbar}
+            offsetRight
             onSelect={setSelected}
             onClose={closeInspector}
             onEdit={startEdit}
@@ -564,11 +743,14 @@ export function MapPage(): React.JSX.Element {
                 error={filterOptionsQuery.isError}
                 panelCollapsed={panelCollapsed}
                 lockedRegionIds={lockedRegionIds}
+                statusLocked={!gisTools}
                 onChange={setIncidentFilters}
                 onReset={resetIncidentFilters}
                 onRetry={() => void filterOptionsQuery.refetch()}
               />
-              <IncidentTimeline value={incidentFilters} onChange={setIncidentFilters} />
+              {gisTools && (
+                <IncidentTimeline value={incidentFilters} onChange={setIncidentFilters} />
+              )}
             </>
           )}
           {catalogQuery.data.size === 0 && (

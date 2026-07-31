@@ -131,9 +131,19 @@ describe('inspectableLayerIds', () => {
     const ids = inspectableLayerIds(SYSTEM_LAYERS, drawnLayerDefs([layer()]));
     expect(ids).toContain('incidents');
     expect(ids).toContain('facilities');
+    expect(ids).toContain('admin_units');
     expect(ids).toContain('drawn:layer-1-fill');
     expect(ids).not.toContain('incidents-clusters');
     expect(ids).not.toContain('incidents-cluster-count');
     expect(ids).not.toContain('incidents-active-pulse');
+  });
+
+  it('can exclude background source-layers from the inspector (duty mode)', () => {
+    const ids = inspectableLayerIds(SYSTEM_LAYERS, [], {
+      excludeSourceLayers: new Set(['admin_units']),
+    });
+    expect(ids).not.toContain('admin_units');
+    expect(ids).toContain('incidents');
+    expect(ids).toContain('risk_zones');
   });
 });

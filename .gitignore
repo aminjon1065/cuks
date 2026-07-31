@@ -37,3 +37,6 @@ apps/api/.ca/
 # Runtime data (docker volumes mounted locally, basemap, etc.)
 infra/basemap/*
 !infra/basemap/.gitkeep
+
+# Local tooling binaries (e.g. pmtiles CLI downloaded on Windows)
+.tools/

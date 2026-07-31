@@ -10,6 +10,7 @@ import { GisFeaturesService } from './gis-features.service';
 import { GisImportsService } from './gis-imports.service';
 import { GisDbAccountsController, GisIntegrationController } from './gis-integration.controller';
 import { GisLayersService } from './gis-layers.service';
+import { GisPlacesService } from './gis-places.service';
 import { GisPublicationService } from './gis-publication.service';
 import { GeoServerService } from './geoserver.service';
 import { IncidentMapOptionsService } from './incident-map-options.service';
@@ -31,6 +32,7 @@ import { TileTokenService } from './tile-token.service';
   providers: [
     TileTokenService,
     IncidentMapOptionsService,
+    GisPlacesService,
     GisLayersService,
     GisFeaturesService,
     GisImportsService,

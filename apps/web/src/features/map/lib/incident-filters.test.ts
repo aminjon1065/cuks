@@ -3,6 +3,7 @@ import {
   addCalendarDays,
   buildIncidentTileQuery,
   calendarDaysBetween,
+  defaultDutyIncidentFilters,
   defaultIncidentFilters,
   dushanbeDayStartEpoch,
   todayInDushanbe,
@@ -16,6 +17,15 @@ describe('incident timeline dates', () => {
       dateFrom: '2026-06-15',
       dateTo: '2026-07-14',
       cursorDate: '2026-07-14',
+      status: '',
+    });
+  });
+
+  it('duty defaults use open status (non-closed)', () => {
+    const now = new Date('2026-07-13T20:30:00Z');
+    expect(defaultDutyIncidentFilters(now)).toMatchObject({
+      status: 'open',
+      dateTo: '2026-07-14',
     });
   });
 
@@ -62,5 +72,21 @@ describe('buildIncidentTileQuery', () => {
     );
 
     expect(new Date(Number(query.get('to')) * 1000).toISOString()).toBe('2026-07-14T19:00:00.000Z');
+  });
+
+  it('omits the date window for duty open status', () => {
+    const query = new URLSearchParams(
+      buildIncidentTileQuery({
+        typeCode: '',
+        status: 'open',
+        regionId: '',
+        dateFrom: '2026-07-01',
+        dateTo: '2026-07-14',
+        cursorDate: '2026-07-14',
+      }),
+    );
+    expect(query.get('status')).toBe('open');
+    expect(query.get('from')).toBeNull();
+    expect(query.get('to')).toBeNull();
   });
 });

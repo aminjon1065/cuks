@@ -48,6 +48,7 @@ function renderPanel(overrides: Partial<LayersPanelProps> = {}) {
     canImport: false,
     canExport: false,
     canPublish: false,
+    gisTools: true,
     editLocked: false,
     layersLoading: false,
     layersError: false,
@@ -93,7 +94,8 @@ describe('LayersPanel', () => {
     renderPanel();
     expect(screen.getByRole('checkbox', { name: 'Административные границы' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Чрезвычайные ситуации' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Зоны риска' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Зоны риска' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Объекты инфраструктуры' })).not.toBeChecked();
   });
 
   it('toggles a layer through the checkbox', () => {
@@ -114,8 +116,10 @@ describe('LayersPanel', () => {
     renderPanel();
     // admin_units is visible by default → its legend label renders.
     expect(screen.getByText('Границы регионов')).toBeInTheDocument();
-    // risk_zones is hidden by default → its legend label does not.
-    expect(screen.queryByText('Зона риска')).not.toBeInTheDocument();
+    // risk_zones is visible by default → its legend label renders.
+    expect(screen.getByText('Зона риска')).toBeInTheDocument();
+    // facilities is hidden by default → no facilities legend.
+    expect(screen.queryByText('Объект инфраструктуры')).not.toBeInTheDocument();
     expect(screen.getByText('Донесение')).toBeInTheDocument();
     expect(screen.getByText('В работе')).toBeInTheDocument();
     expect(screen.getByText('Локализована')).toBeInTheDocument();
@@ -160,16 +164,21 @@ describe('LayersPanel', () => {
       expect(props.onActiveLayerChange).toHaveBeenCalledWith(null);
     });
 
-    it('offers editing and deletion only where the ACL allows it', () => {
+    it('hides draw / GIS-access chrome in duty mode', () => {
       renderPanel({
-        drawnDefs: drawnLayerDefs([layer({ canEdit: false, canManage: false })]),
+        drawnDefs: drawnLayerDefs([layer()]),
+        canCreateLayer: true,
+        canImport: true,
+        gisTools: false,
       });
       expect(
         screen.queryByRole('button', { name: 'Рисовать в слое «Оцепление»' }),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('button', { name: 'Удалить слой «Оцепление»' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('create-layer')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('import-layer')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('gis-access-link')).not.toBeInTheDocument();
+      // Layer itself still visible for toggling.
+      expect(screen.getByText('Оцепление')).toBeInTheDocument();
     });
 
     it('locks target-switching and deletion while a geometry edit is unsaved', () => {

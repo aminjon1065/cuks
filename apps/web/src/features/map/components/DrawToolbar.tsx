@@ -42,7 +42,7 @@ export function DrawToolbar({
 
   return (
     <div
-      className="absolute right-3 top-16 z-20 flex flex-col gap-1 rounded border border-border bg-surface p-1 shadow-[var(--shadow-2)]"
+      className="absolute right-3 top-56 z-20 flex flex-col gap-1 rounded border border-border bg-surface p-1 shadow-[var(--shadow-2)]"
       role="toolbar"
       aria-label={t('draw.toolbar', { name: layerTitle })}
       aria-orientation="vertical"

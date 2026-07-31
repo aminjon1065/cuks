@@ -1,6 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Map as MlMap, NavigationControl, ScaleControl } from 'maplibre-gl';
-import type { MapLayerMouseEvent, MapMouseEvent, VectorTileSource } from 'maplibre-gl';
+import type {
+  GeoJSONSource,
+  MapLayerMouseEvent,
+  MapMouseEvent,
+  VectorTileSource,
+} from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { TerraDraw } from 'terra-draw';
 import type { GeoJsonGeometry } from '@cuks/shared';
@@ -39,12 +44,33 @@ import {
 import { inspectableLayerIds, inspectFeatures, type InspectedFeature } from '../lib/inspect';
 import { createBoxSelect } from '../lib/box-select';
 import type { Bounds } from '../lib/geo';
+import { downloadMapPng } from '../lib/map-snapshot';
+import type { MapCamera } from '../lib/map-view-url';
+import {
+  MEASURE_FILL_LAYER,
+  MEASURE_LINE_LAYER,
+  MEASURE_POINTS_LAYER,
+  MEASURE_SOURCE,
+  measureCollection,
+  measureReading,
+  type LngLat,
+  type MeasureMode,
+  type MeasureReading,
+} from '../lib/measure';
 
-/** Imperative controls the page drives (zoom-to-layer, reset view). */
+/** Imperative controls the page drives (zoom-to-layer, reset view, measure, PNG). */
 export interface MapViewHandle {
   zoomToLayer: (source: string) => Promise<void>;
   fitBounds: (bounds: Bounds) => void;
   resetView: () => void;
+  /** Current camera, or `null` before the map is ready. */
+  getCamera: () => MapCamera | null;
+  /** Jump the camera without animation (shared-view hydrate). */
+  setCamera: (camera: MapCamera) => boolean;
+  /** Drop the current measure sketch (keeps the active measure mode). */
+  clearMeasure: () => void;
+  /** Download a PNG of the current map view (docs/modules/10 §4). */
+  exportPng: () => Promise<void>;
 }
 
 /** The feature open in the geometry editor. */
@@ -83,6 +109,12 @@ export interface MapViewProps {
   onEditGeometry: (geometry: GeoJsonGeometry) => void;
   /** Click / box-select result for the inspector (empty = nothing hit). */
   onInspect: (features: InspectedFeature[]) => void;
+  /** Source-layers that stay on the map but are ignored by the inspector. */
+  excludeInspectSources?: ReadonlySet<string>;
+  /** Ephemeral distance/area measure tool (docs/modules/10 §4). */
+  measureMode?: MeasureMode;
+  /** Live reading for the measure HUD; `null` when idle or cleared. */
+  onMeasureReading?: (reading: MeasureReading | null) => void;
 }
 
 declare global {
@@ -140,6 +172,9 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     onDrawFinish,
     onEditGeometry,
     onInspect,
+    excludeInspectSources,
+    measureMode = 'none',
+    onMeasureReading,
   },
   ref,
 ) {
@@ -167,6 +202,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   incidentTileQueryRef.current = incidentTileQuery;
   const drawnDefsRef = useRef(drawnDefs);
   drawnDefsRef.current = drawnDefs;
+  const excludeInspectSourcesRef = useRef(excludeInspectSources);
+  excludeInspectSourcesRef.current = excludeInspectSources;
   const drawnRevisionRef = useRef(drawnRevision);
   drawnRevisionRef.current = drawnRevision;
   const toolRef = useRef(tool);
@@ -183,6 +220,14 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   onEditGeometryRef.current = onEditGeometry;
   const onInspectRef = useRef(onInspect);
   onInspectRef.current = onInspect;
+  const measureModeRef = useRef(measureMode);
+  measureModeRef.current = measureMode;
+  const onMeasureReadingRef = useRef(onMeasureReading);
+  onMeasureReadingRef.current = onMeasureReading;
+  const measurePointsRef = useRef<LngLat[]>([]);
+  const clearMeasureRef = useRef<() => void>(() => {
+    measurePointsRef.current = [];
+  });
 
   const drawRef = useRef<TerraDraw | null>(null);
   const editingId = editing?.id ?? null;
@@ -228,6 +273,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
       maxZoom: 18,
+      // Needed so `canvas.toBlob` can snapshot the view for PNG export.
+      canvasContextAttributes: { preserveDrawingBuffer: true },
       transformRequest: makeTransformRequest(() => getTokenRef.current()),
     });
     map.addControl(new NavigationControl({ showCompass: true }), 'bottom-right');
@@ -246,8 +293,9 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       setReady(true);
     });
     const zoomCluster = (event: MapLayerMouseEvent): void => {
-      // While drawing, a click places a vertex — flying the camera to a cluster
-      // under it would move the map out from under the sketch.
+      // While drawing/measuring, a click places a vertex — flying the camera to a
+      // cluster under it would move the map out from under the sketch.
+      if (measureModeRef.current !== 'none') return;
       if (toolRef.current !== 'none' && toolRef.current !== 'select') return;
       const feature = event.features?.[0];
       if (!feature || feature.geometry.type !== 'Point') return;
@@ -413,9 +461,15 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     if (!map || !ready) return;
 
     const inspectable = (): boolean =>
-      (toolRef.current === 'none' || toolRef.current === 'select') && !editingRef.current;
+      measureModeRef.current === 'none' &&
+      (toolRef.current === 'none' || toolRef.current === 'select') &&
+      !editingRef.current;
     const queryLayers = (): string[] =>
-      inspectableLayerIds(SYSTEM_LAYERS, drawnDefsRef.current).filter((id) => map.getLayer(id));
+      inspectableLayerIds(SYSTEM_LAYERS, drawnDefsRef.current, {
+        ...(excludeInspectSourcesRef.current
+          ? { excludeSourceLayers: excludeInspectSourcesRef.current }
+          : {}),
+      }).filter((id) => map.getLayer(id));
     const report = (hits: ReturnType<MlMap['queryRenderedFeatures']>): void => {
       onInspectRef.current(inspectFeatures(hits, layerTitles(drawnDefsRef.current)));
     };
@@ -434,7 +488,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       map.off('click', onClick);
       disposeBox();
     };
-  }, [ready, styleEpoch]);
+  }, [ready, styleEpoch, excludeInspectSources]);
 
   // Active incidents get a restrained halo. The loop exists only while an
   // active marker is rendered; hidden/empty/reduced-motion maps stay idle.
@@ -487,6 +541,137 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     };
   }, [incidentTileQuery, ready, states]);
 
+  // Ephemeral measure overlay: click to add vertices; Escape clears; double-click
+  // finishes an area ring. Sketch lives only in a GeoJSON source — never persisted.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    const ensureLayers = (): void => {
+      if (!map.getSource(MEASURE_SOURCE)) {
+        map.addSource(MEASURE_SOURCE, {
+          type: 'geojson',
+          data: measureCollection('distance', []),
+        });
+      }
+      if (!map.getLayer(MEASURE_FILL_LAYER)) {
+        map.addLayer({
+          id: MEASURE_FILL_LAYER,
+          type: 'fill',
+          source: MEASURE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'fill'],
+          paint: {
+            'fill-color': cssToken('--primary', '#1d4ed8'),
+            'fill-opacity': 0.15,
+          },
+        });
+      }
+      if (!map.getLayer(MEASURE_LINE_LAYER)) {
+        map.addLayer({
+          id: MEASURE_LINE_LAYER,
+          type: 'line',
+          source: MEASURE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'line'],
+          paint: {
+            'line-color': cssToken('--primary', '#1d4ed8'),
+            'line-width': 2,
+            'line-dasharray': [2, 1.5],
+          },
+        });
+      }
+      if (!map.getLayer(MEASURE_POINTS_LAYER)) {
+        map.addLayer({
+          id: MEASURE_POINTS_LAYER,
+          type: 'circle',
+          source: MEASURE_SOURCE,
+          filter: ['==', ['get', 'kind'], 'vertex'],
+          paint: {
+            'circle-radius': 4,
+            'circle-color': cssToken('--surface', '#ffffff'),
+            'circle-stroke-color': cssToken('--primary', '#1d4ed8'),
+            'circle-stroke-width': 2,
+          },
+        });
+      }
+    };
+
+    const publish = (points: LngLat[]): void => {
+      measurePointsRef.current = points;
+      const mode = measureModeRef.current;
+      ensureLayers();
+      const source = map.getSource(MEASURE_SOURCE) as GeoJSONSource | undefined;
+      if (mode === 'none') {
+        source?.setData(measureCollection('distance', []));
+        onMeasureReadingRef.current?.(null);
+        return;
+      }
+      source?.setData(measureCollection(mode, points));
+      onMeasureReadingRef.current?.(points.length > 0 ? measureReading(mode, points) : null);
+    };
+
+    const clear = (): void => publish([]);
+    clearMeasureRef.current = clear;
+
+    // Style rebuilds drop custom sources — re-attach after each epoch.
+    ensureLayers();
+    if (measureMode === 'none') {
+      publish([]);
+      map.doubleClickZoom.enable();
+      map.getCanvas().style.cursor = '';
+      return () => {
+        clearMeasureRef.current = () => {
+          measurePointsRef.current = [];
+        };
+      };
+    }
+
+    publish(measurePointsRef.current);
+    map.doubleClickZoom.disable();
+    map.getCanvas().style.cursor = 'crosshair';
+
+    const onClick = (event: MapMouseEvent): void => {
+      if (measureModeRef.current === 'none') return;
+      const { lng, lat } = event.lngLat;
+      publish([...measurePointsRef.current, [lng, lat]]);
+    };
+    const onDblClick = (event: MapMouseEvent): void => {
+      if (measureModeRef.current !== 'area') return;
+      event.preventDefault();
+      // Double-click already fired clicks that may have duplicated the last vertex.
+      const points = measurePointsRef.current;
+      if (points.length >= 2) {
+        const last = points[points.length - 1]!;
+        const prev = points[points.length - 2]!;
+        if (Math.abs(last[0] - prev[0]) < 1e-9 && Math.abs(last[1] - prev[1]) < 1e-9) {
+          publish(points.slice(0, -1));
+        }
+      }
+    };
+
+    map.on('click', onClick);
+    map.on('dblclick', onDblClick);
+
+    return () => {
+      map.off('click', onClick);
+      map.off('dblclick', onDblClick);
+      map.doubleClickZoom.enable();
+      map.getCanvas().style.cursor = '';
+      clearMeasureRef.current = () => {
+        measurePointsRef.current = [];
+      };
+    };
+  }, [ready, styleEpoch, measureMode]);
+
+  // Switching measure mode (including none ↔ tool) resets the sketch.
+  useEffect(() => {
+    measurePointsRef.current = [];
+    onMeasureReadingRef.current?.(null);
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const source = map.getSource(MEASURE_SOURCE) as GeoJSONSource | undefined;
+    source?.setData(measureCollection('distance', []));
+  }, [measureMode, ready]);
+
   useImperativeHandle(ref, () => ({
     async zoomToLayer(source: string) {
       const map = mapRef.current;
@@ -499,6 +684,26 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     },
     resetView() {
       mapRef.current?.fitBounds(TAJIKISTAN_BOUNDS, { padding: 48, duration: 600 });
+    },
+    getCamera() {
+      const map = mapRef.current;
+      if (!map || !readyRef.current) return null;
+      const center = map.getCenter();
+      return { center: [center.lng, center.lat], zoom: map.getZoom() };
+    },
+    setCamera(camera: MapCamera) {
+      const map = mapRef.current;
+      if (!map || !readyRef.current) return false;
+      map.jumpTo({ center: camera.center, zoom: camera.zoom });
+      return true;
+    },
+    clearMeasure() {
+      clearMeasureRef.current();
+    },
+    async exportPng() {
+      const map = mapRef.current;
+      if (!map) throw new Error('map_not_ready');
+      await downloadMapPng(map);
     },
   }));
 

@@ -5,9 +5,15 @@ import { DISPLAY_TIMEZONE, type IncidentStatus } from '@cuks/shared';
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Tile status filter. `open` = all non-closed (dashboard «active» semantics,
+ * duty mode). Empty = any status. Concrete statuses match the lifecycle enum.
+ */
+export type IncidentMapStatusFilter = IncidentStatus | '' | 'open';
+
 export interface IncidentFilterState {
   typeCode: string;
-  status: IncidentStatus | '';
+  status: IncidentMapStatusFilter;
   regionId: string;
   dateFrom: string;
   dateTo: string;
@@ -66,6 +72,7 @@ export function dushanbeDayStartEpoch(value: string): number {
   return Math.floor((parseCalendarDate(value).getTime() - DUSHANBE_OFFSET_MS) / 1000);
 }
 
+/** GIS-mode default: last 30 days, any status (history / timeline). */
 export function defaultIncidentFilters(now: Date = new Date()): IncidentFilterState {
   const dateTo = todayInDushanbe(now);
   return {
@@ -78,14 +85,30 @@ export function defaultIncidentFilters(now: Date = new Date()): IncidentFilterSt
   };
 }
 
+/** Duty-mode default: non-closed incidents only, no date window (ops picture). */
+export function defaultDutyIncidentFilters(now: Date = new Date()): IncidentFilterState {
+  const dateTo = todayInDushanbe(now);
+  return {
+    typeCode: '',
+    status: 'open',
+    regionId: '',
+    dateFrom: addCalendarDays(dateTo, -29),
+    dateTo,
+    cursorDate: dateTo,
+  };
+}
+
 /** Deterministic Martin query string. `to` is exclusive, so the selected cursor
- * day is included in full. The tile token is added later by transformRequest. */
+ * day is included in full. The tile token is added later by transformRequest.
+ * Duty `status=open` omits the date window so older open incidents stay visible. */
 export function buildIncidentTileQuery(filters: IncidentFilterState): string {
   const params = new URLSearchParams();
   if (filters.typeCode) params.set('type', filters.typeCode);
   if (filters.status) params.set('status', filters.status);
   if (filters.regionId) params.set('region', filters.regionId);
-  params.set('from', String(dushanbeDayStartEpoch(filters.dateFrom)));
-  params.set('to', String(dushanbeDayStartEpoch(addCalendarDays(filters.cursorDate, 1))));
+  if (filters.status !== 'open') {
+    params.set('from', String(dushanbeDayStartEpoch(filters.dateFrom)));
+    params.set('to', String(dushanbeDayStartEpoch(addCalendarDays(filters.cursorDate, 1))));
+  }
   return params.toString();
 }

@@ -163,7 +163,8 @@ export const SYSTEM_LAYERS: readonly MapLayerDef[] = [
     kind: 'circle',
     colorToken: '--info',
     legend: [{ shape: 'circle', token: '--info', labelKey: 'legend.facilities' }],
-    defaultVisible: true,
+    // Duty-first defaults: infrastructure off until an operator asks for it.
+    defaultVisible: false,
   },
   {
     id: 'risk_zones',
@@ -175,7 +176,8 @@ export const SYSTEM_LAYERS: readonly MapLayerDef[] = [
     colorToken: '--sev-3',
     fillOpacity: 0.3,
     legend: [{ shape: 'fill', token: '--sev-3', labelKey: 'legend.riskZones' }],
-    defaultVisible: false,
+    // Hazard context on by default for the duty picture.
+    defaultVisible: true,
   },
 ];
 

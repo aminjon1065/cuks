@@ -37,6 +37,8 @@ export interface LayersPanelProps {
   canExport: boolean;
   /** `gis.layers.manage` — enables the WMS/WFS publish toggle (task 2.9). */
   canPublish: boolean;
+  /** When false (duty mode), hide draw/import/export/publish/GIS-access chrome. */
+  gisTools: boolean;
   /** An unsaved geometry edit is open — switching target or deleting would strand it. */
   editLocked: boolean;
   /** The drawn-layer registry is still loading. */
@@ -99,6 +101,7 @@ function LayerRow({
   editLocked,
   canExport,
   canPublish,
+  gisTools,
   onToggle,
   onOpacity,
   onZoom,
@@ -113,6 +116,7 @@ function LayerRow({
   editLocked: boolean;
   canExport: boolean;
   canPublish: boolean;
+  gisTools: boolean;
   onToggle: LayersPanelProps['onToggle'];
   onOpacity: LayersPanelProps['onOpacity'];
   onZoom: LayersPanelProps['onZoom'];
@@ -148,7 +152,7 @@ function LayerRow({
         >
           {title}
         </label>
-        {drawn?.canEdit && (
+        {gisTools && drawn?.canEdit && (
           <Button
             variant="ghost"
             size="icon"
@@ -163,7 +167,7 @@ function LayerRow({
             <Pencil className="size-3.5" />
           </Button>
         )}
-        {registry && canPublish && (
+        {gisTools && registry && canPublish && (
           <Button
             variant="ghost"
             size="icon"
@@ -181,7 +185,7 @@ function LayerRow({
             <Globe className="size-3.5" />
           </Button>
         )}
-        {registry && canExport && (
+        {gisTools && registry && canExport && (
           <Button
             variant="ghost"
             size="icon"
@@ -204,7 +208,7 @@ function LayerRow({
         >
           <Crosshair className="size-3.5" />
         </Button>
-        {registry?.canManage && (
+        {gisTools && registry?.canManage && (
           <Button
             variant="ghost"
             size="icon"
@@ -262,6 +266,7 @@ export function LayersPanel({
   canImport,
   canExport,
   canPublish,
+  gisTools,
   editLocked,
   layersLoading,
   layersError,
@@ -302,12 +307,11 @@ export function LayersPanel({
   const available = [...SYSTEM_LAYERS, ...drawnDefs].filter(
     (def) => !availableSources || availableSources.has(def.tileSource ?? def.source),
   );
+  const showMineTools = gisTools && (canCreateLayer || canImport);
   const groups = PANEL_GROUP_ORDER.map((group) => ({
     group,
     layers: available.filter((def) => def.group === group),
-  })).filter(
-    (entry) => entry.layers.length > 0 || (entry.group === 'mine' && (canCreateLayer || canImport)),
-  );
+  })).filter((entry) => entry.layers.length > 0 || (entry.group === 'mine' && showMineTools));
 
   const renderGroup = (group: LayerGroup, layers: MapLayerDef[]): React.JSX.Element => (
     <section key={group} className="mb-2 last:mb-0">
@@ -315,7 +319,7 @@ export function LayersPanel({
         <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
           {t(`groups.${group}`)}
         </h3>
-        {group === 'mine' && (
+        {group === 'mine' && showMineTools && (
           <div className="flex items-center gap-0.5">
             {canImport && (
               <Button
@@ -371,6 +375,7 @@ export function LayersPanel({
               editLocked={editLocked}
               canExport={canExport}
               canPublish={canPublish}
+              gisTools={gisTools}
               onToggle={onToggle}
               onOpacity={onOpacity}
               onZoom={onZoom}
@@ -393,18 +398,20 @@ export function LayersPanel({
           {t('panel.layers')}
         </div>
         <div className="flex items-center gap-0.5">
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="size-7 text-text-muted"
-            aria-label={t('gisAccessLink')}
-            title={t('gisAccessLink')}
-          >
-            <Link to="/app/map/gis-access" data-testid="gis-access-link">
-              <Globe className="size-4" />
-            </Link>
-          </Button>
+          {gisTools && (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="size-7 text-text-muted"
+              aria-label={t('gisAccessLink')}
+              title={t('gisAccessLink')}
+            >
+              <Link to="/app/map/gis-access" data-testid="gis-access-link">
+                <Globe className="size-4" />
+              </Link>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
