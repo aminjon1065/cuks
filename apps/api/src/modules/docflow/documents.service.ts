@@ -689,20 +689,21 @@ export class DocumentsService {
     };
   }
 
-  /** Pending-work counts for the cabinet queue badges (docs/modules/11 §7). */
+  /**
+   * Pending-work counts for the cabinet queue badges (docs/modules/11 §7).
+   *
+   * Counted by the database. These used to fetch every matching document id and read
+   * `.length` — four round-trips shipping thousands of uuids across the wire to produce four
+   * integers, on a screen that renders them as badges.
+   */
   async queueCounts(user: AuthUser): Promise<DocumentQueueCountsDto> {
     const [approve, sign, ack, tasks] = await Promise.all([
-      this.routes.approvalQueueDocumentIds(user.id),
-      this.routes.signQueueDocumentIds(user.id),
-      this.acknowledgements.toAcknowledgeDocumentIds(user.id),
-      this.resolutions.myTasksDocumentIds(user.id),
+      this.routes.approvalQueueCount(user.id),
+      this.routes.signQueueCount(user.id),
+      this.acknowledgements.toAcknowledgeCount(user.id),
+      this.resolutions.myTasksCount(user.id),
     ]);
-    return {
-      to_approve: approve.length,
-      to_sign: sign.length,
-      to_acknowledge: ack.length,
-      my_tasks: tasks.length,
-    };
+    return { to_approve: approve, to_sign: sign, to_acknowledge: ack, my_tasks: tasks };
   }
 
   /** A document's audit history — the «История» tab (docs/modules/11 §7). Visibility-gated

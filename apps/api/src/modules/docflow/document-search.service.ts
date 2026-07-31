@@ -11,6 +11,9 @@ import {
 } from '@cuks/db';
 import {
   likeStartsWith,
+  parseSnippet,
+  SNIPPET_END,
+  SNIPPET_START,
   type DocumentSearchHitDto,
   type DocumentSearchQuery,
   type PaginatedResult,
@@ -77,15 +80,22 @@ export class DocumentSearchService {
           authorName: author.shortName,
           regDate: documents.regDate,
           createdAt: documents.createdAt,
-          // Built ONLY from the document own fields. `MaxFragments=0` gives one contiguous
+          // Built ONLY from the document's own fields. `MaxFragments=0` gives one contiguous
           // window rather than a stitched-together set, which reads better and cannot
           // accidentally assemble a whole paragraph out of a confidential body.
+          //
+          // The highlight markers are control characters, not `<mark>`: `ts_headline` wraps
+          // the matched words but does NOT escape the text around them, so returning HTML
+          // would hand the client a document's own `<script>` to render. The sentinels are
+          // stripped from the source first, so a document cannot forge a highlight either.
           snippet: sql<string | null>`case when ${documents.searchTsv} @@ ${tsq}
             then ts_headline('russian',
-              coalesce(${documents.subject}, '') || ' — ' ||
-              coalesce(${documents.summary}, ${documents.contentText}, ''),
+              translate(
+                coalesce(${documents.subject}, '') || ' — ' ||
+                coalesce(${documents.summary}, ${documents.contentText}, ''),
+                ${SNIPPET_START + SNIPPET_END}, ''),
               ${tsq},
-              'StartSel=<mark>, StopSel=</mark>, MaxWords=28, MinWords=8, MaxFragments=0')
+              ${`StartSel=${SNIPPET_START}, StopSel=${SNIPPET_END}, MaxWords=28, MinWords=8, MaxFragments=0`})
             else null end`,
           hitDocument: sql<boolean>`${documents.searchTsv} @@ ${tsq}`,
           hitNumber: sql<boolean>`(${this.numberMatch(query.q)})`,
@@ -118,7 +128,7 @@ export class DocumentSearchService {
         authorName: r.authorName ?? null,
         regDate: r.regDate?.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),
-        snippet: r.snippet ?? null,
+        snippet: parseSnippet(r.snippet),
         matchedIn: sources(r),
       })),
       total: totals[0]?.n ?? 0,

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import {
   acquaintanceBatches,
   acquaintances,
@@ -217,6 +217,31 @@ export class AcknowledgementsService {
     return [
       ...new Set([...stepRows.map((r) => r.documentId), ...batchRows.map((r) => r.documentId)]),
     ];
+  }
+
+  /**
+   * The same queue as one number. Counted in SQL as the union of the two sources — a document
+   * reachable both through an active step and through an open batch is one document owed, not
+   * two, and the outer `count(distinct …)` is what says so.
+   */
+  async toAcknowledgeCount(userId: string): Promise<number> {
+    const rows = await this.db.execute<{ n: number }>(sql`
+      select count(distinct document_id)::int as n from (
+        select ${acquaintances.documentId} as document_id
+          from ${acquaintances}
+          join ${routeSteps} on ${routeSteps.id} = ${acquaintances.routeStepId}
+          where ${acquaintances.userId} = ${userId}::uuid
+            and ${acquaintances.status} = 'pending'
+            and ${routeSteps.status} = 'active'
+        union all
+        select ${acquaintances.documentId} as document_id
+          from ${acquaintances}
+          join ${acquaintanceBatches} on ${acquaintanceBatches.id} = ${acquaintances.batchId}
+          where ${acquaintances.userId} = ${userId}::uuid
+            and ${acquaintances.status} = 'pending'
+            and ${acquaintanceBatches.releasedAt} is null
+      ) owed`);
+    return rows.rows[0]?.n ?? 0;
   }
 
   /** Whether the caller is on the document's acknowledgement sheet (for visibility). */

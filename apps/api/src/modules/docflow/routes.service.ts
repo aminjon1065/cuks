@@ -284,6 +284,40 @@ export class RoutesService {
   }
 
   /**
+   * How many documents are in the queue — counted by the database rather than by shipping
+   * every id back and reading `.length`. A badge on a dashboard is one integer; on a register
+   * of two hundred thousand the difference is thousands of uuids over the wire per page load.
+   *
+   * `count(distinct document_id)`, because a document with two active steps assigned to the
+   * caller is still one document waiting for them.
+   */
+  async queueCount(userId: string, kind: 'approve' | 'sign'): Promise<number> {
+    const match = this.actingPredicate(await this.actingContext(userId, new Date()));
+    if (!match) return 0;
+    const [row] = await this.db
+      .select({ n: sql<number>`count(distinct ${routes.documentId})::int` })
+      .from(routeSteps)
+      .innerJoin(routes, eq(routes.id, routeSteps.routeId))
+      .where(
+        and(
+          eq(routes.status, 'active'),
+          eq(routeSteps.status, 'active'),
+          eq(routeSteps.kind, kind),
+          match,
+        ),
+      );
+    return row?.n ?? 0;
+  }
+
+  approvalQueueCount(userId: string): Promise<number> {
+    return this.queueCount(userId, 'approve');
+  }
+
+  signQueueCount(userId: string): Promise<number> {
+    return this.queueCount(userId, 'sign');
+  }
+
+  /**
    * Within a transaction: find and lock the document's active route, returning the
    * active `sign` step the actor may act on (or null). Used by the sign action, which
    * records the signature and advances the step in the same transaction.

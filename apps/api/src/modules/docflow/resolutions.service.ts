@@ -62,6 +62,21 @@ export class ResolutionsService {
     return rows.map((r) => r.documentId);
   }
 
+  /** The same queue as one number — the dashboard badge needs a count, not the ids. */
+  async myTasksCount(userId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: sql<number>`count(distinct ${resolutions.documentId})::int` })
+      .from(resolutions)
+      .where(
+        and(
+          eq(resolutions.status, 'active'),
+          sql`(${resolutions.availableAt} is null or ${resolutions.availableAt} <= now())`,
+          or(eq(resolutions.executorId, userId), arrayContains(resolutions.coExecutors, [userId])),
+        ),
+      );
+    return row?.n ?? 0;
+  }
+
   private mine(userId: string) {
     return or(
       eq(resolutions.authorId, userId),

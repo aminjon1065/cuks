@@ -113,6 +113,13 @@ export interface CommandDialogProps {
   onOpenChange: (open: boolean) => void;
   label: string;
   children: React.ReactNode;
+  /**
+   * Turn OFF cmdk's own fuzzy filtering. Pass `false` when the items ALREADY COME FROM A
+   * SERVER QUERY: the client-side filter would re-check them against the raw string and
+   * silently drop rows that matched by morphology, by the text of an attachment, or by any
+   * other rule it cannot see.
+   */
+  shouldFilter?: boolean;
 }
 
 export function CommandDialog({
@@ -120,6 +127,7 @@ export function CommandDialog({
   onOpenChange,
   label,
   children,
+  shouldFilter = true,
 }: CommandDialogProps): React.JSX.Element {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -133,7 +141,7 @@ export function CommandDialog({
           )}
         >
           <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
-          <Command>{children}</Command>
+          <Command shouldFilter={shouldFilter}>{children}</Command>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

@@ -6,6 +6,7 @@ import {
   type DocumentSearchHitDto,
   type DocumentSearchQuery,
   type PaginatedResult,
+  type AttentionCountsDto,
   type QuickSearchHitDto,
 } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -14,6 +15,7 @@ import { Throttle } from '../../common/decorators/throttle.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DocumentSearchService } from './document-search.service';
+import { AttentionService } from './attention.service';
 
 /** Cmd+K sends a keystroke at a time, so its own budget is wider than the full search's. */
 const SEARCH_PER_MINUTE = 60;
@@ -32,7 +34,10 @@ const quickQuerySchema = z.object({ q: z.string().trim().min(1).max(200) });
 @ApiTags('docflow')
 @Controller('docflow')
 export class DocumentSearchController {
-  constructor(private readonly search: DocumentSearchService) {}
+  constructor(
+    private readonly search: DocumentSearchService,
+    private readonly attention: AttentionService,
+  ) {}
 
   @Get('search')
   @RequirePermission('docflow.use')
@@ -54,5 +59,12 @@ export class DocumentSearchController {
     @CurrentUser() user: AuthUser,
   ): Promise<QuickSearchHitDto[]> {
     return this.search.quick(query.q, user);
+  }
+
+  @Get('attention')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Dashboard counts: what is waiting on the caller right now' })
+  attentionCounts(@CurrentUser() user: AuthUser): Promise<AttentionCountsDto> {
+    return this.attention.counts(user);
   }
 }

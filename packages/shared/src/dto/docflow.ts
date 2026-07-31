@@ -425,6 +425,46 @@ export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 export const SEARCH_MATCH_SOURCES = ['document', 'file', 'correspondent', 'number'] as const;
 export type SearchMatchSource = (typeof SEARCH_MATCH_SOURCES)[number];
 
+/** One run of snippet text, flagged if it is part of the match. */
+export interface SnippetPart {
+  text: string;
+  hit: boolean;
+}
+
+/**
+ * The sentinels `ts_headline` wraps matches in before the server turns them into segments.
+ *
+ * Chosen to be impossible in real document text and stripped from the source before
+ * highlighting, so a document cannot forge a highlight by containing the marker itself.
+ */
+export const SNIPPET_START = '\u0002';
+export const SNIPPET_END = '\u0003';
+
+/** Split a `ts_headline` result on the sentinels. Shared so the server and its tests agree. */
+export function parseSnippet(raw: string | null): SnippetPart[] | null {
+  if (!raw) return null;
+  const parts: SnippetPart[] = [];
+  let rest = raw;
+  while (rest.length > 0) {
+    const start = rest.indexOf(SNIPPET_START);
+    if (start === -1) break;
+    const end = rest.indexOf(SNIPPET_END, start);
+    // An unpaired sentinel means the fragment was cut mid-highlight: keep the text, drop the
+    // marker, rather than returning a half-open highlight the UI would have to guess about.
+    if (end === -1) break;
+    if (start > 0) parts.push({ text: rest.slice(0, start), hit: false });
+    parts.push({ text: rest.slice(start + 1, end), hit: true });
+    rest = rest.slice(end + 1);
+  }
+  if (rest.length > 0) {
+    parts.push({
+      text: rest.replaceAll(SNIPPET_START, '').replaceAll(SNIPPET_END, ''),
+      hit: false,
+    });
+  }
+  return parts.length > 0 ? parts : null;
+}
+
 export const documentSearchQuerySchema = z.object({
   /** The query itself. Trimmed, and empty is refused: an empty search is just the register. */
   q: z.string().trim().min(1).max(200),
@@ -454,12 +494,17 @@ export interface DocumentSearchHitDto {
   regDate: string | null;
   createdAt: string;
   /**
-   * A highlighted fragment of the document own text, with the matched words wrapped in
-   * `<mark>`. Never built from an attachment: a file body has its own access gate, and a
-   * snippet is a copy of that text (plan §6.11 — a snippet must not disclose text the
-   * reader has no access to).
+   * A highlighted fragment of the document's own text, as SEGMENTS rather than as markup.
+   *
+   * Deliberately not HTML: `ts_headline` wraps the matched words but does not escape the text
+   * around them, so a subject containing `<script>` would come back live. Handing the client
+   * segments means the highlight is structure, the text is text, and React escapes it on the
+   * way to the DOM — there is nothing to get wrong at the call site.
+   *
+   * Never built from an attachment: a file body has its own access gate, and a snippet is a
+   * copy of that text (plan §6.11 — a snippet must not disclose text the reader cannot open).
    */
-  snippet: string | null;
+  snippet: SnippetPart[] | null;
   /** Which of the searched surfaces matched. `file` means the hit is inside an attachment. */
   matchedIn: SearchMatchSource[];
 }
@@ -471,6 +516,34 @@ export interface QuickSearchHitDto {
   subject: string;
   docClass: DocClass;
   status: DocumentStatus;
+}
+
+// --- «Требует внимания» (plan §8.8) ---
+
+/**
+ * The eight queues the attention widget shows, in the order it shows them: what somebody is
+ * WAITING on me for first, then what I owe, then what is late, then what the office owes.
+ *
+ * Each key doubles as the drill-down target, so a number on the dashboard and the list it
+ * opens are answers to the same question — a widget whose count disagrees with its own link
+ * is worse than no widget.
+ */
+export const ATTENTION_QUEUES = [
+  'to_approve',
+  'to_sign',
+  'to_acknowledge',
+  'my_tasks',
+  'overdue',
+  'awaiting_dispatch',
+  'new_incoming',
+  'disposition_candidates',
+] as const;
+export type AttentionQueue = (typeof ATTENTION_QUEUES)[number];
+
+export interface AttentionCountsDto {
+  /** Counts for every queue the caller may see. A queue they may not see is simply absent —
+   *  a zero would still admit that the queue exists and that it is empty for them. */
+  counts: Partial<Record<AttentionQueue, number>>;
 }
 
 /** Register an unregistered document: assign a journal and mint its number. */

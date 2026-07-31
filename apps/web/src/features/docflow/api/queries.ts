@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
   AcknowledgementSheetDto,
+  AttentionCountsDto,
+  DocumentSearchHitDto,
+  QuickSearchHitDto,
   ActivateCertificateInput,
   AddDocumentFileInput,
   CertificateDto,
@@ -253,6 +256,52 @@ export function useQueueCounts(): UseQueryResult<DocumentQueueCountsDto> {
     queryKey: [...documentsKey, 'queue-counts'],
     queryFn: () => api.get<DocumentQueueCountsDto>('/v1/docflow/documents/queue-counts'),
     staleTime: 15 * 1000,
+  });
+}
+
+/** «Требует внимания» on the dashboard — the eight queues, minus the ones this caller may
+ *  not see (the server omits those rather than sending a zero). */
+export function useAttentionCounts(): UseQueryResult<AttentionCountsDto> {
+  return useQuery({
+    queryKey: [...documentsKey, 'attention'],
+    queryFn: () => api.get<AttentionCountsDto>('/v1/docflow/attention'),
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Full-text search over the register. `enabled` on a non-empty query so an empty box makes
+ * no request at all — the empty search is the register, and it has its own screen.
+ */
+export function useDocumentSearch(
+  query: string,
+  params: { page: number; limit: number; sort?: string },
+): UseQueryResult<PaginatedResult<DocumentSearchHitDto>> {
+  const q = query.trim();
+  const search = new URLSearchParams({
+    q,
+    page: String(params.page),
+    limit: String(params.limit),
+    ...(params.sort ? { sort: params.sort } : {}),
+  });
+  return useQuery({
+    queryKey: [...documentsKey, 'search', q, params.page, params.limit, params.sort],
+    queryFn: () =>
+      api.get<PaginatedResult<DocumentSearchHitDto>>(`/v1/docflow/search?${search.toString()}`),
+    enabled: q.length > 0,
+    staleTime: 15 * 1000,
+  });
+}
+
+/** The command palette's document source: at most five, same server policy as the search. */
+export function useQuickSearch(query: string): UseQueryResult<QuickSearchHitDto[]> {
+  const q = query.trim();
+  return useQuery({
+    queryKey: [...documentsKey, 'quick', q],
+    queryFn: () =>
+      api.get<QuickSearchHitDto[]>(`/v1/docflow/search/quick?q=${encodeURIComponent(q)}`),
+    enabled: q.length > 1,
+    staleTime: 10 * 1000,
   });
 }
 

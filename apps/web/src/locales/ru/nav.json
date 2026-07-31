@@ -33,7 +33,10 @@
     "open": "Открыть командную панель",
     "placeholder": "Поиск разделов и действий…",
     "empty": "Ничего не найдено",
-    "groupNavigation": "Навигация"
+    "groupNavigation": "Навигация",
+    "groupDocuments": "Документы",
+    "groupSearch": "Поиск",
+    "searchAll": "Искать «{{query}}» во всех документах"
   },
   "notifications": {
     "label": "Уведомления",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -59,6 +59,7 @@ import { NewFolderDialog } from '../components/NewFolderDialog';
 import { MoveDialog } from '../components/MoveDialog';
 import { ShareDialog } from '../components/ShareDialog';
 import { FileViewerOverlay } from '../components/viewer/FileViewerOverlay';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 type Section = 'personal' | 'org' | 'shared' | 'recent' | 'trash';
 const SECTIONS: { key: Section; icon: typeof FolderClosed }[] = [
@@ -68,16 +69,6 @@ const SECTIONS: { key: Section; icon: typeof FolderClosed }[] = [
   { key: 'recent', icon: Clock },
   { key: 'trash', icon: Trash2 },
 ];
-
-/** Debounce a rapidly-changing value (search box → query). */
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(id);
-  }, [value, delayMs]);
-  return debounced;
-}
 
 const VIEW_KEY = 'cuks-files-view';
 

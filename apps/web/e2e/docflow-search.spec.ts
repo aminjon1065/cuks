@@ -20,7 +20,7 @@ interface DocumentDto {
 interface Hit {
   id: string;
   subject: string;
-  snippet: string | null;
+  snippet: { text: string; hit: boolean }[] | null;
   matchedIn: string[];
 }
 interface Page {
@@ -82,7 +82,12 @@ test('search: finds a document by an inflected word, and says where the hit came
     await search(admin, `q=${encodeURIComponent('наводнение')}&sort=-created_at&page=1&limit=20`)
   ).items.find((i) => i.id === doc.id)!;
   expect(hit.matchedIn).toContain('document');
-  expect(hit.snippet, 'the match is highlighted').toContain('<mark>');
+  expect(
+    hit.snippet?.some((p) => p.hit),
+    'the match is highlighted',
+  ).toBe(true);
+  // Markup never crosses the wire — the highlight is structure, the text is text.
+  expect(JSON.stringify(hit.snippet)).not.toContain('<mark>');
 
   await admin.dispose();
 });
@@ -189,4 +194,62 @@ test('search: pagination is stable across pages, and a bad sort is refused', asy
   }
 
   await admin.dispose();
+});
+
+test('search: a document cannot inject markup through its own snippet', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const stamp = Date.now();
+  // The subject a stored-XSS attempt would use. `ts_headline` wraps matches but escapes
+  // nothing, so anything that rendered its output as HTML would run this.
+  const doc = await makeDoc(admin, headers, {
+    subject: `<img src=x onerror=alert(1)> наводнение ${stamp}`,
+    summary: '<script>alert(2)</script> тело',
+  });
+
+  const page = await search(
+    admin,
+    `q=${encodeURIComponent('наводнение')}&sort=-created_at&page=1&limit=20`,
+  );
+  const hit = page.items.find((i) => i.id === doc.id)!;
+  expect(hit, 'the document is found').toBeTruthy();
+
+  // The tags survive as TEXT inside a segment — which is the point: they are content, not
+  // markup, and nothing downstream is given a chance to decide otherwise.
+  const flat = (hit.snippet ?? []).map((p) => p.text).join('');
+  expect(flat).toContain('<img src=x onerror=alert(1)>');
+  // And the payload never appears as a markup wrapper the client would be tempted to trust.
+  expect(JSON.stringify(hit.snippet)).not.toContain('<mark>');
+  expect(hit.snippet?.some((p) => p.hit)).toBe(true);
+
+  await admin.dispose();
+});
+
+test('attention: counts agree with the queues, and hide what the caller may not see', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const badges = await json<Record<string, number>>(
+    await admin.get('/api/v1/docflow/documents/queue-counts'),
+  );
+  const attention = await json<{ counts: Record<string, number> }>(
+    await admin.get('/api/v1/docflow/attention'),
+  );
+
+  // The four shared queues must not disagree: one badge, one number, two screens.
+  for (const key of ['to_approve', 'to_sign', 'to_acknowledge', 'my_tasks']) {
+    expect(attention.counts[key], key).toBe(badges[key]);
+  }
+
+  // An employee without the archive right is not told the disposal queue exists — absent,
+  // not zero, because a zero still answers «есть ли такая очередь».
+  const other = await apiLogin(E2E_USER2.username, E2E_USER2.password);
+  const theirs = await json<{ counts: Record<string, number> }>(
+    await other.get('/api/v1/docflow/attention'),
+  );
+  expect(Object.keys(theirs.counts)).not.toContain('disposition_candidates');
+  expect(Object.keys(theirs.counts)).not.toContain('awaiting_dispatch');
+  expect(theirs.counts.overdue, 'the queues they do have are still numbers').toBeGreaterThanOrEqual(
+    0,
+  );
+
+  await Promise.all([admin.dispose(), other.dispose()]);
 });

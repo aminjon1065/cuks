@@ -33,7 +33,10 @@
     "open": "Кушодани лавҳаи фармонҳо",
     "placeholder": "Ҷустуҷӯи бахшҳо ва амалҳо…",
     "empty": "Ҳеҷ чиз ёфт нашуд",
-    "groupNavigation": "Навигатсия"
+    "groupNavigation": "Навигатсия",
+    "groupDocuments": "Документы",
+    "groupSearch": "Поиск",
+    "searchAll": "Искать «{{query}}» во всех документах"
   },
   "notifications": {
     "label": "Огоҳиномаҳо",
