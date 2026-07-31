@@ -21,7 +21,9 @@ import type {
   AddDocumentCollaboratorInput,
   DocumentCollaboratorDto,
   DocumentHistoryEntryDto,
+  DocumentTemplateDto,
   DocumentTimelineEntryDto,
+  InstantiateDocumentTemplateInput,
   DocumentLinkDto,
   DocumentQueueCountsDto,
   ExtendResolutionInput,
@@ -352,6 +354,36 @@ export function useDocumentTimeline(id: string | null): UseQueryResult<DocumentT
     queryKey: [...documentsKey, id, 'timeline'],
     queryFn: () => api.get<DocumentTimelineEntryDto[]>(`/v1/docflow/documents/${id}/timeline`),
     enabled: !!id,
+  });
+}
+
+// ---- Document templates (docs/modules/11 §12.7) -----------------------------
+
+export const documentTemplatesKey = [...docflowKey, 'document-templates'] as const;
+
+export function useDocumentTemplates(enabled = true): UseQueryResult<DocumentTemplateDto[]> {
+  return useQuery({
+    queryKey: documentTemplatesKey,
+    queryFn: () => api.get<DocumentTemplateDto[]>('/v1/docflow/document-templates'),
+    enabled,
+  });
+}
+
+export function useInstantiateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      templateId,
+      input,
+    }: {
+      templateId: string;
+      input: InstantiateDocumentTemplateInput;
+    }) =>
+      api.post<{ documentId: string }>(
+        `/v1/docflow/document-templates/${templateId}/actions/instantiate`,
+        input,
+      ),
+    onSuccess: () => invalidateDocuments(qc),
   });
 }
 

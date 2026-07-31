@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, FileText, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileStack, FileText, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button, DataTable, EmptyState, PageHeader, StatusBadge, cn } from '@cuks/ui';
 import {
@@ -16,6 +16,7 @@ import { formatDateTime } from '@/lib/format';
 import { useDocuments, useQueueCounts } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
 import { CreateDocumentDialog } from '../components/CreateDocumentDialog';
+import { TemplatePickerDialog } from '../components/TemplatePickerDialog';
 import { QueueRowActions } from '../components/QueueRowActions';
 import { useDocumentTitle } from '@/lib/use-document-title';
 
@@ -49,6 +50,7 @@ export function DocumentsPage(): React.JSX.Element {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
 
   const query: ListDocumentsQuery = {
     page,
@@ -152,9 +154,14 @@ export function DocumentsPage(): React.JSX.Element {
         description={t('documents.subtitle')}
         actions={
           canCreate ? (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" /> {t('documents.create.action')}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setTemplateOpen(true)}>
+                <FileStack className="size-4" aria-hidden /> {t('templates.pick.action')}
+              </Button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="size-4" /> {t('documents.create.action')}
+              </Button>
+            </div>
           ) : undefined
         }
       />
@@ -270,6 +277,11 @@ export function DocumentsPage(): React.JSX.Element {
       <CreateDocumentDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCreated={(id) => navigate(`/app/docs/${id}`)}
+      />
+      <TemplatePickerDialog
+        open={templateOpen}
+        onOpenChange={setTemplateOpen}
         onCreated={(id) => navigate(`/app/docs/${id}`)}
       />
     </div>
