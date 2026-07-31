@@ -67,6 +67,12 @@ import type {
   ResolutionTypeDto,
   UpdateResolutionProposalInput,
   UpdateResolutionTypeInput,
+  CancelDispatchInput,
+  ConfirmDispatchInput,
+  CreateDispatchInput,
+  CreateResponseInput,
+  DocumentDispatchDto,
+  FailDispatchInput,
 } from '@cuks/shared';
 import { CSRF_COOKIE, CSRF_HEADER } from '@cuks/shared';
 import { api } from '@/lib/api-client';
@@ -951,5 +957,72 @@ export function useAcknowledgeGate(documentId: string) {
         {},
       ),
     onSuccess: () => invalidateProposals(qc, documentId),
+  });
+}
+
+// ---- Outgoing response + dispatch (docs/modules/11 §12.3) ------------------
+
+/** Draft the answer to an incoming document; returns the new outgoing card. */
+export function useCreateResponse(sourceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateResponseInput) =>
+      api.post<DocumentDetailDto>(
+        `/v1/docflow/documents/${sourceId}/actions/create-response`,
+        input,
+      ),
+    onSuccess: () => {
+      // The source card gains a link, and the queues gain a draft.
+      void qc.invalidateQueries({ queryKey: [...documentsKey, sourceId] });
+      void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+    },
+  });
+}
+
+export function useDocumentDispatches(
+  documentId: string | null,
+): UseQueryResult<DocumentDispatchDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'dispatches'],
+    queryFn: () => api.get<DocumentDispatchDto[]>(`/v1/docflow/documents/${documentId}/dispatches`),
+    enabled: !!documentId,
+  });
+}
+
+/** A send can complete the document, so the whole card is refreshed. */
+function invalidateDispatches(qc: ReturnType<typeof useQueryClient>, documentId: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+}
+
+export function useCreateDispatch(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDispatchInput) =>
+      api.post<DocumentDispatchDto>(`/v1/docflow/documents/${documentId}/dispatches`, input),
+    onSuccess: () => invalidateDispatches(qc, documentId),
+  });
+}
+
+type DispatchActionBody =
+  ConfirmDispatchInput | FailDispatchInput | CancelDispatchInput | Record<string, never>;
+
+export function useDispatchAction(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      dispatchId,
+      action,
+      body,
+    }: {
+      dispatchId: string;
+      action: 'confirm' | 'fail' | 'cancel' | 'retry';
+      body?: DispatchActionBody;
+    }) =>
+      api.post<DocumentDispatchDto>(
+        `/v1/docflow/dispatches/${dispatchId}/actions/${action}`,
+        body ?? {},
+      ),
+    onSuccess: () => invalidateDispatches(qc, documentId),
   });
 }

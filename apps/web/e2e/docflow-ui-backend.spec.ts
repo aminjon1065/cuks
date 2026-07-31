@@ -142,7 +142,9 @@ test('docflow 3.7: the journals register filters by year', async () => {
   const journals = await json<{ id: string; code: string }[]>(
     await admin.get('/api/v1/docflow/journals'),
   );
-  const journalId = journals.find((j) => j.code === 'incoming')?.id ?? journals[0]!.id;
+  // The book must match the document's class — an internal order is numbered in «Приказы»,
+  // and registering it in «Входящие» is refused (plan этап 6).
+  const journalId = journals.find((j) => j.code === 'orders')!.id;
   const reg = await admin.post(`/api/v1/docflow/documents/${doc.id}/actions/register`, {
     headers,
     data: { journalId },

@@ -52,11 +52,11 @@ test('docflow UI: create a document and register it from the card', async ({ pag
   );
 });
 
-test('docflow UI: the card shows five tabs and a history feed', async ({ page }) => {
+test('docflow UI: the card shows its tabs and a history feed', async ({ page }) => {
   await createAndRegister(page);
 
-  // The five card tabs are present.
-  for (const name of ['Обзор', 'Маршрут', 'Резолюции', 'Связи', 'История']) {
+  // The card tabs are present.
+  for (const name of ['Обзор', 'Маршрут', 'Резолюции', 'Отправка', 'Связи', 'История']) {
     await expect(page.getByRole('tab', { name })).toBeVisible();
   }
   // История lists the document's audit events, attributed to the actor (the actor name
@@ -98,4 +98,50 @@ test('docflow UI: issue a resolution from the card', async ({ page }) => {
   await expect(page.getByTestId('document-status')).toContainText('На исполнении', {
     timeout: 15_000,
   });
+});
+
+/**
+ * The outgoing half on the real screens (docs/modules/11 §12.3, plan этап 6): «Создать
+ * ответ» appears on a registered incoming card, the answer opens with the counterparty
+ * already filled in and a banner back to the letter, and its «Отправка» tab explains why
+ * nothing can be sent until the answer has a number.
+ */
+test('docflow UI: create the answer to an incoming letter from its card', async ({ page }) => {
+  await page.goto('/app/docs/journals');
+  await page.getByRole('button', { name: 'Зарегистрировать входящий' }).first().click();
+
+  const wizard = page.getByRole('dialog');
+  const subject = `UI входящий ${Date.now()}`;
+  await wizard.getByLabel('Тема').fill(subject);
+  const registered = page.waitForResponse(
+    (r) => r.url().includes('/docflow/documents/register-incoming') && r.status() === 201,
+  );
+  await wizard.getByRole('button', { name: 'Зарегистрировать' }).click();
+  await registered;
+  await expect(page.getByRole('main').getByRole('heading', { name: /ВХ-/ })).toBeVisible();
+
+  // The answer is offered only once the letter has a number, which it now has.
+  await page.getByRole('button', { name: 'Создать ответ' }).click();
+  const dialog = page.getByRole('dialog');
+  // The preset route needs people we are not naming here — draft it without a route.
+  await dialog.getByLabel('Сразу отправить на согласование').uncheck();
+  const created = page.waitForResponse(
+    (r) => r.url().includes('/actions/create-response') && r.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: 'Создать' }).click();
+  const createdRes = await created;
+  expect(createdRes.status(), await createdRes.text()).toBe(201);
+
+  // We land on the answer, with a banner back to the letter it answers.
+  await expect(
+    page
+      .getByRole('main')
+      .getByText(/Ответ на/)
+      .first(),
+  ).toBeVisible();
+  await expect(page.getByTestId('document-status')).toContainText('Черновик');
+
+  // And its send tab is honest about why it is empty.
+  await page.getByRole('tab', { name: 'Отправка' }).click();
+  await expect(page.getByText('Отправка возможна после регистрации документа.')).toBeVisible();
 });

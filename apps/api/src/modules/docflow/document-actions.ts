@@ -111,7 +111,9 @@ export function documentAvailableActions(
   if (
     (doc.docClass === 'incoming' || doc.docClass === 'citizens') &&
     !!doc.regNumber &&
-    actor.permissions.includes('docflow.create')
+    // Superadmin explicitly: their rights arrive as a wildcard, so a literal `includes`
+    // would hide the action from the one account that may do everything.
+    (actor.isSuperadmin || actor.permissions.includes('docflow.create'))
   ) {
     actions.push('createResponse');
   }

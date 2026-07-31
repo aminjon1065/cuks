@@ -181,3 +181,16 @@ describe('documentAvailableActions — the outgoing half (plan этап 6)', () 
     expect(documentAvailableActions(internal, clerk, [])).not.toContain('dispatch');
   });
 });
+
+describe('documentAvailableActions — superadmin wildcards (plan этап 6)', () => {
+  it('offers «создать ответ» to a superadmin whose rights are not spelled out', () => {
+    // A superadmin's permissions arrive as a wildcard, so a literal `includes` check would
+    // hide the action from the one account that may do everything.
+    const superadmin = { id: OTHER, permissions: [], isSuperadmin: true };
+    const registered = doc({ docClass: 'incoming', status: 'registered', regNumber: 'ВХ-1' });
+    expect(documentAvailableActions(registered, superadmin, [])).toContain('createResponse');
+
+    const outgoing = doc({ docClass: 'outgoing', status: 'registered', regNumber: 'ИСХ-1' });
+    expect(documentAvailableActions(outgoing, superadmin, [])).toContain('dispatch');
+  });
+});

@@ -36,4 +36,5 @@ export function useDocumentRealtime(documentId: string | null): void {
   // Also fires when a gate opens — and then it reaches the executors' own rooms, whose
   // «Мои задачи» list must refresh even though no document card is open (docs/modules/11 §12.11).
   useSocketEvent('docflow.resolution.updated', invalidate);
+  useSocketEvent('docflow.dispatch.updated', invalidate);
 }

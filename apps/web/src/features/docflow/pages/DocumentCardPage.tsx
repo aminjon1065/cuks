@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, FileCheck2, Pencil } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CornerUpLeft, FileCheck2, Pencil } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -47,8 +47,19 @@ import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSecti
 import { HistorySection } from '../components/HistorySection';
 import { useDocumentTitle } from '@/lib/use-document-title';
 import { useDocumentRealtime } from '../hooks/useDocumentRealtime';
+import { CreateResponseDialog } from '../components/CreateResponseDialog';
+import { DispatchSection } from '../components/DispatchSection';
+import { RelationBanner } from '../components/RelationBanner';
 
-const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'tasks', 'history'] as const;
+const CARD_TABS = [
+  'overview',
+  'route',
+  'resolutions',
+  'dispatch',
+  'links',
+  'tasks',
+  'history',
+] as const;
 type CardTab = (typeof CARD_TABS)[number];
 
 const selectClass = cn(
@@ -64,6 +75,7 @@ export function DocumentCardPage(): React.JSX.Element {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [responseOpen, setResponseOpen] = useState(false);
   const [tab, setTab] = useState<CardTab>('overview');
   useDocumentRealtime(id ?? null);
   useDocumentTitle(
@@ -136,6 +148,11 @@ export function DocumentCardPage(): React.JSX.Element {
                 <FileCheck2 className="size-4" /> {t('documents.register.action')}
               </Button>
             ) : null}
+            {data.availableActions.includes('createResponse') ? (
+              <Button variant="outline" size="sm" onClick={() => setResponseOpen(true)}>
+                <CornerUpLeft className="size-4" aria-hidden /> {t('response.action')}
+              </Button>
+            ) : null}
             {data.availableActions.includes('changeStatus') ? (
               <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
                 {t('documents.status.action')}
@@ -144,6 +161,8 @@ export function DocumentCardPage(): React.JSX.Element {
           </div>
         }
       />
+
+      <RelationBanner doc={data} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-4">
@@ -184,6 +203,7 @@ export function DocumentCardPage(): React.JSX.Element {
               <ResolutionSection doc={data} />
             </div>
           ) : null}
+          {tab === 'dispatch' ? <DispatchSection doc={data} /> : null}
           {tab === 'links' ? (
             <section className="rounded-md border border-border bg-surface p-4">
               <LinksSection doc={data} />
@@ -210,9 +230,12 @@ export function DocumentCardPage(): React.JSX.Element {
         <SummaryCard data={data} />
       </div>
 
-      {registerOpen ? <RegisterDialog id={data.id} onClose={() => setRegisterOpen(false)} /> : null}
+      {registerOpen ? <RegisterDialog doc={data} onClose={() => setRegisterOpen(false)} /> : null}
       {statusOpen ? <StatusDialog data={data} onClose={() => setStatusOpen(false)} /> : null}
       {editOpen ? <EditDocumentDialog doc={data} onClose={() => setEditOpen(false)} /> : null}
+      {responseOpen ? (
+        <CreateResponseDialog source={data} onClose={() => setResponseOpen(false)} />
+      ) : null}
     </div>
   );
 
@@ -292,19 +315,30 @@ function Requisites({ data }: { data: DocumentDetailDto }): React.JSX.Element {
   );
 }
 
-function RegisterDialog({ id, onClose }: { id: string; onClose: () => void }): React.JSX.Element {
+function RegisterDialog({
+  doc,
+  onClose,
+}: {
+  doc: DocumentDetailDto;
+  onClose: () => void;
+}): React.JSX.Element {
   const { t } = useTranslation('docflow');
   const journals = useJournals();
   const register = useRegisterDocument();
   const [journalId, setJournalId] = useState('');
-  const options = useMemo(() => (journals.data ?? []).filter((j) => j.isActive), [journals.data]);
+  // Only the books this document belongs in: a number from the wrong class is not a typo to
+  // be corrected later, it is what the document is cited by from then on (plan этап 6).
+  const options = useMemo(
+    () => (journals.data ?? []).filter((j) => j.isActive && j.docClass === doc.docClass),
+    [journals.data, doc.docClass],
+  );
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const chosen = journalId || options[0]?.id;
     if (!chosen) return;
     register.mutate(
-      { id, input: { journalId: chosen } },
+      { id: doc.id, input: { journalId: chosen } },
       {
         onSuccess: () => {
           toast({ title: t('documents.register.done'), tone: 'success' });
@@ -337,6 +371,11 @@ function RegisterDialog({ id, onClose }: { id: string; onClose: () => void }): R
               ))}
             </select>
           </div>
+          {options.length === 0 ? (
+            <p role="alert" className="rounded-sm bg-warning/10 px-3 py-2 text-[13px] text-warning">
+              {t('documents.register.noJournal')}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
               {t('common.cancel')}
