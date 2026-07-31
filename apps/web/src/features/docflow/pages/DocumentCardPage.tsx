@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, FileCheck2, Paperclip } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileCheck2 } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -37,6 +37,7 @@ import { ResolutionSection } from '../components/ResolutionSection';
 import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
 import { AccessSection } from '../components/AccessSection';
+import { DocumentFilesSection } from '../components/DocumentFilesSection';
 import { LinksSection } from '../components/LinksSection';
 import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 import { HistorySection } from '../components/HistorySection';
@@ -156,7 +157,7 @@ export function DocumentCardPage(): React.JSX.Element {
           {tab === 'overview' ? (
             <>
               <Requisites data={data} />
-              <Files data={data} />
+              <DocumentFilesSection documentId={data.id} files={data.files} />
               <SignatureSection doc={data} />
               <AcknowledgementSection doc={data} />
               <AccessSection doc={data} />
@@ -267,32 +268,6 @@ function Requisites({ data }: { data: DocumentDetailDto }): React.JSX.Element {
           </div>
         ))}
       </dl>
-    </section>
-  );
-}
-
-function Files({ data }: { data: DocumentDetailDto }): React.JSX.Element {
-  const { t } = useTranslation('docflow');
-  return (
-    <section className="rounded-md border border-border bg-surface p-4">
-      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text">
-        <Paperclip className="size-4" /> {t('documents.card.files')}
-      </h2>
-      {data.files.length === 0 ? (
-        <p className="text-[13px] text-text-muted">{t('documents.card.noFiles')}</p>
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {data.files.map((file) => (
-            <li key={file.id} className="flex items-center gap-2 text-[13px] text-text">
-              <span className="rounded bg-surface-2 px-1.5 text-[11px] text-text-muted">
-                {t(`documents.fileKind.${file.kind}`)}
-                {file.kind === 'main' ? ` v${file.version}` : ''}
-              </span>
-              {file.title ?? file.fileId}
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }

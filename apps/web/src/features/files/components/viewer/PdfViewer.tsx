@@ -3,8 +3,6 @@ import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import type { FsNodeDto } from '@cuks/shared';
-import { downloadUrl } from '../../lib';
 import { ViewerError } from './viewers';
 
 // Bundle the worker locally (Vite `?url`) — no CDN (docs/02 invariants).
@@ -70,7 +68,12 @@ function PdfPageCanvas({
   );
 }
 
-export function PdfViewer({ node }: { node: FsNodeDto }): React.JSX.Element {
+/**
+ * `src` is a same-origin API URL that 302s to the bytes. The file manager passes its
+ * node download URL; docflow passes its own document-gated one, so the viewer never
+ * needs to know which access policy cleared the read.
+ */
+export function PdfViewer({ src }: { src: string }): React.JSX.Element {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
@@ -87,7 +90,7 @@ export function PdfViewer({ node }: { node: FsNodeDto }): React.JSX.Element {
         // One credentialed fetch (cookie → same-origin API → 302 → MinIO bytes,
         // CORS-readable) then hand the bytes to pdf.js — avoids threading
         // credentials/redirects through pdf.js's own range loader.
-        const res = await fetch(downloadUrl(node.id), { credentials: 'include' });
+        const res = await fetch(src, { credentials: 'include' });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.arrayBuffer();
         if (cancelled) return;
@@ -106,7 +109,7 @@ export function PdfViewer({ node }: { node: FsNodeDto }): React.JSX.Element {
       cancelled = true;
       void task?.destroy(); // destroys the document + worker
     };
-  }, [node.id]);
+  }, [src]);
 
   const numPages = pdf?.numPages ?? 0;
   const goTo = (p: number): void => {

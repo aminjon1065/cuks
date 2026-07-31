@@ -19,7 +19,7 @@ function pickViewer(node: FsNodeDto): React.JSX.Element {
   const mime = node.mime ?? '';
   if (node.avStatus === 'infected') return <BlockedViewer />;
   if (mime.startsWith('image/')) return <ImageViewer node={node} />;
-  if (mime === 'application/pdf') return <PdfViewer node={node} />;
+  if (mime === 'application/pdf') return <PdfViewer src={downloadUrl(node.id)} />;
   if (mime.startsWith('video/')) return <VideoViewer node={node} />;
   if (mime.startsWith('audio/')) return <AudioViewer node={node} />;
   if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') {

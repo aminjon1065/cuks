@@ -194,6 +194,11 @@
     "fileKind": {
       "main": "Основной",
       "attachment": "Вложение"
+    },
+    "files": {
+      "download": "Скачать «{{name}}»",
+      "scanning": "Идёт проверка",
+      "infected": "Заражён"
     }
   },
   "routeStatus": {
