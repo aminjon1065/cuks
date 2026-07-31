@@ -66,6 +66,17 @@ export class RoutesController {
     return this.routes.act(id, 'approve', body.comment?.trim() || null, user);
   }
 
+  @Post('route-steps/:id/actions/complete')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Report an active `execute` route step as done' })
+  complete(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(approveRouteStepSchema)) body: ApproveRouteStepInput,
+  ): Promise<RouteDto[]> {
+    return this.routes.act(id, 'complete', body.comment?.trim() || null, user);
+  }
+
   @Post('route-steps/:id/actions/reject')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Reject an active route step (returns the document to the author)' })

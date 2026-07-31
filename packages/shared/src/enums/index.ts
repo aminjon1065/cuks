@@ -258,6 +258,52 @@ export type RouteStepStatus = (typeof ROUTE_STEP_STATUSES)[number];
 export const ROUTE_STEP_DECISIONS = ['approved', 'rejected', 'signed', 'acknowledged'] as const;
 export type RouteStepDecision = (typeof ROUTE_STEP_DECISIONS)[number];
 
+/** Everything that can close a route step (docs/modules/11 §4). */
+export const ROUTE_STEP_ACTIONS = [
+  'approve',
+  'reject',
+  'sign',
+  'acknowledge',
+  'register',
+  'complete',
+] as const;
+export type RouteStepAction = (typeof ROUTE_STEP_ACTIONS)[number];
+
+/**
+ * Which actions may close a step of each kind — the single source of truth for the
+ * server guard AND the buttons the card offers, so the UI can never present an action
+ * the server will refuse (docs/modules/11 §4, plan этап 1D).
+ *
+ * `reject` is on every kind: declining is the universal recovery path back to the author.
+ * Each other kind has exactly one completion path, and it is the one that carries the
+ * step's guarantee — a signature step needs a real cryptographic signature, an
+ * acknowledge step needs every assigned reader, a register step needs a minted number.
+ */
+export const ROUTE_STEP_KIND_ACTIONS: Record<RouteStepKind, readonly RouteStepAction[]> = {
+  approve: ['approve', 'reject'],
+  sign: ['sign', 'reject'],
+  register: ['register', 'reject'],
+  acknowledge: ['acknowledge', 'reject'],
+  execute: ['complete', 'reject'],
+};
+
+/** True when `action` may close a step of this `kind`. */
+export function routeStepAllows(kind: RouteStepKind, action: RouteStepAction): boolean {
+  return ROUTE_STEP_KIND_ACTIONS[kind].includes(action);
+}
+
+/**
+ * The action the step row itself offers, or `null` when the step is completed from its
+ * own dedicated surface: a `sign` step from the signature dialog, `acknowledge` from the
+ * acquaintance sheet, `register` from the document's registration action. Those rows show
+ * a hint instead of a button that would only ever produce an error.
+ */
+export function routeStepRowAction(kind: RouteStepKind): 'approve' | 'complete' | null {
+  if (kind === 'approve') return 'approve';
+  if (kind === 'execute') return 'complete';
+  return null;
+}
+
 /** Who a step is assigned to (docs/modules/11 §3): a user, a position, or an org unit. */
 export const ROUTE_ASSIGNEE_TYPES = ['user', 'position', 'org_unit'] as const;
 export type RouteAssigneeType = (typeof ROUTE_ASSIGNEE_TYPES)[number];

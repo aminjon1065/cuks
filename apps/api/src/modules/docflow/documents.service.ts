@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import {
+  acquaintances,
   auditLog,
   correspondents,
   documentFiles,
@@ -9,6 +10,9 @@ import {
   fsNodes,
   journals,
   orgUnits,
+  resolutions,
+  routeSteps,
+  routes,
   signatures,
   users,
   type Database,
@@ -83,6 +87,51 @@ export function planDocumentStatusChange(
     );
   }
   return { status: input.status, reason: input.reason?.trim() || null };
+}
+
+/** What is still open on a document, as counted by the status command. */
+export interface DocumentObligations {
+  /** Route steps still `active` on an active route. */
+  activeRouteSteps: number;
+  /** Resolutions still `active` (an unexecuted instruction). */
+  activeResolutions: number;
+  /** Assigned readers who have not acknowledged yet. */
+  pendingAcquaintances: number;
+}
+
+/** Statuses that assert the document's work is finished, so nothing may still be open. */
+const CLOSING_STATUSES: readonly DocumentStatus[] = ['completed', 'archived'];
+
+/**
+ * Refuse to declare a document finished while it still owes work (docs/modules/11 §4,
+ * plan этап 1D §4.6). Without this, «Завершён» could be set straight past a pending
+ * approval, an unexecuted instruction or an unread order — and the card would then show a
+ * closed document with live obligations underneath it. Pure, so every combination is
+ * unit-tested; the caller supplies the counts it read in the same locked transaction.
+ */
+export function assertNoOpenObligations(target: DocumentStatus, open: DocumentObligations): void {
+  if (!CLOSING_STATUSES.includes(target)) return;
+  if (open.activeRouteSteps > 0) {
+    throw AppException.unprocessable(
+      'docflow.document.route_open',
+      'The document still has an active route step',
+      { toStatus: target, activeRouteSteps: open.activeRouteSteps },
+    );
+  }
+  if (open.activeResolutions > 0) {
+    throw AppException.unprocessable(
+      'docflow.document.resolution_open',
+      'The document still has an unexecuted resolution',
+      { toStatus: target, activeResolutions: open.activeResolutions },
+    );
+  }
+  if (open.pendingAcquaintances > 0) {
+    throw AppException.unprocessable(
+      'docflow.document.acquaintance_open',
+      'Not everyone assigned has acknowledged the document yet',
+      { toStatus: target, pendingAcquaintances: open.pendingAcquaintances },
+    );
+  }
 }
 
 /** True for a Postgres unique-violation error (SQLSTATE 23505). */
@@ -288,6 +337,35 @@ export class DocumentsService {
       );
     }
     return row.id;
+  }
+
+  /** Count what the document still owes: active route steps, live resolutions, unread
+   *  acquaintances (plan этап 1D). Read inside the caller's locked transaction. */
+  private async openObligations(tx: Database, documentId: string): Promise<DocumentObligations> {
+    const [steps] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(routeSteps)
+      .innerJoin(routes, eq(routes.id, routeSteps.routeId))
+      .where(
+        and(
+          eq(routes.documentId, documentId),
+          eq(routes.status, 'active'),
+          eq(routeSteps.status, 'active'),
+        ),
+      );
+    const [resolutionRows] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(resolutions)
+      .where(and(eq(resolutions.documentId, documentId), eq(resolutions.status, 'active')));
+    const [acquaintanceRows] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(acquaintances)
+      .where(and(eq(acquaintances.documentId, documentId), isNull(acquaintances.acknowledgedAt)));
+    return {
+      activeRouteSteps: steps?.n ?? 0,
+      activeResolutions: resolutionRows?.n ?? 0,
+      pendingAcquaintances: acquaintanceRows?.n ?? 0,
+    };
   }
 
   /** Every referenced fs node must exist (deleted/unknown ids are a 400, not a rollback). */
@@ -615,6 +693,10 @@ export class DocumentsService {
       if (!journal) throw AppException.notFound('docflow.journal.not_found', 'Journal not found');
       const now = new Date();
       const { number } = await this.numbering.allocate(tx, journal, now);
+      // Registration IS the completion path of a `register` route step (plan этап 1D):
+      // close it first, then write the final status — otherwise the route completing would
+      // leave the document at `pending_registration` on top of the number just minted.
+      await this.routes.completeRegisterStep(tx, id, actor.id, now);
       await tx
         .update(documents)
         .set({
@@ -660,6 +742,9 @@ export class DocumentsService {
         );
       }
       const p = planDocumentStatusChange(doc.status, input);
+      // Read the obligations under the same row lock that gates the transition, so a step
+      // or resolution cannot slip in between the check and the write.
+      assertNoOpenObligations(p.status, await this.openObligations(tx, id));
       await tx.update(documents).set({ status: p.status }).where(eq(documents.id, id));
       return { from: doc.status, ...p };
     });

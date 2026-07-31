@@ -12,14 +12,18 @@ import {
   users,
   type Database,
 } from '@cuks/db';
-import type {
-  CreateRouteTemplateInput,
-  RouteDto,
-  RouteStepDto,
-  RouteStepInput,
-  RouteTemplateDto,
-  StartRouteInput,
-  UpdateRouteTemplateInput,
+import {
+  ROUTE_STEP_KIND_ACTIONS,
+  routeStepAllows,
+  type CreateRouteTemplateInput,
+  type RouteDto,
+  type RouteStepAction,
+  type RouteStepDto,
+  type RouteStepInput,
+  type RouteStepKind,
+  type RouteTemplateDto,
+  type StartRouteInput,
+  type UpdateRouteTemplateInput,
 } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -29,6 +33,20 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { canViewDocumentBase } from './document-visibility';
 import { planApproval, type RouteStepState } from './route-engine';
 import { SubstitutionsService } from './substitutions.service';
+
+/**
+ * Refuse an action that does not match the step's kind (docs/modules/11 §4, plan этап 1D).
+ * Pure, so the whole matrix of kind × action is unit-tested without a database, and the
+ * client drives its buttons off the same shared table.
+ */
+export function assertStepActionAllowed(kind: RouteStepKind, action: RouteStepAction): void {
+  if (routeStepAllows(kind, action)) return;
+  throw AppException.conflict(
+    'docflow.route_step.action_kind_mismatch',
+    'That action cannot complete a step of this kind',
+    { kind, action, allowed: ROUTE_STEP_KIND_ACTIONS[kind] },
+  );
+}
 
 /** The identities a user matches for step assignment: self, held positions, and the
  *  org units they head (docs/modules/11 §3). */
@@ -317,11 +335,52 @@ export class RoutesService {
         .update(routes)
         .set({ status: 'completed', completedAt: now })
         .where(eq(routes.id, route.id));
+      // A finished route hands the document to the chancellery — but only if it is still
+      // waiting for a number. A route whose `register` step ran mid-way has already
+      // registered it, and downgrading that back to `pending_registration` would leave a
+      // numbered document claiming it is unregistered (plan этап 1D).
       await tx
         .update(documents)
         .set({ status: 'pending_registration' })
-        .where(eq(documents.id, route.documentId));
+        .where(and(eq(documents.id, route.documentId), isNull(documents.regNumber)));
     }
+  }
+
+  /**
+   * Close the active `register` step of the document's route, if it has one (plan этап 1D).
+   * Registration is the step's completion path — the number IS the guarantee — so it is
+   * driven by the document action rather than by a button on the step row. Runs inside the
+   * registration transaction: if the number is rolled back, so is the step.
+   *
+   * No active route or no active register step is a no-op: registering a document that was
+   * never routed, or one whose route has no register step, is perfectly normal.
+   */
+  async completeRegisterStep(
+    tx: Database,
+    documentId: string,
+    actorId: string,
+    now: Date,
+  ): Promise<void> {
+    const [route] = await tx
+      .select({ id: routes.id, documentId: routes.documentId })
+      .from(routes)
+      .where(and(eq(routes.documentId, documentId), eq(routes.status, 'active')))
+      .limit(1)
+      .for('update');
+    if (!route) return;
+    const [step] = await tx
+      .select({ id: routeSteps.id })
+      .from(routeSteps)
+      .where(
+        and(
+          eq(routeSteps.routeId, route.id),
+          eq(routeSteps.kind, 'register'),
+          eq(routeSteps.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!step) return;
+    await this.applyStepCompletion(tx, route, step.id, 'approved', null, actorId, now);
   }
 
   // --- Acknowledge expansion (task 3.6) --------------------------------------
@@ -334,11 +393,22 @@ export class RoutesService {
     assigneeType: string,
     assigneeId: string,
   ): Promise<string[]> {
-    if (assigneeType === 'user') return [assigneeId];
+    // Only a user who can actually act counts: a blocked or deleted account would leave
+    // the step with a nominal assignee and nobody to complete it (plan этап 1D).
+    const actable = and(eq(users.status, 'active'), isNull(users.deletedAt));
+    if (assigneeType === 'user') {
+      const [row] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, assigneeId), actable))
+        .limit(1);
+      return row ? [row.id] : [];
+    }
     if (assigneeType === 'position') {
       const rows = await tx
         .select({ userId: userPositions.userId })
         .from(userPositions)
+        .innerJoin(users, and(eq(users.id, userPositions.userId), actable))
         .where(eq(userPositions.positionId, assigneeId));
       return [...new Set(rows.map((r) => r.userId))];
     }
@@ -350,8 +420,32 @@ export class RoutesService {
         positions,
         and(eq(positions.id, userPositions.positionId), isNull(positions.deletedAt)),
       )
+      .innerJoin(users, and(eq(users.id, userPositions.userId), actable))
       .where(eq(positions.orgUnitId, assigneeId));
     return [...new Set(rows.map((r) => r.userId))];
+  }
+
+  /**
+   * Every step must resolve to at least one user who can act, or the route would stall on
+   * an unreachable step with no way forward but a rejection (plan этап 1D, §4.5). Checked
+   * before any row is written, so a bad definition never leaves a half-started route.
+   */
+  private async assertStepsHaveActors(tx: Database, stepDefs: RouteStepInput[]): Promise<void> {
+    for (const step of stepDefs) {
+      const users_ = await this.resolveAssigneeUsers(tx, step.assigneeType, step.assigneeId);
+      if (users_.length === 0) {
+        throw AppException.unprocessable(
+          'docflow.route.step_has_no_assignee',
+          'A route step resolves to nobody who can act on it',
+          {
+            order: step.order,
+            kind: step.kind,
+            assigneeType: step.assigneeType,
+            assigneeId: step.assigneeId,
+          },
+        );
+      }
+    }
   }
 
   /**
@@ -474,6 +568,7 @@ export class RoutesService {
           'Only a draft document can be sent to a route',
         );
       }
+      await this.assertStepsHaveActors(tx, stepDefs);
       const [prior] = await tx
         .select({ maxCycle: sql<number>`coalesce(max(${routes.cycle}), 0)::int` })
         .from(routes)
@@ -520,7 +615,7 @@ export class RoutesService {
 
   async act(
     stepId: string,
-    action: 'approve' | 'reject',
+    action: 'approve' | 'reject' | 'complete',
     comment: string | null,
     actor: AuthUser,
   ): Promise<RouteDto[]> {
@@ -566,23 +661,13 @@ export class RoutesService {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
       onBehalfOf = resolved.onBehalfOf;
-      // Steps with a dedicated completion path must not be completed by a plain approval,
-      // which would bypass their gate: a `sign` step needs a cryptographic signature
-      // (SignaturesService.sign, 2FA/password/certificate — docs/09-security.md §4), and an
-      // `acknowledge` step needs every assigned member to read it (AcknowledgementsService,
-      // task 3.6). Declining still goes through reject (also the recovery path).
-      if (action === 'approve' && step.kind === 'sign') {
-        throw AppException.conflict(
-          'docflow.route_step.sign_required',
-          'A signing step must be completed by signing',
-        );
-      }
-      if (action === 'approve' && step.kind === 'acknowledge') {
-        throw AppException.conflict(
-          'docflow.route_step.acknowledge_required',
-          'An acknowledgement step is completed once every member reads it',
-        );
-      }
+      // One table decides which action may close which kind (ROUTE_STEP_KIND_ACTIONS), and
+      // the card drives its buttons off the same table — so a step is never completed by an
+      // action that skips its guarantee: `sign` needs a real cryptographic signature
+      // (SignaturesService, docs/09 §4), `acknowledge` needs every assigned reader
+      // (AcknowledgementsService), `register` needs a minted number (DocumentsService).
+      // Declining is allowed on every kind — it is the recovery path back to the author.
+      assertStepActionAllowed(step.kind, action);
       const now = new Date();
       if (action === 'reject') {
         await tx
@@ -638,8 +723,8 @@ export class RoutesService {
         meta: { stepId, principalId: onBehalfOf },
       });
     }
-    // Approving may have activated an acknowledge step — expand its sheet and notify.
-    if (action === 'approve') await this.expandAndNotifyAcknowledge(documentId);
+    // Closing a step may have activated an acknowledge group — expand its sheet and notify.
+    if (action !== 'reject') await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
   }
 
