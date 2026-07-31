@@ -1072,14 +1072,32 @@ Event payload содержит id и безопасный минимум. Пол
   запущен Docker, инфраструктура и браузеры Playwright недоступны. Прогнать вместе с
   `pnpm db:migrate` при поднятой инфраструктуре.
 
-#### 1C. Защищённые файлы СЭД
+#### 1C. Защищённые файлы СЭД — **готово (2026-07-31), кроме прогона e2e/backfill**
 
-- [ ] Ввести `DocflowFilesService`.
-- [ ] Attach переносит/copy в system space server-side.
-- [ ] Download/preview endpoint применяет visibility, DSP и AV.
-- [ ] Существующие личные ссылки мигрировать/backfill безопасно и идемпотентно.
-- [ ] Сделать файлы карточки кликабельными; основной PDF — inline preview.
-- [ ] Тесты deny для чужого документа, DSP без allow-list и quarantine.
+- [x] Ввести `DocflowFilesService`. —
+  `apps/api/src/modules/docflow/docflow-files.service.ts`: усыновление узла
+  (`adoptDocumentFile`, чистая функция на `tx` — поэтому DI-цикла с `DocumentsService`
+  нет), гейт `assertVersionServable` и защищённые `downloadUrl`/`previewUrl`.
+- [x] Attach переносит/copy в system space server-side. — оба пути прикрепления
+  (`addFile` и `register-incoming`) переносят узел в `system/docflow/<documentId>/`,
+  обнуляя владельца; папки создаются лениво под advisory-lock. Идемпотентно.
+- [x] Download/preview endpoint применяет visibility, DSP и AV. —
+  `GET /docflow/documents/:id/files/:fileId/{download,preview}`: `assertVisible` (404 без
+  утечки существования) → связь файла именно с этим документом → AV → короткоживущий
+  presigned URL. Audit на каждую выдачу, ДСП дополнительно в read_log.
+- [x] Существующие личные ссылки мигрировать/backfill безопасно и идемпотентно. —
+  `pnpm --filter @cuks/db backfill:docflow-files [-- --dry-run] [-- --batch=N]`
+  (`packages/db/src/scripts/backfill-docflow-files.ts`): коммит по одному документу,
+  повторный запуск — no-op, прерванный запуск возобновляется простым перезапуском.
+  **Не запускался** — нет поднятой БД.
+- [x] Сделать файлы карточки кликабельными; основной PDF — inline preview. —
+  `DocumentFilesSection` (имя, размер, AV-бейдж, кнопка скачивания); текущий основной
+  PDF рендерится инлайн. `PdfViewer` расцеплен с `FsNodeDto` (принимает `src`), чтобы его
+  можно было переиспользовать с document-gated URL. i18n RU/TJ добавлены.
+- [~] Тесты deny для чужого документа, DSP без allow-list и quarantine. — unit на AV-гейт
+  (4) и на UI-гейт (7) зелёные; e2e `apps/web/e2e/docflow-files.spec.ts` (усыновление,
+  карантин, чужой документ, чужой fileId, ДСП) **написан, но не прогнан** — Docker не
+  запущен.
 
 #### 1D. Инварианты маршрутов и статусов
 
