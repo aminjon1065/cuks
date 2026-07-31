@@ -1339,30 +1339,41 @@ Commit: `feat(docflow): complete route builder and step sla`.
 
 Схема:
 
-- [ ] `resolution_types`;
-- [ ] `resolution_proposals`;
-- [ ] `acquaintance_batches`;
-- [ ] новые поля acquaintance/resolution;
-- [ ] индексы pending signer, release time, available executor.
+- [x] `resolution_types`;
+- [x] `resolution_proposals`;
+- [x] `acquaintance_batches`;
+- [x] новые поля acquaintance/resolution;
+- [x] индексы pending signer, release time, available executor.
 
 Backend:
 
-- [ ] Proposal CRUD/submit/approve/reject.
-- [ ] Signer/substitution policy.
-- [ ] Approve transaction создаёт resolution.
-- [ ] Gate default 4h из system setting.
-- [ ] Early release when all acknowledged.
-- [ ] Worker timeout release.
-- [ ] My tasks/resolutions скрывает недоступные до release.
-- [ ] Notifications и audit.
+- [x] Proposal CRUD/submit/approve/reject.
+- [x] Signer/substitution policy.
+- [x] Approve transaction создаёт resolution.
+- [x] Gate default 4h из system setting.
+- [x] Early release when all acknowledged.
+- [x] Worker timeout release.
+- [x] My tasks/resolutions скрывает недоступные до release.
+- [x] Notifications и audit.
 
 Frontend:
 
-- [ ] Proposal form и signer view.
-- [ ] Countdown и acquaintance statuses.
-- [ ] Return comment.
-- [ ] Executor card появляется realtime после release.
-- [ ] Types dictionary settings.
+- [x] Proposal form и signer view.
+- [x] Countdown и acquaintance statuses.
+- [x] Return comment.
+- [x] Executor card появляется realtime после release.
+- [x] Types dictionary settings.
+
+Два пункта закрыты с оговоркой:
+
+- «Gate default 4h из system setting» — окно берётся из `DOCFLOW_ACQUAINTANCE_GATE_HOURS`
+  (default 4 ч). Runtime-хранилища системных настроек в проекте нет (в модели данных —
+  только `user_settings`), а заводить его ради одного значения — отдельный подсистемный
+  трек, не описанный в спеках;
+- «Worker timeout release» — развёртка живёт в api (`AcquaintanceGateService`, раз в
+  минуту), а не в воркере: логика гонки за снятие gate одна, и в воркере она была бы
+  второй реализацией того же инварианта. Идемпотентность обеспечивает предикат
+  `released_at is null` в UPDATE, поэтому несколько инстансов api безопасны.
 
 Тесты:
 

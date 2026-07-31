@@ -33,6 +33,7 @@ import {
 } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
 import { RouteSection } from '../components/RouteSection';
+import { ProposalsSection } from '../components/ProposalsSection';
 import { ResolutionSection } from '../components/ResolutionSection';
 import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
@@ -177,7 +178,12 @@ export function DocumentCardPage(): React.JSX.Element {
             </>
           ) : null}
           {tab === 'route' ? <RouteSection doc={data} /> : null}
-          {tab === 'resolutions' ? <ResolutionSection doc={data} /> : null}
+          {tab === 'resolutions' ? (
+            <div className="flex flex-col gap-3">
+              <ProposalsSection doc={data} />
+              <ResolutionSection doc={data} />
+            </div>
+          ) : null}
           {tab === 'links' ? (
             <section className="rounded-md border border-border bg-surface p-4">
               <LinksSection doc={data} />

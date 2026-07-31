@@ -55,6 +55,19 @@ export function resolveProposalDecider(
 /** Statuses from which the author may still edit or withdraw their draft. */
 const EDITABLE_PROPOSAL_STATUSES: readonly ResolutionProposalStatus[] = ['draft', 'pending'];
 
+/**
+ * Whether THIS caller may still change the proposal — the same rule `requireOwnProposal` +
+ * `assertProposalEditable` enforce, exported so the card's «Изменить» cannot offer what the
+ * API would refuse.
+ */
+export function canEditProposal(
+  proposal: { status: ResolutionProposalStatus; proposedBy: string },
+  actor: { id: string; isSuperadmin: boolean },
+): boolean {
+  if (!EDITABLE_PROPOSAL_STATUSES.includes(proposal.status)) return false;
+  return actor.id === proposal.proposedBy || actor.isSuperadmin;
+}
+
 export function assertProposalEditable(status: ResolutionProposalStatus): void {
   if (EDITABLE_PROPOSAL_STATUSES.includes(status)) return;
   throw AppException.conflict(

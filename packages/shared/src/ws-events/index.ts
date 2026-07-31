@@ -62,6 +62,21 @@ export interface WsEventPayloads {
     action: 'started' | 'step_completed' | 'rejected';
     actorId: string;
   };
+  /**
+   * A resolution proposal moved, or its pre-execution reading gate opened (docs/modules/11
+   * §12.11). Delivered to the document's `entity:document:{id}` room — and, on `released`,
+   * additionally to each executor's `user:{id}` room, because until the gate opened they
+   * could not be in the document's room at all and their «Мои задачи» must not wait for a
+   * page reload.
+   *
+   * Ids and an action only, like the route event: a client refetches through the normal API
+   * gate, so a released instruction still reaches only whoever may read it.
+   */
+  'docflow.resolution.updated': {
+    documentId: string;
+    action: 'proposed' | 'approved' | 'rejected' | 'acknowledged' | 'released';
+    actorId: string | null;
+  };
   /** Incoming 1:1 call (docs/modules/14 §2): the DM caller is ringing this user — show the accept/
    *  decline prompt + ringtone. Delivered to the recipient's `user:{id}` room only. */
   'meet.ring': {

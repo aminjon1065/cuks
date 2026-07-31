@@ -36,6 +36,7 @@ import type {
 } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { ResolutionTypesPanel } from '../components/ResolutionTypesPanel';
 import { RouteTemplatesPanel } from '../components/RouteTemplatesPanel';
 import { TemplatesPanel } from '../components/TemplatesPanel';
 import {
@@ -60,11 +61,18 @@ const selectClass = cn(
 );
 const DOC_CLASS_VALUES: readonly DocClass[] = ['incoming', 'outgoing', 'internal', 'citizens'];
 const SEQ_RESET_VALUES: readonly JournalSeqReset[] = ['yearly', 'never'];
-type Tab = 'journals' | 'correspondents' | 'nomenclature' | 'templates' | 'routeTemplates';
+type Tab =
+  | 'journals'
+  | 'correspondents'
+  | 'nomenclature'
+  | 'resolutionTypes'
+  | 'templates'
+  | 'routeTemplates';
 const TABS: readonly Tab[] = [
   'journals',
   'correspondents',
   'nomenclature',
+  'resolutionTypes',
   'templates',
   'routeTemplates',
 ];
@@ -114,6 +122,7 @@ export function DocflowSettingsPage(): React.JSX.Element {
       {tab === 'journals' && <JournalsPanel />}
       {tab === 'correspondents' && <CorrespondentsPanel />}
       {tab === 'nomenclature' && <NomenclaturePanel />}
+      {tab === 'resolutionTypes' && <ResolutionTypesPanel />}
       {tab === 'templates' && <TemplatesPanel />}
       {tab === 'routeTemplates' && <RouteTemplatesPanel />}
     </div>

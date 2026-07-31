@@ -9,12 +9,14 @@ import {
   type Database,
 } from '@cuks/db';
 import {
+  wsRooms,
   type AcquaintanceGateDto,
   type ApproveResolutionProposalInput,
   type CreateResolutionProposalInput,
   type RejectResolutionProposalInput,
   type ResolutionProposalDto,
   type UpdateResolutionProposalInput,
+  type WsEventPayloads,
 } from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -22,8 +24,11 @@ import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DocumentsService } from './documents.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RealtimeService } from '../events/realtime.service';
+import { ConfigService } from '../../config/config.service';
 import {
   assertProposalEditable,
+  canEditProposal,
   planGate,
   planRelease,
   resolveProposalDecider,
@@ -48,7 +53,26 @@ export class ResolutionProposalsService {
     private readonly substitutions: SubstitutionsService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly realtime: RealtimeService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Tell open cards a proposal moved (docs/modules/11 §12.11). Ids and an action only —
+   * never the text, which quotes a document that may be ДСП (docs/09 §3); the client
+   * refetches through the normal API gate.
+   */
+  private emitUpdated(
+    documentId: string,
+    action: WsEventPayloads['docflow.resolution.updated']['action'],
+    actorId: string | null,
+  ): void {
+    this.realtime.emitToRoom(wsRooms.entity('document', documentId), 'docflow.resolution.updated', {
+      documentId,
+      action,
+      actorId,
+    });
+  }
 
   async list(documentId: string, actor: AuthUser): Promise<ResolutionProposalDto[]> {
     await this.documents.assertVisible(documentId, actor);
@@ -160,6 +184,7 @@ export class ResolutionProposalsService {
       priority: 'normal',
       emailMode: 'offline',
     });
+    this.emitUpdated(proposal.documentId, 'proposed', actor.id);
     return this.toDto(updated, actor);
   }
 
@@ -197,7 +222,11 @@ export class ResolutionProposalsService {
       }
 
       const now = new Date();
-      const gate = planGate(proposal.acquaintUserIds, now);
+      const gate = planGate(
+        proposal.acquaintUserIds,
+        now,
+        this.config.all.DOCFLOW_ACQUAINTANCE_GATE_HOURS,
+      );
       const [resolution] = await tx
         .insert(resolutions)
         .values({
@@ -279,6 +308,7 @@ export class ResolutionProposalsService {
         emailMode: 'offline',
       });
     }
+    this.emitUpdated(decided.proposal.documentId, 'approved', actor.id);
     if (!decided.gated) await this.notifyExecutors(decided.proposal.id);
     return this.toDto(decided.proposal, actor);
   }
@@ -334,6 +364,7 @@ export class ResolutionProposalsService {
       priority: 'normal',
       emailMode: 'offline',
     });
+    this.emitUpdated(proposal.documentId, 'rejected', actor.id);
     return this.toDto(proposal, actor);
   }
 
@@ -389,6 +420,7 @@ export class ResolutionProposalsService {
       }
     }
 
+    this.emitUpdated(batch.documentId, 'acknowledged', actor.id);
     // Always re-evaluate: this may have been the last outstanding reader.
     if (await this.releaseIfDue(batchId, now)) {
       await this.notifyExecutorsForBatch(batchId);
@@ -527,6 +559,7 @@ export class ResolutionProposalsService {
     const canDecide =
       row.status === 'pending' &&
       (actor.id === row.signerId || principalIds.includes(row.signerId) || actor.isSuperadmin);
+    const canEdit = canEditProposal(row, { id: actor.id, isSuperadmin: actor.isSuperadmin });
 
     return {
       id: row.id,
@@ -550,6 +583,7 @@ export class ResolutionProposalsService {
       decisionComment: row.decisionComment,
       resolutionId: row.resolutionId,
       canDecide,
+      canEdit,
       gate: await this.gateFor(row.resolutionId),
       createdAt: row.createdAt.toISOString(),
     };
@@ -570,7 +604,13 @@ export class ResolutionProposalsService {
     return rows.map((r) => r.id);
   }
 
-  /** Notify the executors of the resolution a just-opened gate was guarding. */
+  /**
+   * Tell the executors of the resolution a just-opened gate was guarding — and their open
+   * screens too. The realtime event goes to each executor's own `user:{id}` room, not only
+   * to the document room: until this moment they could not see the document, so they cannot
+   * have been in its room, and «Мои задачи» would otherwise show the instruction only after
+   * a reload.
+   */
   async notifyExecutorsForBatch(batchId: string): Promise<void> {
     const [row] = await this.db
       .select({
@@ -594,7 +634,13 @@ export class ResolutionProposalsService {
         priority: 'normal',
         emailMode: 'offline',
       });
+      this.realtime.emitToUser(userId, 'docflow.resolution.updated', {
+        documentId: row.documentId,
+        action: 'released',
+        actorId: null,
+      });
     }
+    this.emitUpdated(row.documentId, 'released', null);
   }
 
   private async gateFor(resolutionId: string | null): Promise<AcquaintanceGateDto | null> {

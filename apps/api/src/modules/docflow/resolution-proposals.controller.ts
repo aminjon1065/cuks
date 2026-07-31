@@ -1,23 +1,29 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   approveResolutionProposalSchema,
   createResolutionProposalSchema,
+  createResolutionTypeSchema,
   rejectResolutionProposalSchema,
   updateResolutionProposalSchema,
+  updateResolutionTypeSchema,
   type AcquaintanceGateDto,
   type ApproveResolutionProposalInput,
   type CreateResolutionProposalInput,
+  type CreateResolutionTypeInput,
   type RejectResolutionProposalInput,
   type ResolutionProposalDto,
+  type ResolutionTypeDto,
   type UpdateResolutionProposalInput,
+  type UpdateResolutionTypeInput,
 } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { ResolutionProposalsService } from './resolution-proposals.service';
+import { ResolutionTypesService } from './resolution-types.service';
 
 const uuidSchema = z.string().uuid();
 
@@ -30,7 +36,53 @@ const uuidSchema = z.string().uuid();
 @ApiTags('docflow')
 @Controller('docflow')
 export class ResolutionProposalsController {
-  constructor(private readonly proposals: ResolutionProposalsService) {}
+  constructor(
+    private readonly proposals: ResolutionProposalsService,
+    private readonly types: ResolutionTypesService,
+  ) {}
+
+  // --- Resolution-type dictionary -------------------------------------------
+
+  @Get('resolution-types')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Resolution types (`?active=true` for the proposal picker)' })
+  listTypes(@Query('active') active?: string): Promise<ResolutionTypeDto[]> {
+    return this.types.list(active === 'true');
+  }
+
+  @Post('resolution-types')
+  @RequirePermission('docflow.journals.manage')
+  @ApiOperation({ summary: 'Add a resolution type' })
+  createType(
+    @Body(new ZodValidationPipe(createResolutionTypeSchema)) body: CreateResolutionTypeInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ResolutionTypeDto> {
+    return this.types.create(body, user);
+  }
+
+  @Patch('resolution-types/:id')
+  @RequirePermission('docflow.journals.manage')
+  @ApiOperation({ summary: 'Edit a resolution type' })
+  updateType(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(updateResolutionTypeSchema)) body: UpdateResolutionTypeInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<ResolutionTypeDto> {
+    return this.types.update(id, body, user);
+  }
+
+  @Delete('resolution-types/:id')
+  @RequirePermission('docflow.journals.manage')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete an unused resolution type' })
+  async removeType(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<void> {
+    await this.types.remove(id, user);
+  }
+
+  // --- Proposals -------------------------------------------------------------
 
   @Get('documents/:id/resolution-proposals')
   @RequirePermission('docflow.use')

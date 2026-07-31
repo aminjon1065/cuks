@@ -20,6 +20,7 @@ import {
   notifications,
   orgUnits,
   positions,
+  resolutionTypes,
   rolePermissions,
   roles,
   taskColumns,
@@ -646,6 +647,78 @@ const DOCFLOW_NOMENCLATURE: ReadonlyArray<{
   },
 ];
 
+/**
+ * Typical resolution wordings (docs/modules/11 §12.11). `requires*` is what the proposal
+ * form insists on for that kind: «Ознакомить» names readers rather than an executor, so it
+ * asks for neither an executor nor a deadline.
+ */
+const DOCFLOW_RESOLUTION_TYPES: ReadonlyArray<{
+  id: string;
+  code: string;
+  nameRu: string;
+  nameTj: string;
+  actionKind: 'execute' | 'acknowledge' | 'reply' | 'review';
+  requiresDueAt: boolean;
+  requiresExecutor: boolean;
+  requiresOutgoingResponse: boolean;
+  defaultControl: boolean;
+  defaultDueHours: number | null;
+  sortOrder: number;
+}> = [
+  {
+    id: '0190d0c2-0000-7000-8000-000000000001',
+    code: 'execute',
+    nameRu: 'Исполнить',
+    nameTj: 'Иҷро кунед',
+    actionKind: 'execute',
+    requiresDueAt: true,
+    requiresExecutor: true,
+    requiresOutgoingResponse: false,
+    defaultControl: true,
+    defaultDueHours: 72,
+    sortOrder: 1,
+  },
+  {
+    id: '0190d0c2-0000-7000-8000-000000000002',
+    code: 'reply',
+    nameRu: 'Подготовить ответ',
+    nameTj: 'Ҷавоб тайёр кунед',
+    actionKind: 'reply',
+    requiresDueAt: true,
+    requiresExecutor: true,
+    requiresOutgoingResponse: true,
+    defaultControl: true,
+    defaultDueHours: 120,
+    sortOrder: 2,
+  },
+  {
+    id: '0190d0c2-0000-7000-8000-000000000003',
+    code: 'review',
+    nameRu: 'Рассмотреть и доложить',
+    nameTj: 'Баррасӣ карда, гузориш диҳед',
+    actionKind: 'review',
+    requiresDueAt: true,
+    requiresExecutor: true,
+    requiresOutgoingResponse: false,
+    defaultControl: false,
+    defaultDueHours: 48,
+    sortOrder: 3,
+  },
+  {
+    id: '0190d0c2-0000-7000-8000-000000000004',
+    code: 'acknowledge',
+    nameRu: 'Ознакомить',
+    nameTj: 'Шинос кунонед',
+    actionKind: 'acknowledge',
+    requiresDueAt: false,
+    requiresExecutor: false,
+    requiresOutgoingResponse: false,
+    defaultControl: false,
+    defaultDueHours: null,
+    sortOrder: 4,
+  },
+];
+
 /** Docflow reference data (task 3.1): registration journals + case-index nomenclature. */
 async function seedDocflow(db: Database): Promise<void> {
   for (const j of DOCFLOW_JOURNALS) {
@@ -668,8 +741,11 @@ async function seedDocflow(db: Database): Promise<void> {
       .values({ id: n.id, index: n.index, title: n.title, sort: n.sort })
       .onConflictDoNothing();
   }
+  for (const r of DOCFLOW_RESOLUTION_TYPES) {
+    await db.insert(resolutionTypes).values(r).onConflictDoNothing();
+  }
   console.log(
-    `Docflow reference seeded: ${DOCFLOW_JOURNALS.length} journals, ${DOCFLOW_NOMENCLATURE.length} nomenclature entries.`,
+    `Docflow reference seeded: ${DOCFLOW_JOURNALS.length} journals, ${DOCFLOW_NOMENCLATURE.length} nomenclature entries, ${DOCFLOW_RESOLUTION_TYPES.length} resolution types.`,
   );
 }
 

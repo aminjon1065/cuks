@@ -21,6 +21,7 @@ import { DocumentTemplatesService } from './document-templates.service';
 import { AcquaintanceGateService } from './acquaintance-gate.service';
 import { ResolutionProposalsController } from './resolution-proposals.controller';
 import { ResolutionProposalsService } from './resolution-proposals.service';
+import { ResolutionTypesService } from './resolution-types.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
@@ -71,6 +72,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     RoutesService,
     ResolutionsService,
     ResolutionProposalsService,
+    ResolutionTypesService,
     AcquaintanceGateService,
     CaService,
     SignaturesService,

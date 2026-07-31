@@ -24,6 +24,7 @@ import {
   type DocumentFileKind,
   type DocumentStatus,
   type JournalSeqReset,
+  RESOLUTION_ACTION_KINDS,
   type ResolutionActionKind,
   type ResolutionProposalStatus,
   type ResolutionStatus,
@@ -1069,6 +1070,8 @@ export interface ResolutionProposalDto {
   resolutionId: string | null;
   /** Whether THIS caller may decide it — the signer or their active deputy. */
   canDecide: boolean;
+  /** Whether THIS caller may still edit or submit it — its drafter, before a decision. */
+  canEdit: boolean;
   /** The gate the approval created, once it exists. */
   gate: AcquaintanceGateDto | null;
   createdAt: string;
@@ -1088,3 +1091,37 @@ export interface ResolutionTypeDto {
   isActive: boolean;
   sortOrder: number;
 }
+
+/**
+ * A resolution type carries what the chancellery may pre-fill and insist on for an
+ * instruction of that kind — «Исполнить» wants an executor and a deadline, «Ознакомить»
+ * wants neither (docs/modules/11 §12.11).
+ */
+export const createResolutionTypeSchema = z.object({
+  code: z
+    .string()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z][a-z0-9_]*$/, 'Only lowercase latin, digits and underscore'),
+  nameRu: z.string().min(1).max(200),
+  nameTj: z.string().min(1).max(200),
+  actionKind: z.enum(RESOLUTION_ACTION_KINDS).default('execute'),
+  requiresDueAt: z.boolean().default(false),
+  requiresExecutor: z.boolean().default(true),
+  requiresOutgoingResponse: z.boolean().default(false),
+  defaultControl: z.boolean().default(false),
+  /** Hours from approval; null means «no default», not «immediately». */
+  defaultDueHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 365)
+    .nullish(),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+});
+export type CreateResolutionTypeInput = z.infer<typeof createResolutionTypeSchema>;
+
+/** The code is immutable once issued — proposals and reports quote it. */
+export const updateResolutionTypeSchema = createResolutionTypeSchema.omit({ code: true }).partial();
+export type UpdateResolutionTypeInput = z.infer<typeof updateResolutionTypeSchema>;

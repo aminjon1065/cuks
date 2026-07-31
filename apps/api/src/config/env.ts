@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { LOCKOUT_MAX_ATTEMPTS, LOCKOUT_WINDOW_SECONDS } from '@cuks/shared';
+import {
+  ACQUAINTANCE_GATE_HOURS,
+  LOCKOUT_MAX_ATTEMPTS,
+  LOCKOUT_WINDOW_SECONDS,
+} from '@cuks/shared';
 
 /**
  * `FOO=` in `.env` (present, blank) must mean "unset" for an optional field —
@@ -43,6 +47,16 @@ export const envSchema = z
     // lockout entirely (only outside production — see superRefine below).
     AUTH_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().min(0).default(LOCKOUT_MAX_ATTEMPTS),
     AUTH_LOCKOUT_WINDOW_SECONDS: z.coerce.number().int().positive().default(LOCKOUT_WINDOW_SECONDS),
+
+    // How long executors wait behind a pre-execution reading gate before it opens by
+    // itself (docs/modules/11 §12.3 — «системная настройка, default PT4H»). The project
+    // has no runtime settings store yet, so it lives here; the default is the customer's
+    // four hours, and an e2e run may shorten it to exercise the timeout path.
+    DOCFLOW_ACQUAINTANCE_GATE_HOURS: z.coerce
+      .number()
+      .positive()
+      .max(24 * 30)
+      .default(ACQUAINTANCE_GATE_HOURS),
 
     // Object storage (MinIO / S3).
     S3_ENDPOINT: z.string().url(),

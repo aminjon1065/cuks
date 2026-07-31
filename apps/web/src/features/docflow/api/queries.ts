@@ -58,6 +58,15 @@ import type {
   UpdateDocumentInput,
   UpdateJournalInput,
   UpdateNomenclatureInput,
+  AcquaintanceGateDto,
+  ApproveResolutionProposalInput,
+  CreateResolutionProposalInput,
+  CreateResolutionTypeInput,
+  RejectResolutionProposalInput,
+  ResolutionProposalDto,
+  ResolutionTypeDto,
+  UpdateResolutionProposalInput,
+  UpdateResolutionTypeInput,
 } from '@cuks/shared';
 import { CSRF_COOKIE, CSRF_HEADER } from '@cuks/shared';
 import { api } from '@/lib/api-client';
@@ -828,5 +837,119 @@ export function useDeleteRouteTemplate() {
   return useMutation({
     mutationFn: (id: string) => api.delete<{ ok: true }>(`/v1/docflow/route-templates/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: routeTemplatesKey }),
+  });
+}
+
+// ---- Resolution proposals + the pre-execution gate (docs/modules/11 §12.11) ---
+
+export const resolutionTypesKey = [...docflowKey, 'resolution-types'] as const;
+
+export function useResolutionTypes(activeOnly = false): UseQueryResult<ResolutionTypeDto[]> {
+  return useQuery({
+    queryKey: [...resolutionTypesKey, { activeOnly }],
+    queryFn: () =>
+      api.get<ResolutionTypeDto[]>(
+        `/v1/docflow/resolution-types${activeOnly ? '?active=true' : ''}`,
+      ),
+  });
+}
+
+export function useCreateResolutionType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateResolutionTypeInput) =>
+      api.post<ResolutionTypeDto>('/v1/docflow/resolution-types', input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: resolutionTypesKey }),
+  });
+}
+
+export function useUpdateResolutionType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateResolutionTypeInput }) =>
+      api.patch<ResolutionTypeDto>(`/v1/docflow/resolution-types/${id}`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: resolutionTypesKey }),
+  });
+}
+
+export function useDeleteResolutionType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/v1/docflow/resolution-types/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: resolutionTypesKey }),
+  });
+}
+
+export function useDocumentProposals(
+  documentId: string | null,
+): UseQueryResult<ResolutionProposalDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'proposals'],
+    queryFn: () =>
+      api.get<ResolutionProposalDto[]>(`/v1/docflow/documents/${documentId}/resolution-proposals`),
+    enabled: !!documentId,
+  });
+}
+
+/** A decision issues a resolution and may change the document — refresh the whole card. */
+function invalidateProposals(qc: ReturnType<typeof useQueryClient>, documentId: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+}
+
+export function useCreateProposal(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateResolutionProposalInput) =>
+      api.post<ResolutionProposalDto>(
+        `/v1/docflow/documents/${documentId}/resolution-proposals`,
+        input,
+      ),
+    onSuccess: () => invalidateProposals(qc, documentId),
+  });
+}
+
+export function useUpdateProposal(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateResolutionProposalInput }) =>
+      api.patch<ResolutionProposalDto>(`/v1/docflow/resolution-proposals/${id}`, input),
+    onSuccess: () => invalidateProposals(qc, documentId),
+  });
+}
+
+type ProposalActionBody =
+  ApproveResolutionProposalInput | RejectResolutionProposalInput | Record<string, never>;
+
+export function useProposalAction(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      proposalId,
+      action,
+      body,
+    }: {
+      proposalId: string;
+      action: 'submit' | 'approve' | 'reject';
+      body?: ProposalActionBody;
+    }) =>
+      api.post<ResolutionProposalDto>(
+        `/v1/docflow/resolution-proposals/${proposalId}/actions/${action}`,
+        body ?? {},
+      ),
+    onSuccess: () => invalidateProposals(qc, documentId),
+  });
+}
+
+/** Confirm reading in a pre-execution gate; the last reader opens it immediately. */
+export function useAcknowledgeGate(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) =>
+      api.post<AcquaintanceGateDto>(
+        `/v1/docflow/acquaintance-batches/${batchId}/actions/acknowledge`,
+        {},
+      ),
+    onSuccess: () => invalidateProposals(qc, documentId),
   });
 }
