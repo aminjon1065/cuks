@@ -1099,16 +1099,31 @@ Event payload содержит id и безопасный минимум. Пол
   карантин, чужой документ, чужой fileId, ДСП) **написан, но не прогнан** — Docker не
   запущен.
 
-#### 1D. Инварианты маршрутов и статусов
+#### 1D. Инварианты маршрутов и статусов — **готово (2026-07-31), кроме прогона e2e**
 
-- [ ] Server validation запрещает route step без разрешаемого actor.
-- [ ] UI показывает действие по kind.
-- [ ] `sign` завершается только signature action.
-- [ ] `acknowledge` завершается только acknowledge action.
-- [ ] Определить и реализовать completion для `register` и `execute`.
-- [ ] Central workflow policy запрещает `completed/archived` при открытых
-  обязательных действиях.
-- [ ] Regression tests всех допустимых и запрещённых переходов.
+- [x] Server validation запрещает route step без разрешаемого actor. —
+  `assertStepsHaveActors` до первой записи; `resolveAssigneeUsers` теперь считает только
+  действующих пользователей (не `blocked`, не удалённых). Ошибка
+  `docflow.route.step_has_no_assignee` (422), маршрут не создаётся.
+- [x] UI показывает действие по kind. — `routeStepRowAction` из общей таблицы; строки
+  `sign`/`acknowledge`/`register` показывают подсказку, где шаг завершается, вместо
+  неработающей кнопки. `reject` доступен везде.
+- [x] `sign` завершается только signature action. — через общую таблицу
+  `ROUTE_STEP_KIND_ACTIONS` (прежний частный guard заменён).
+- [x] `acknowledge` завершается только acknowledge action. — там же.
+- [x] Определить и реализовать completion для `register` и `execute`. — `register`
+  закрывается регистрацией документа в той же транзакции, что и выдача номера
+  (`completeRegisterStep`); `execute` — новым
+  `POST /docflow/route-steps/:id/actions/complete`.
+- [x] Central workflow policy запрещает `completed/archived` при открытых
+  обязательных действиях. — `assertNoOpenObligations` (чистая) поверх счётчиков,
+  прочитанных под тем же row lock: `route_open` / `resolution_open` /
+  `acquaintance_open`. Попутно исправлено: завершение маршрута больше не откатывает
+  уже зарегистрированный документ в `pending_registration`.
+- [~] Regression tests всех допустимых и запрещённых переходов. — unit: полная матрица
+  вид × действие (8 кейсов) и политика закрытия (6 кейсов); web: действия по kind
+  (4 кейса). E2E `apps/web/e2e/docflow-route-invariants.spec.ts` **написан, но не
+  прогнан** — Docker не запущен.
 
 Файлы:
 

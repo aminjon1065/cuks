@@ -81,7 +81,7 @@ POST /docflow/documents  GET /docflow/documents?queue=to_approve|to_sign|to_ack|
 POST /docflow/documents/register-incoming (атомарно, idempotencyKey — см. §12.2)
 GET /docflow/documents/:id/files/:fileId/{download|preview} (visibility+ДСП+AV — см. §12.2)
 GET/PATCH /docflow/documents/:id  POST /docflow/documents/:id/files (+версии)
-POST /docflow/documents/:id/route (из шаблона/ручной)  POST /docflow/route-steps/:id/actions/{approve|reject|acknowledge}
+POST /docflow/documents/:id/route (из шаблона/ручной)  POST /docflow/route-steps/:id/actions/{approve|complete|reject}
 POST /docflow/documents/:id/actions/register {journal}  POST /docflow/documents/:id/actions/sign {signature}
 POST /docflow/documents/:id/resolutions  PATCH /docflow/resolutions/:id (отчёт/исполнено/продление)
 GET /docflow/control  GET /docflow/reports/discipline?period  GET/POST /docflow/journals
@@ -140,7 +140,27 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 `documents` (+ реквизиты отправителя/адресата, `response_due_at`, `content_json`/`content_text`, архивные поля `archived_at`, `retention_until`, `legal_hold`, `disposition_status`, `search_vector`); новые `document_collaborators`, `document_templates`/`document_template_versions`, `resolution_types`, `resolution_proposals`, `acquaintance_batches`, `document_dispatches`; расширения `acquaintances` (batch, status, `notified_at`), `resolutions` (`available_at`, приёмка/возврат), `route_steps` (`activated_at`/`due_at`/`completed_at`, actor по должности/подразделению), `nomenclature` (сроки хранения). Комментарии переиспользуют общую `app.comments` с `entity_type='document'`. Полный перечень полей, ограничений и индексов — план §6.
 
-### 12.6. Безопасные defaults
+### 12.6. Инварианты маршрутов и статусов
+
+**Шаг без исполнителя не создаётся.** Старт маршрута проверяет, что каждый шаг разрешается минимум в одного **действующего** пользователя (не заблокированного и не удалённого): пользователь напрямую, держатели должности или сотрудники подразделения. Иначе — `docflow.route.step_has_no_assignee` (422), и маршрут не создаётся вовсе (проверка до первой записи, вся операция — одна транзакция). Тот же фильтр применяется при разворачивании листа ознакомления.
+
+**Действие строго по виду шага.** Единая таблица `ROUTE_STEP_KIND_ACTIONS` в `@cuks/shared` — источник правды и для серверного гейта, и для кнопок карточки, поэтому UI физически не может предложить действие, которое сервер отклонит:
+
+| Вид шага | Чем завершается | Где выполняется в UI |
+|---|---|---|
+| `approve` | `approve` | кнопка в строке шага |
+| `execute` | `complete` | кнопка в строке шага |
+| `sign` | `sign` (ECDSA) | диалог подписи |
+| `acknowledge` | `acknowledge` (все назначенные) | лист ознакомления |
+| `register` | `register` (регистрация документа) | действие «Зарегистрировать» |
+
+`reject` допустим на любом виде — это универсальный возврат автору. Несовпадение — `docflow.route_step.action_kind_mismatch` (409) с `details.kind/action/allowed`. Строки шагов, завершаемых на своей поверхности, показывают подсказку вместо неработающей кнопки.
+
+Регистрация документа закрывает активный `register`-шаг в **той же** транзакции, что и выдача номера. Завершение маршрута переводит документ в `pending_registration`, **только если номер ещё не выдан** — иначе зарегистрированный документ откатывался бы в «ожидает регистрации» с уже присвоенным номером.
+
+**Закрытие документа доказывает завершённость.** Переход в `completed`/`archived` дополнительно проверяет отсутствие открытых обязательств, считанных под тем же row lock: активные шаги маршрута → `docflow.document.route_open`, неисполненные резолюции → `docflow.document.resolution_open`, неподтверждённые ознакомления → `docflow.document.acquaintance_open` (все 422). Остальные переходы графа не затрагиваются: перевод в `in_progress` при живой резолюции — нормальный случай.
+
+### 12.7. Безопасные defaults
 
 Действуют, пока заказчик не ответит на вопросы плана §15 — и **не блокируют** остальные этапы:
 
