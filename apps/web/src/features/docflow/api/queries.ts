@@ -77,6 +77,14 @@ import type {
   AcknowledgementReportQuery,
   CreateDistributionInput,
   DistributionDto,
+  ArchiveDocumentInput,
+  ArchiveEntryDto,
+  ArchiveQuery,
+  CreateDispositionBatchInput,
+  DispositionBatchDto,
+  DispositionDecisionInput,
+  LegalHoldInput,
+  RestoreDocumentInput,
 } from '@cuks/shared';
 import { CSRF_COOKIE, CSRF_HEADER } from '@cuks/shared';
 import { api } from '@/lib/api-client';
@@ -1094,4 +1102,114 @@ export async function exportAcknowledgementXlsx(query: AcknowledgementReportQuer
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---- Archive, retention and disposition (docs/modules/11 §12.12) -----------
+
+export const archiveKey = [...docflowKey, 'archive'] as const;
+
+function archivePath(query: ArchiveQuery): string {
+  const params = new URLSearchParams({ page: String(query.page), limit: String(query.limit) });
+  if (query.caseIndex) params.set('caseIndex', query.caseIndex);
+  if (query.search) params.set('search', query.search);
+  if (query.candidatesOnly) params.set('candidatesOnly', 'true');
+  if (query.legalHoldOnly) params.set('legalHoldOnly', 'true');
+  return `/v1/docflow/archive?${params.toString()}`;
+}
+
+export function useArchive(query: ArchiveQuery): UseQueryResult<PaginatedResult<ArchiveEntryDto>> {
+  return useQuery({
+    queryKey: [...archiveKey, 'list', query],
+    queryFn: () => api.get<PaginatedResult<ArchiveEntryDto>>(archivePath(query)),
+  });
+}
+
+/** Filing, restoring and holding all change the card and the lists it appears in. */
+function invalidateArchive(qc: ReturnType<typeof useQueryClient>, documentId: string) {
+  void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+  void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+  void qc.invalidateQueries({ queryKey: archiveKey });
+}
+
+export function useArchiveDocument(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ArchiveDocumentInput) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${documentId}/actions/archive`, input),
+    onSuccess: () => invalidateArchive(qc, documentId),
+  });
+}
+
+export function useRestoreDocument(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RestoreDocumentInput) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${documentId}/actions/restore`, input),
+    onSuccess: () => invalidateArchive(qc, documentId),
+  });
+}
+
+export function useSetLegalHold(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LegalHoldInput) =>
+      api.post<DocumentDetailDto>(`/v1/docflow/documents/${documentId}/actions/legal-hold`, input),
+    onSuccess: () => invalidateArchive(qc, documentId),
+  });
+}
+
+export function useClearLegalHold(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LegalHoldInput) =>
+      api.delete<DocumentDetailDto>(`/v1/docflow/documents/${documentId}/legal-hold`, input),
+    onSuccess: () => invalidateArchive(qc, documentId),
+  });
+}
+
+export function useDispositionBatches(): UseQueryResult<DispositionBatchDto[]> {
+  return useQuery({
+    queryKey: [...archiveKey, 'batches'],
+    queryFn: () => api.get<DispositionBatchDto[]>('/v1/docflow/archive/disposition-batches'),
+  });
+}
+
+export function useCreateDispositionBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDispositionBatchInput) =>
+      api.post<DispositionBatchDto>('/v1/docflow/archive/disposition-batches', input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: archiveKey }),
+  });
+}
+
+export function useDispositionAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      batchId,
+      action,
+      body,
+    }: {
+      batchId: string;
+      action: 'submit' | 'approve' | 'reject' | 'execute';
+      body?: DispositionDecisionInput;
+    }) =>
+      api.post<DispositionBatchDto>(
+        `/v1/docflow/archive/disposition-batches/${batchId}/actions/${action}`,
+        body ?? {},
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: archiveKey }),
+  });
+}
+
+export function useAddDispositionItems() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ batchId, documentIds }: { batchId: string; documentIds: string[] }) =>
+      api.post<DispositionBatchDto>(`/v1/docflow/archive/disposition-batches/${batchId}/items`, {
+        documentIds,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: archiveKey }),
+  });
 }

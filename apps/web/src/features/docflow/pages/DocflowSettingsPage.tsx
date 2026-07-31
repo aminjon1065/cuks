@@ -595,6 +595,7 @@ function NomenclaturePanel(): React.JSX.Element {
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-28">{t('nomenclature.columns.index')}</TableHead>
               <TableHead>{t('nomenclature.columns.title')}</TableHead>
+              <TableHead className="w-40">{t('nomenclature.columns.retention')}</TableHead>
               <TableHead className="w-24">{t('journals.columns.status')}</TableHead>
               <TableHead className="w-24" />
             </TableRow>
@@ -604,6 +605,13 @@ function NomenclaturePanel(): React.JSX.Element {
               <TableRow key={n.id}>
                 <TableCell className="font-mono text-xs text-text-muted">{n.index}</TableCell>
                 <TableCell className="text-text">{n.title}</TableCell>
+                <TableCell className="text-text-muted">
+                  {n.isPermanent
+                    ? t('nomenclature.permanent')
+                    : n.retentionMonths
+                      ? t('nomenclature.months', { count: n.retentionMonths })
+                      : '—'}
+                </TableCell>
                 <TableCell>
                   <ActiveBadge active={n.isActive} />
                 </TableCell>
@@ -665,6 +673,13 @@ function NomenclatureDialog(props: {
   const [index, setIndex] = useState(props.value?.index ?? '');
   const [title, setTitle] = useState(props.value?.title ?? '');
   const [retentionNote, setRetentionNote] = useState(props.value?.retentionNote ?? '');
+  const [retentionMonths, setRetentionMonths] = useState(
+    props.value?.retentionMonths != null ? String(props.value.retentionMonths) : '',
+  );
+  const [isPermanent, setIsPermanent] = useState(props.value?.isPermanent ?? false);
+  const [requiresApproval, setRequiresApproval] = useState(
+    props.value?.dispositionRequiresApproval ?? true,
+  );
   const [isActive, setIsActive] = useState(props.value?.isActive ?? true);
 
   const submit = (e: FormEvent) => {
@@ -673,6 +688,10 @@ function NomenclatureDialog(props: {
       index: index.trim(),
       title: title.trim(),
       retentionNote: retentionNote.trim() || null,
+      // A permanent case has no term to state — sending both would say two things at once.
+      retentionMonths: isPermanent || !retentionMonths ? null : Number(retentionMonths),
+      isPermanent,
+      dispositionRequiresApproval: requiresApproval,
       isActive,
     });
   };
@@ -698,6 +717,34 @@ function NomenclatureDialog(props: {
           <Field label={t('nomenclature.form.title')}>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
           </Field>
+          <Field
+            label={t('nomenclature.form.retentionMonths')}
+            hint={t('nomenclature.form.retentionMonthsHint')}
+          >
+            <Input
+              type="number"
+              min={1}
+              value={retentionMonths}
+              onChange={(e) => setRetentionMonths(e.target.value)}
+              disabled={isPermanent}
+            />
+          </Field>
+          <label className="flex items-center gap-2 text-[13px] text-text">
+            <input
+              type="checkbox"
+              checked={isPermanent}
+              onChange={(e) => setIsPermanent(e.target.checked)}
+            />
+            {t('nomenclature.form.isPermanent')}
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-text">
+            <input
+              type="checkbox"
+              checked={requiresApproval}
+              onChange={(e) => setRequiresApproval(e.target.checked)}
+            />
+            {t('nomenclature.form.requiresApproval')}
+          </label>
           <Field label={t('nomenclature.form.retention')}>
             <Input value={retentionNote} onChange={(e) => setRetentionNote(e.target.value)} />
           </Field>

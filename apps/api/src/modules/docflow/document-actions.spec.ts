@@ -19,6 +19,8 @@ function doc(over: Partial<ActionableDocument> = {}): ActionableDocument {
     confidentiality: 'normal',
     accessList: [],
     regNumber: null,
+    archivedAt: null,
+    dispositionStatus: 'none',
     ...over,
   };
 }

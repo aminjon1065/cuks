@@ -48,6 +48,7 @@ import { HistorySection } from '../components/HistorySection';
 import { useDocumentTitle } from '@/lib/use-document-title';
 import { useDocumentRealtime } from '../hooks/useDocumentRealtime';
 import { CreateResponseDialog } from '../components/CreateResponseDialog';
+import { ArchiveSection } from '../components/ArchiveSection';
 import { DispatchSection } from '../components/DispatchSection';
 import { DistributionSection } from '../components/DistributionSection';
 import { RelationBanner } from '../components/RelationBanner';
@@ -207,6 +208,7 @@ export function DocumentCardPage(): React.JSX.Element {
               <SignatureSection doc={data} />
               <AcknowledgementSection doc={data} />
               <AccessSection doc={data} />
+              <ArchiveSection doc={data} />
             </>
           ) : null}
           {tab === 'route' ? <RouteSection doc={data} /> : null}

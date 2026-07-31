@@ -46,6 +46,10 @@ export const PERMISSIONS = [
   'docflow.control',
   'docflow.reports.view',
   'docflow.confidential.view',
+  // Archive: two separate rights on purpose. A hold is a legal instruction and disposal is
+  // irreversible — neither belongs to whoever happens to hold the registry.
+  'docflow.archive.hold',
+  'docflow.archive.dispose',
   // tasks
   'tasks.use',
   'tasks.projects.create',
@@ -151,6 +155,8 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'docflow.control',
       'docflow.reports.view',
       'docflow.confidential.view',
+      'docflow.archive.hold',
+      'docflow.archive.dispose',
       'incidents.create',
       'incidents.manage',
       'analytics.build',

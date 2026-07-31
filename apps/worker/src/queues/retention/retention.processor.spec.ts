@@ -23,6 +23,11 @@ function makeDb(queue: unknown[][], opts: { txThrowsOnNodeIndex?: number } = {})
       // file_uploads row); a plain awaited `.where()` (fileVersions/fsNodes
       // deletes in purgeOneNode, whose result is never read) does not, so the
       // queue only needs one entry per value the processor actually consumes.
+      // The archive candidate sweep is a plain UPDATE … RETURNING; it consumes one queue
+      // entry, like the deletes above.
+      update: vi.fn(() => ({
+        set: () => ({ where: () => ({ returning: async () => q.shift() ?? [] }) }),
+      })),
       delete: vi.fn(() => ({
         where: () => {
           const obj: Record<string, unknown> = {};

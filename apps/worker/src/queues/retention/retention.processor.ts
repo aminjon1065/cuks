@@ -3,6 +3,7 @@ import { Inject, Logger } from '@nestjs/common';
 import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 import type { Job, Queue } from 'bullmq';
 import {
+  documents,
   fileLinks,
   fileUploads,
   fileVersions,
@@ -72,10 +73,50 @@ export class RetentionProcessor extends WorkerHost {
     const reconciled = await this.reconcileStalePendingScans();
     const expiredLinks = await this.purgeExpiredLinks();
     const recordingsPurged = await this.purgeExpiredRecordings();
+    const dispositionCandidates = await this.markDispositionCandidates();
     this.logger.log(
-      { purged, abandoned, reconciled, expiredLinks, recordingsPurged },
+      { purged, abandoned, reconciled, expiredLinks, recordingsPurged, dispositionCandidates },
       'retention sweep complete',
     );
+  }
+
+  /**
+   * Mark archived documents whose retention term has run out (docs/modules/11 §12.12, plan
+   * этап 8).
+   *
+   * The ONLY thing a machine is allowed to decide about the archive. It sets a flag that
+   * means «этот документ стоит посмотреть» and stops: assembling an act, approving it and
+   * carrying it out are three separate human decisions in the api. Nothing here deletes a
+   * row, a file or an object, and nothing here can.
+   *
+   * The four vetoes are in the predicate rather than in code so the database refuses them
+   * too: not archived, kept permanently, under legal hold, or with no deadline at all. A
+   * legal hold set a second before this runs still wins, because the UPDATE reads it.
+   * Idempotent — a document already marked matches the same predicate and is simply re-set.
+   */
+  private async markDispositionCandidates(): Promise<number> {
+    const now = new Date();
+    const marked = await this.db
+      .update(documents)
+      .set({ dispositionStatus: 'candidate' })
+      .where(
+        and(
+          isNotNull(documents.archivedAt),
+          isNull(documents.deletedAt),
+          eq(documents.isPermanent, false),
+          eq(documents.legalHold, false),
+          isNotNull(documents.retentionUntil),
+          lt(documents.retentionUntil, now),
+          // Only from 'none': anything already inside an act of disposal, or decided about,
+          // is not the sweep's to touch.
+          eq(documents.dispositionStatus, 'none'),
+        ),
+      )
+      .returning({ id: documents.id });
+    if (marked.length > 0) {
+      this.logger.log({ marked: marked.length }, 'documents marked as disposition candidates');
+    }
+    return marked.length;
   }
 
   /** Delete meeting recordings past their retention window (docs/modules/14 §4): soft-delete the row

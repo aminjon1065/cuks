@@ -57,3 +57,32 @@ export function businessDateParts(instant: Date): BusinessDateParts {
 export function businessYear(instant: Date): number {
   return businessDateParts(instant).year;
 }
+
+/**
+ * Add whole months to an instant, clamping the day when the target month is shorter
+ * (docs/modules/11 §12.12 — a retention term is stated in months).
+ *
+ * `31 января + 1 месяц` is the last day of February, not the third of March: a naive
+ * `setMonth` rolls over into the next month, which would quietly hand a record an extra few
+ * days of retention every time the arithmetic crossed a short month. The calculation is done
+ * in UTC, where the deadline is stored; the Dushanbe calendar matters for what a *date* is
+ * called, not for how many months lie between two instants.
+ */
+export function addMonthsUtc(instant: Date, months: number): Date {
+  const year = instant.getUTCFullYear();
+  const month = instant.getUTCMonth() + months;
+  const day = instant.getUTCDate();
+  // Day 0 of the following month is the last day of the target month.
+  const lastDayOfTarget = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      Math.min(day, lastDayOfTarget),
+      instant.getUTCHours(),
+      instant.getUTCMinutes(),
+      instant.getUTCSeconds(),
+      instant.getUTCMilliseconds(),
+    ),
+  );
+}

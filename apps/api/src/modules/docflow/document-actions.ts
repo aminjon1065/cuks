@@ -4,6 +4,7 @@ import {
   DOCUMENT_EDITING_ROLES,
   type DocumentAction,
   type DocClass,
+  type DispositionStatus,
   type DocumentCollaboratorRole,
   type DocumentStatus,
 } from '@cuks/shared';
@@ -46,7 +47,12 @@ export interface ActionableDocument {
   confidentiality: 'normal' | 'dsp';
   accessList: string[];
   regNumber: string | null;
+  archivedAt: Date | null;
+  dispositionStatus: DispositionStatus;
 }
+
+/** Statuses a document may be filed away from — the same list `assertArchivable` enforces. */
+const ARCHIVABLE_STATUSES: readonly DocumentStatus[] = ['registered', 'in_progress', 'completed'];
 
 /**
  * Statuses whose requisites are still the author's to shape. Once a number is minted the
@@ -143,6 +149,18 @@ export function documentAvailableActions(
     (isOwner || hasRegistryAccess(actor))
   ) {
     actions.push('distribute');
+  }
+  // Filing away and taking back out are registry acts on a finished document. A legal hold
+  // is offered to whoever holds the hold right — a separate one, because a hold is a legal
+  // instruction rather than records housekeeping (docs/modules/11 §12.12).
+  if (hasRegistryAccess(actor) && !doc.archivedAt && ARCHIVABLE_STATUSES.includes(doc.status)) {
+    actions.push('archive');
+  }
+  if (hasRegistryAccess(actor) && !!doc.archivedAt && doc.dispositionStatus !== 'executed') {
+    actions.push('restore');
+  }
+  if (actor.isSuperadmin || actor.permissions.includes('docflow.archive.hold')) {
+    actions.push('legalHold');
   }
   return actions;
 }

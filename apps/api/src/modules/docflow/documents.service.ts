@@ -803,6 +803,20 @@ export class DocumentsService {
       subject: row.subject,
       status: row.status,
       confidentiality: row.confidentiality,
+      archive: {
+        archivedAt: row.archivedAt?.toISOString() ?? null,
+        // The name is looked up only when it is worth a query.
+        archivedByName: row.archivedBy
+          ? ((await this.userShortNames([row.archivedBy])).get(row.archivedBy) ?? null)
+          : null,
+        retentionUntil: row.retentionUntil?.toISOString() ?? null,
+        retentionMonths: row.retentionMonths,
+        isPermanent: row.isPermanent,
+        legalHold: row.legalHold,
+        legalHoldReason: row.legalHoldReason,
+        dispositionStatus: row.dispositionStatus,
+        disposedAt: row.disposedAt?.toISOString() ?? null,
+      },
       journalName: journalRow[0]?.name ?? null,
       authorName: authorRow[0]?.shortName ?? null,
       correspondentName: correspondentRow[0]?.name ?? null,

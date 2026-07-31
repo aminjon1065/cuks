@@ -26,6 +26,9 @@ import {
   type DocumentFileKind,
   type DispatchChannel,
   type DispatchStatus,
+  type DispositionBatchStatus,
+  type DispositionItemDecision,
+  type DispositionStatus,
   type DocumentStatus,
   type JournalSeqReset,
   RESOLUTION_ACTION_KINDS,
@@ -141,6 +144,11 @@ export const createNomenclatureSchema = z.object({
   title: z.string().min(1).max(300),
   orgUnitId: z.string().uuid().nullish(),
   retentionNote: z.string().max(200).nullish(),
+  /** The term in months, snapshotted onto every document filed here (plan §6.9). */
+  retentionMonths: z.number().int().min(1).max(1200).nullish(),
+  isPermanent: z.boolean().default(false),
+  archiveOrgUnitId: z.string().uuid().nullish(),
+  dispositionRequiresApproval: z.boolean().default(true),
   sort: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
@@ -151,6 +159,10 @@ export const updateNomenclatureSchema = z.object({
   title: z.string().min(1).max(300).optional(),
   orgUnitId: z.string().uuid().nullish(),
   retentionNote: z.string().max(200).nullish(),
+  retentionMonths: z.number().int().min(1).max(1200).nullish(),
+  isPermanent: z.boolean().optional(),
+  archiveOrgUnitId: z.string().uuid().nullish(),
+  dispositionRequiresApproval: z.boolean().optional(),
   sort: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
 });
@@ -163,6 +175,10 @@ export interface NomenclatureDto {
   orgUnitId: string | null;
   orgUnitName: string | null;
   retentionNote: string | null;
+  retentionMonths: number | null;
+  isPermanent: boolean;
+  archiveOrgUnitId: string | null;
+  dispositionRequiresApproval: boolean;
   sort: number;
   isActive: boolean;
 }
@@ -485,7 +501,22 @@ export interface DocumentQueueCountsDto {
   my_tasks: number;
 }
 
+/** Where the document stands in the archive — null until it is filed (docs/modules/11 §12.12). */
+export interface DocumentArchiveDto {
+  archivedAt: string | null;
+  archivedByName: string | null;
+  retentionUntil: string | null;
+  retentionMonths: number | null;
+  isPermanent: boolean;
+  legalHold: boolean;
+  legalHoldReason: string | null;
+  dispositionStatus: DispositionStatus;
+  disposedAt: string | null;
+}
+
 export interface DocumentDetailDto extends DocumentListItemDto {
+  /** Archive facts, so the card can show a hold badge and a retention date. */
+  archive: DocumentArchiveDto;
   summary: string | null;
   orgUnitId: string | null;
   orgUnitName: string | null;
@@ -1316,4 +1347,107 @@ export interface AcknowledgementReportDto {
   };
   /** Rows the caller may not see were dropped, not redacted; this says how many. */
   hiddenCount: number;
+}
+
+// --- Archive, retention and disposition (docs/modules/11 §12.12, plan §6.9/§7.8) ---
+
+/** Filing a document into its case. The case index is what the retention term is read from. */
+export const archiveDocumentSchema = z.object({
+  caseIndex: z.string().max(32).nullish(),
+  note: z.string().max(1000).nullish(),
+});
+export type ArchiveDocumentInput = z.infer<typeof archiveDocumentSchema>;
+
+/** Taking it back out — always with a reason, because the archive is a record of decisions. */
+export const restoreDocumentSchema = z.object({
+  reason: z.string().min(1).max(1000),
+});
+export type RestoreDocumentInput = z.infer<typeof restoreDocumentSchema>;
+
+/** A hold nobody can explain is a hold nobody can lift, so the reason is mandatory both ways. */
+export const legalHoldSchema = z.object({
+  reason: z.string().min(1).max(1000),
+});
+export type LegalHoldInput = z.infer<typeof legalHoldSchema>;
+
+/** The archive view of a document: where it is filed, until when, and what holds it. */
+export interface ArchiveEntryDto {
+  documentId: string;
+  regNumber: string | null;
+  subject: string;
+  docClass: DocClass;
+  caseIndex: string | null;
+  caseTitle: string | null;
+  archivedAt: string | null;
+  archivedByName: string | null;
+  retentionUntil: string | null;
+  retentionMonths: number | null;
+  isPermanent: boolean;
+  legalHold: boolean;
+  legalHoldReason: string | null;
+  dispositionStatus: DispositionStatus;
+  confidentiality: DocumentConfidentiality;
+}
+
+export const archiveQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  caseIndex: z.string().max(32).optional(),
+  search: z.string().max(200).optional(),
+  /** Only the documents whose term has run out and which nothing has decided about. */
+  candidatesOnly: z.preprocess(
+    (v) => (v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional(),
+  ),
+  legalHoldOnly: z.preprocess(
+    (v) => (v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional(),
+  ),
+});
+export type ArchiveQuery = z.infer<typeof archiveQuerySchema>;
+
+export const createDispositionBatchSchema = z.object({
+  number: z.string().min(1).max(64),
+  reason: z.string().min(1).max(2000),
+  /** The documents the act proposes to dispose of; more may be added while it is a draft. */
+  documentIds: z.array(z.string().uuid()).max(500).default([]),
+});
+export type CreateDispositionBatchInput = z.infer<typeof createDispositionBatchSchema>;
+
+export const dispositionDecisionSchema = z.object({
+  comment: z.string().max(2000).nullish(),
+});
+export type DispositionDecisionInput = z.infer<typeof dispositionDecisionSchema>;
+
+export const dispositionItemsSchema = z.object({
+  documentIds: z.array(z.string().uuid()).min(1).max(500),
+});
+export type DispositionItemsInput = z.infer<typeof dispositionItemsSchema>;
+
+export interface DispositionItemDto {
+  documentId: string;
+  regNumber: string | null;
+  subject: string;
+  caseIndex: string | null;
+  retentionUntil: string | null;
+  legalHold: boolean;
+  decision: DispositionItemDecision;
+  comment: string | null;
+}
+
+export interface DispositionBatchDto {
+  id: string;
+  number: string;
+  status: DispositionBatchStatus;
+  reason: string;
+  decisionComment: string | null;
+  createdByName: string | null;
+  approvedByName: string | null;
+  submittedAt: string | null;
+  decidedAt: string | null;
+  executedAt: string | null;
+  createdAt: string;
+  items: DispositionItemDto[];
+  /** Whether THIS caller may still decide it — a reviewer who is not its author. */
+  canDecide: boolean;
 }

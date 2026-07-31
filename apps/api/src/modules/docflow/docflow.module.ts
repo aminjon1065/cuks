@@ -22,6 +22,8 @@ import { AcquaintanceGateService } from './acquaintance-gate.service';
 import { ResolutionProposalsController } from './resolution-proposals.controller';
 import { ResolutionProposalsService } from './resolution-proposals.service';
 import { ResolutionTypesService } from './resolution-types.service';
+import { ArchiveController } from './archive.controller';
+import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
 import { DistributionsService } from './distributions.service';
@@ -59,6 +61,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ResolutionProposalsController,
     DispatchesController,
     DistributionsController,
+    ArchiveController,
     SignaturesController,
     AcknowledgementsController,
     DocumentLinksController,
@@ -76,6 +79,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentResponsesService,
     DispatchesService,
     DistributionsService,
+    ArchiveService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

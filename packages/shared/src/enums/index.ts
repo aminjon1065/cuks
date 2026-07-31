@@ -255,6 +255,12 @@ export const DOCUMENT_ACTIONS = [
   'dispatch',
   /** Send a registered internal document round for acknowledgement. */
   'distribute',
+  /** Close the document into its case, freezing a retention deadline. */
+  'archive',
+  /** Take it back out of the archive, with a reason. */
+  'restore',
+  /** Set or lift a legal hold — a document under hold is never disposed of. */
+  'legalHold',
 ] as const;
 export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
 
@@ -326,6 +332,39 @@ export type AcquaintanceStatus = (typeof ACQUAINTANCE_STATUSES)[number];
 
 /** Default pre-execution gate (docs/modules/11 §12.3): four hours, per the external TZ. */
 export const ACQUAINTANCE_GATE_HOURS = 4;
+
+// --- Archive, retention and disposition (docs/modules/11 §12.12, plan §6.9) ---
+
+/**
+ * Where a document stands on the road out of the archive (plan §6.9).
+ *
+ * `candidate` is the ONLY state a machine may set: the sweep marks documents whose retention
+ * has run out and stops. Everything after it is a human decision, and `executed` is a
+ * recorded act of disposal — never a side effect of a job.
+ */
+export const DISPOSITION_STATUSES = [
+  'none',
+  'candidate',
+  'pending',
+  'approved',
+  'rejected',
+  'executed',
+] as const;
+export type DispositionStatus = (typeof DISPOSITION_STATUSES)[number];
+
+/** A disposition act moves draft → pending → approved|rejected, and only then executed. */
+export const DISPOSITION_BATCH_STATUSES = [
+  'draft',
+  'pending',
+  'approved',
+  'rejected',
+  'executed',
+] as const;
+export type DispositionBatchStatus = (typeof DISPOSITION_BATCH_STATUSES)[number];
+
+/** What a reviewer decided about one document inside the act. */
+export const DISPOSITION_ITEM_DECISIONS = ['pending', 'dispose', 'keep'] as const;
+export type DispositionItemDecision = (typeof DISPOSITION_ITEM_DECISIONS)[number];
 
 /** Confidentiality grade (docs/modules/11 §3). `dsp` = restricted (allow-list only). */
 export const DOCUMENT_CONFIDENTIALITY = ['normal', 'dsp'] as const;

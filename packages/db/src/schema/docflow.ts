@@ -18,6 +18,9 @@ import {
   CERTIFICATE_KINDS,
   DISPATCH_CHANNELS,
   DISPATCH_STATUSES,
+  DISPOSITION_BATCH_STATUSES,
+  DISPOSITION_ITEM_DECISIONS,
+  DISPOSITION_STATUSES,
   DOC_CLASSES,
   DOCUMENT_COLLABORATOR_ROLES,
   DOCUMENT_CONFIDENTIALITY,
@@ -146,6 +149,19 @@ export const nomenclature = appSchema.table(
     title: text('title').notNull(),
     orgUnitId: uuid('org_unit_id').references(() => orgUnits.id, { onDelete: 'restrict' }),
     retentionNote: text('retention_note'),
+    /** How long a document filed in this case is kept, in months (plan §6.9). Null means the
+     *  case states no term: such a document is archived without a deadline and never swept up
+     *  as a candidate, because guessing a term is worse than having none. */
+    retentionMonths: integer('retention_months'),
+    /** Permanent storage: never a disposition candidate, whatever the calendar says. */
+    isPermanent: boolean('is_permanent').notNull().default(false),
+    /** Which archive keeps the case, when it is not the owning subdivision. */
+    archiveOrgUnitId: uuid('archive_org_unit_id').references(() => orgUnits.id, {
+      onDelete: 'set null',
+    }),
+    /** Whether disposal from this case needs a countersigned act. Default true: the
+     *  irreversible direction is the one that must be opted out of, deliberately. */
+    dispositionRequiresApproval: boolean('disposition_requires_approval').notNull().default(true),
     sort: integer('sort').notNull().default(0),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: createdAt(),
@@ -226,6 +242,33 @@ export const documents = appSchema.table(
      *  the original document instead of minting a second number; null for documents
      *  created any other way. */
     registrationKey: uuid('registration_key'),
+    /**
+     * Archive (docs/modules/11 §12.12, plan §6.9). `retention_until` is a SNAPSHOT of what
+     * the case rule said on the day the document was filed, together with the numbers it was
+     * derived from: editing the nomenclature afterwards must not silently move a deadline
+     * somebody already answered for.
+     */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archivedBy: uuid('archived_by').references(() => users.id, { onDelete: 'set null' }),
+    retentionUntil: timestamp('retention_until', { withTimezone: true }),
+    retentionMonths: integer('retention_months'),
+    /** Permanent storage — never a disposition candidate, whatever the calendar says. */
+    isPermanent: boolean('is_permanent').notNull().default(false),
+    /**
+     * A legal hold outranks every retention rule: while it is set the document is not a
+     * candidate, cannot enter an act of disposal and cannot be disposed of. The reason is
+     * mandatory in the command — a hold nobody can explain is a hold nobody can lift.
+     */
+    legalHold: boolean('legal_hold').notNull().default(false),
+    legalHoldReason: text('legal_hold_reason'),
+    legalHoldAt: timestamp('legal_hold_at', { withTimezone: true }),
+    legalHoldBy: uuid('legal_hold_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Where the document stands on the way out. Only `candidate` is ever machine-set. */
+    dispositionStatus: text('disposition_status', { enum: DISPOSITION_STATUSES })
+      .notNull()
+      .default('none'),
+    disposedAt: timestamp('disposed_at', { withTimezone: true }),
+    disposedBy: uuid('disposed_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -250,6 +293,15 @@ export const documents = appSchema.table(
     index('documents_org_unit_idx').on(t.orgUnitId),
     index('documents_journal_idx').on(t.journalId),
     index('documents_search_idx').using('gin', t.searchTsv),
+    // The archive list, newest first.
+    index('documents_archived_idx')
+      .on(t.status, t.archivedAt.desc())
+      .where(sql`${t.archivedAt} is not null`),
+    // The candidate sweep: archived documents whose retention has run out and which nothing
+    // has decided about yet. Partial, because it covers the largest slice of the table.
+    index('documents_retention_idx')
+      .on(t.retentionUntil, t.dispositionStatus)
+      .where(sql`${t.archivedAt} is not null and ${t.isPermanent} = false`),
   ],
 );
 
@@ -881,5 +933,62 @@ export const documentDispatches = appSchema.table(
   (t) => [
     index('document_dispatches_document_idx').on(t.documentId, t.createdAt.desc()),
     index('document_dispatches_status_idx').on(t.status, t.attemptedAt),
+  ],
+);
+
+/**
+ * app.archive_disposition_batches — a formal act of disposal (plan §6.9).
+ *
+ * Marking a document a candidate is arithmetic; disposing of it is a decision, and the two
+ * are deliberately different objects. An act is drafted, submitted, then approved or
+ * rejected by somebody other than its author, and only an approved act may be executed.
+ * `executed` here means LOGICAL disposal: the record is closed and stays readable. Physical
+ * purging of objects is not wired at all until a retention policy is approved (docs/09 §6).
+ */
+export const archiveDispositionBatches = appSchema.table(
+  'archive_disposition_batches',
+  {
+    id: primaryId(),
+    /** Human-facing act number, unique among live acts. */
+    number: text('number').notNull(),
+    status: text('status', { enum: DISPOSITION_BATCH_STATUSES }).notNull().default('draft'),
+    reason: text('reason').notNull(),
+    decisionComment: text('decision_comment'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    executedAt: timestamp('executed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    uniqueIndex('archive_disposition_batches_number_uq')
+      .on(t.number)
+      .where(sql`${t.deletedAt} is null`),
+    index('archive_disposition_batches_status_idx').on(t.status, t.createdAt.desc()),
+  ],
+);
+
+/** app.archive_disposition_items — one document inside an act, with the reviewer's verdict. */
+export const archiveDispositionItems = appSchema.table(
+  'archive_disposition_items',
+  {
+    id: primaryId(),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => archiveDispositionBatches.id, { onDelete: 'cascade' }),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'restrict' }),
+    decision: text('decision', { enum: DISPOSITION_ITEM_DECISIONS }).notNull().default('pending'),
+    comment: text('comment'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    // One line per document per act — adding it twice is a mis-click, not two decisions.
+    uniqueIndex('archive_disposition_items_pair_uq').on(t.batchId, t.documentId),
+    index('archive_disposition_items_document_idx').on(t.documentId),
   ],
 );

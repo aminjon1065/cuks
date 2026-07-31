@@ -379,6 +379,13 @@
       "when": 1785540007000,
       "tag": "0053_medical_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1785540008000,
+      "tag": "0054_whole_blackheart",
+      "breakpoints": true
     }
   ]
 }

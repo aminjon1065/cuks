@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addMonthsUtc,
   DUSHANBE_UTC_OFFSET_MS,
   businessDateParts,
   businessYear,
@@ -105,5 +106,39 @@ describe('dushanbeDayNumber fast path', () => {
       const fromParts = Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
       expect(dushanbeDayNumber(instant.getTime())).toBe(fromParts);
     }
+  });
+});
+
+describe('addMonthsUtc', () => {
+  it('adds whole months', () => {
+    expect(addMonthsUtc(new Date('2026-01-15T10:00:00Z'), 60).toISOString()).toBe(
+      '2031-01-15T10:00:00.000Z',
+    );
+    expect(addMonthsUtc(new Date('2026-11-30T00:00:00Z'), 2).toISOString()).toBe(
+      '2027-01-30T00:00:00.000Z',
+    );
+  });
+
+  it('clamps to the last day when the target month is shorter', () => {
+    // A naive setMonth rolls 31 января + 1 месяц into 3 марта, quietly handing a retention
+    // term extra days every time the arithmetic crosses a short month.
+    expect(addMonthsUtc(new Date('2026-01-31T00:00:00Z'), 1).toISOString()).toBe(
+      '2026-02-28T00:00:00.000Z',
+    );
+    expect(addMonthsUtc(new Date('2026-08-31T00:00:00Z'), 1).toISOString()).toBe(
+      '2026-09-30T00:00:00.000Z',
+    );
+  });
+
+  it('handles a leap February', () => {
+    expect(addMonthsUtc(new Date('2028-01-31T00:00:00Z'), 1).toISOString()).toBe(
+      '2028-02-29T00:00:00.000Z',
+    );
+  });
+
+  it('keeps the time of day, in UTC', () => {
+    expect(addMonthsUtc(new Date('2026-03-10T23:45:12.500Z'), 12).toISOString()).toBe(
+      '2027-03-10T23:45:12.500Z',
+    );
   });
 });

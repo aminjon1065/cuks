@@ -30,6 +30,10 @@ export class NomenclatureService {
         orgUnitId: nomenclature.orgUnitId,
         orgUnitName: orgUnits.name,
         retentionNote: nomenclature.retentionNote,
+        retentionMonths: nomenclature.retentionMonths,
+        isPermanent: nomenclature.isPermanent,
+        archiveOrgUnitId: nomenclature.archiveOrgUnitId,
+        dispositionRequiresApproval: nomenclature.dispositionRequiresApproval,
         sort: nomenclature.sort,
         isActive: nomenclature.isActive,
       })
@@ -58,6 +62,10 @@ export class NomenclatureService {
         title: input.title,
         orgUnitId: input.orgUnitId ?? null,
         retentionNote: input.retentionNote ?? null,
+        retentionMonths: input.retentionMonths ?? null,
+        isPermanent: input.isPermanent,
+        archiveOrgUnitId: input.archiveOrgUnitId ?? null,
+        dispositionRequiresApproval: input.dispositionRequiresApproval,
         sort: input.sort ?? 0,
         isActive: input.isActive ?? true,
         createdBy: actor.id,
@@ -88,6 +96,18 @@ export class NomenclatureService {
         ...(input.orgUnitId !== undefined ? { orgUnitId: input.orgUnitId ?? null } : {}),
         ...(input.retentionNote !== undefined
           ? { retentionNote: input.retentionNote ?? null }
+          : {}),
+        // The retention rule. Editing it changes what FUTURE filings snapshot; documents
+        // already in the case keep the term they were filed under (docs/modules/11 §12.12).
+        ...(input.retentionMonths !== undefined
+          ? { retentionMonths: input.retentionMonths ?? null }
+          : {}),
+        ...(input.isPermanent !== undefined ? { isPermanent: input.isPermanent } : {}),
+        ...(input.archiveOrgUnitId !== undefined
+          ? { archiveOrgUnitId: input.archiveOrgUnitId ?? null }
+          : {}),
+        ...(input.dispositionRequiresApproval !== undefined
+          ? { dispositionRequiresApproval: input.dispositionRequiresApproval }
           : {}),
         ...(input.sort !== undefined ? { sort: input.sort } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
