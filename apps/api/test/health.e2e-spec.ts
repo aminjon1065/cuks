@@ -28,7 +28,12 @@ describe('Health (e2e)', () => {
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: API_VERSION });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
-  });
+    // Booting the whole AppModule against deliberately unreachable dependencies means
+    // waiting out real connection retries (Redis, S3, the DB pool) — around 8s here, which
+    // sits above Vitest's default hook timeout and tips over whenever the monorepo run
+    // loads the machine. The allowance is explicit rather than marginal; the assertions
+    // below are unchanged.
+  }, 60_000);
 
   afterAll(async () => {
     await app?.close();
