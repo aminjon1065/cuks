@@ -86,12 +86,15 @@ test('editing: a preparer edits the draft but gets nothing else', async () => {
   expect(edited.ok(), `preparer edit ${edited.status()}`).toBeTruthy();
   expect((await json<DocumentDto>(edited)).version, 'an accepted edit bumps the version').toBe(2);
 
-  // Access management and collaborator management stay with the author.
+  // Access management and collaborator management stay with the author. The grif path
+  // answers 404 rather than 403 by design (docs/09 §3 — the ДСП surface never confirms a
+  // document's existence to someone who may not manage it); collaborator management, which
+  // carries no ДСП signal and is reached only after the card is already visible, says 403.
   const grif = await preparer.patch(`/api/v1/docflow/documents/${doc.id}/access`, {
     headers: preparerHeaders,
     data: { confidentiality: 'dsp', accessList: [] },
   });
-  expect(grif.status(), 'a preparer must not widen or set the grif').toBe(403);
+  expect(grif.status(), 'a preparer must not widen or set the grif').toBe(404);
   const invite = await preparer.post(`/api/v1/docflow/documents/${doc.id}/collaborators`, {
     headers: preparerHeaders,
     data: { userId: ids[E2E_USER.username], role: 'editor' },

@@ -38,8 +38,26 @@ async function jsonHeaders(ctx: APIRequestContext): Promise<Record<string, strin
   return { ...(await csrfHeaders(ctx)), 'content-type': 'application/json' };
 }
 async function adminId(ctx: APIRequestContext): Promise<string> {
-  const me = await json<{ id: string }>(await ctx.get('/api/v1/auth/me'));
+  // Auth is version-neutral (`/api/auth/*`), unlike the versioned business endpoints.
+  const res = await ctx.get('/api/auth/me');
+  expect(res.ok(), `auth/me ${res.status()}`).toBeTruthy();
+  const me = await json<{ id: string }>(res);
+  expect(me.id, 'the caller resolves to a user id').toBeTruthy();
   return me.id;
+}
+
+/** Start a route and fail loudly here rather than on a missing route later. */
+async function startRoute(
+  ctx: APIRequestContext,
+  headers: Record<string, string>,
+  documentId: string,
+  steps: Record<string, unknown>[],
+): Promise<void> {
+  const res = await ctx.post(`/api/v1/docflow/documents/${documentId}/route`, {
+    headers,
+    data: { steps },
+  });
+  expect(res.ok(), `start route ${res.status()} ${await res.text()}`).toBeTruthy();
 }
 async function createDraft(
   ctx: APIRequestContext,
@@ -91,15 +109,10 @@ test('routes: each kind is closed only by the action that carries its guarantee'
   const me = await adminId(admin);
   const documentId = await createDraft(admin, headers, `Инварианты шагов ${Date.now()}`);
 
-  await admin.post(`/api/v1/docflow/documents/${documentId}/route`, {
-    headers,
-    data: {
-      steps: [
-        { order: 1, kind: 'approve', assigneeType: 'user', assigneeId: me },
-        { order: 2, kind: 'sign', assigneeType: 'user', assigneeId: me },
-      ],
-    },
-  });
+  await startRoute(admin, headers, documentId, [
+    { order: 1, kind: 'approve', assigneeType: 'user', assigneeId: me },
+    { order: 2, kind: 'sign', assigneeType: 'user', assigneeId: me },
+  ]);
   const active = (await routesOf(admin, documentId))[0]!.steps;
   const approveStep = active.find((s) => s.kind === 'approve')!;
   const signStep = active.find((s) => s.kind === 'sign')!;
@@ -138,15 +151,10 @@ test('routes: an execute step is closed by complete, and registering closes a re
   const me = await adminId(admin);
   const documentId = await createDraft(admin, headers, `Исполнение и регистрация ${Date.now()}`);
 
-  await admin.post(`/api/v1/docflow/documents/${documentId}/route`, {
-    headers,
-    data: {
-      steps: [
-        { order: 1, kind: 'execute', assigneeType: 'user', assigneeId: me },
-        { order: 2, kind: 'register', assigneeType: 'user', assigneeId: me },
-      ],
-    },
-  });
+  await startRoute(admin, headers, documentId, [
+    { order: 1, kind: 'execute', assigneeType: 'user', assigneeId: me },
+    { order: 2, kind: 'register', assigneeType: 'user', assigneeId: me },
+  ]);
   const executeStep = (await routesOf(admin, documentId))[0]!.steps.find(
     (s) => s.kind === 'execute',
   )!;
@@ -189,15 +197,10 @@ test('routes: a registered document cannot be closed while a route step is still
 
   // Registering FIRST leaves the document `registered` with the rest of the route still
   // running — the exact shape where the transition graph alone would let it be archived.
-  await admin.post(`/api/v1/docflow/documents/${documentId}/route`, {
-    headers,
-    data: {
-      steps: [
-        { order: 1, kind: 'register', assigneeType: 'user', assigneeId: me },
-        { order: 2, kind: 'approve', assigneeType: 'user', assigneeId: me },
-      ],
-    },
-  });
+  await startRoute(admin, headers, documentId, [
+    { order: 1, kind: 'register', assigneeType: 'user', assigneeId: me },
+    { order: 2, kind: 'approve', assigneeType: 'user', assigneeId: me },
+  ]);
   const journals = await json<{ id: string; code: string }[]>(
     await admin.get('/api/v1/docflow/journals'),
   );

@@ -11,6 +11,11 @@ import { E2E_USER, E2E_USER2, STORAGE_STATE } from './support/fixtures';
  * caller cannot see (or a ДСП one they are not listed on) yields the same 404 as a
  * missing file; a file id from another document is not readable by pairing it with a
  * document the caller CAN see; and nothing is served before the antivirus has cleared it.
+ *
+ * REQUIRES THE WORKER. The antivirus verdict is produced by the `av-scan` BullMQ job, and
+ * Playwright's `webServer` starts only the api and the web app. Run `pnpm --filter
+ * @cuks/worker dev` alongside, or these specs will (correctly) fail waiting for a verdict
+ * that nobody is computing.
  */
 const API = 'http://localhost:3000';
 
@@ -99,7 +104,10 @@ async function waitForClean(
     if (doc.files.find((f) => f.fileId === fileId)?.avStatus === 'clean') return;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error(`file ${fileId} never reached avStatus=clean`);
+  throw new Error(
+    `file ${fileId} never reached avStatus=clean — is the worker running? ` +
+      'The av-scan job produces the verdict; Playwright starts only api + web.',
+  );
 }
 
 test('docflow files: attaching adopts the node out of the personal space', async () => {

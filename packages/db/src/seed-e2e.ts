@@ -10,6 +10,7 @@ import { createDb, type Database } from './client';
 import {
   adminUnits,
   incidents,
+  journals,
   meetRooms,
   notificationOutbox,
   notifications,
@@ -285,11 +286,29 @@ async function provisionRecording(
   });
 }
 
+/**
+ * Retire the throwaway registration journals the concurrency spec creates
+ * (`docflow-acceptance.spec.ts`, code `conc-<timestamp>`). They are never cleaned up, and
+ * their default `sort = 0` puts them ahead of the seeded books in every journal picker —
+ * so after a few runs the UI spec registers into a `{seq4}` journal and gets a number with
+ * no prefix. Soft-deleted rather than deleted: documents already registered in them keep
+ * their FK (and their numbers) intact.
+ */
+async function retireThrowawayJournals(db: Database): Promise<void> {
+  const retired = await db
+    .update(journals)
+    .set({ deletedAt: new Date() })
+    .where(sql`${journals.code} like 'conc-%' and ${journals.deletedAt} is null`)
+    .returning({ id: journals.id });
+  if (retired.length) console.log(`retired ${retired.length} throwaway concurrency journal(s)`);
+}
+
 async function provision(db: Database): Promise<void> {
   // The API can be running while this deterministic seed is applied. Remove
   // stale incident handoff markers before clearing the e2e users' feeds so a
   // prior failed run cannot be delivered later into the next test's assertions.
   await db.delete(notificationOutbox).where(eq(notificationOutbox.topic, 'incidents.notification'));
+  await retireThrowawayJournals(db);
 
   const adminId = await provisionUser(db, {
     username: E2E_USERNAME,
