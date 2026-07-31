@@ -21,7 +21,10 @@ import {
   type RouteStepDto,
   type RouteStepInput,
   type RouteStepKind,
+  type RouteStepValidationDto,
   type RouteTemplateDto,
+  type RouteValidationDto,
+  type RouteValidationProblem,
   type StartRouteInput,
   type UpdateRouteTemplateInput,
 } from '@cuks/shared';
@@ -31,7 +34,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { NotificationsService } from '../notifications/notifications.service';
 import { canViewDocumentBase } from './document-visibility';
-import { planApproval, type RouteStepState } from './route-engine';
+import { planApproval, stepDueAt, type RouteStepState } from './route-engine';
 import { SubstitutionsService } from './substitutions.service';
 
 /**
@@ -317,7 +320,15 @@ export class RoutesService {
   ): Promise<void> {
     await tx
       .update(routeSteps)
-      .set({ status: 'done', decision, comment, actedBy: actorId, actedFor, actedAt: now })
+      .set({
+        status: 'done',
+        decision,
+        comment,
+        actedBy: actorId,
+        actedFor,
+        actedAt: now,
+        completedAt: now,
+      })
       .where(eq(routeSteps.id, stepId));
     const all = await tx
       .select({ id: routeSteps.id, stepOrder: routeSteps.stepOrder, status: routeSteps.status })
@@ -325,10 +336,7 @@ export class RoutesService {
       .where(eq(routeSteps.routeId, route.id));
     const plan = planApproval(all as RouteStepState[], stepId);
     if (plan.activateStepIds.length) {
-      await tx
-        .update(routeSteps)
-        .set({ status: 'active' })
-        .where(inArray(routeSteps.id, plan.activateStepIds));
+      await this.activateSteps(tx, plan.activateStepIds, now);
       await this.handOverToRegistry(tx, route.documentId, plan.activateStepIds);
     }
     if (plan.routeComplete) {
@@ -344,6 +352,28 @@ export class RoutesService {
         .update(documents)
         .set({ status: 'pending_registration' })
         .where(and(eq(documents.id, route.documentId), isNull(documents.regNumber)));
+    }
+  }
+
+  /**
+   * Move steps to `active` and start their SLA clock (docs/modules/11 §12.9). `due_at` is
+   * materialised here rather than computed on read, so the overdue sweep can use an index
+   * and a step's deadline cannot drift when the template it came from is later edited.
+   *
+   * Each step is stamped individually because `due_hours` differs per step; the write is
+   * still one statement per step inside the caller's transaction.
+   */
+  private async activateSteps(tx: Database, stepIds: string[], now: Date): Promise<void> {
+    if (stepIds.length === 0) return;
+    const rows = await tx
+      .select({ id: routeSteps.id, dueHours: routeSteps.dueHours })
+      .from(routeSteps)
+      .where(inArray(routeSteps.id, stepIds));
+    for (const row of rows) {
+      await tx
+        .update(routeSteps)
+        .set({ status: 'active', activatedAt: now, dueAt: stepDueAt(now, row.dueHours) })
+        .where(eq(routeSteps.id, row.id));
     }
   }
 
@@ -569,6 +599,78 @@ export class RoutesService {
 
   // --- Route lifecycle -------------------------------------------------------
 
+  /**
+   * Dry-run a route definition (docs/modules/11 §12.9). Resolves every step's assignee to
+   * the people who would actually be able to act and reports what is wrong, WITHOUT
+   * writing anything — so the builder can show the problem before the author commits,
+   * instead of the start failing with one error and no map of the rest.
+   *
+   * Read-only, but wrapped in a transaction so every step is resolved against one
+   * consistent snapshot of the org structure.
+   */
+  // No actor parameter: the dry-run reads only the org structure, so the answer does not
+  // depend on who asks. The controller's `docflow.create` gate is the access check.
+  async validateRoute(input: StartRouteInput): Promise<RouteValidationDto> {
+    const stepDefs = await this.resolveStepDefs(input);
+    return this.db.transaction(async (tx) => {
+      const steps: RouteStepValidationDto[] = [];
+      for (const def of stepDefs) {
+        const actorIds = await this.resolveAssigneeUsers(tx, def.assigneeType, def.assigneeId);
+        const names = await this.userNames(actorIds);
+        const problems: RouteValidationProblem[] = [];
+        if (actorIds.length === 0) problems.push('no_assignee');
+        const assigneeName = await this.assigneeLabel(tx, def.assigneeType, def.assigneeId);
+        if (!assigneeName) problems.push('assignee_not_found');
+        steps.push({
+          order: def.order,
+          kind: def.kind,
+          assigneeType: def.assigneeType,
+          assigneeId: def.assigneeId,
+          assigneeName,
+          actorNames: actorIds.map((id) => names.get(id) ?? id),
+          problems,
+        });
+      }
+      const groups = [...new Set(steps.map((s) => s.order))]
+        .sort((a, b) => a - b)
+        .map((order) => ({
+          order,
+          stepCount: steps.filter((s) => s.order === order).length,
+        }));
+      return { valid: steps.every((s) => s.problems.length === 0), steps, groups };
+    });
+  }
+
+  /** Display label for a step's assignee, or null when the id resolves to nothing. */
+  private async assigneeLabel(
+    tx: Database,
+    assigneeType: string,
+    assigneeId: string,
+  ): Promise<string | null> {
+    if (assigneeType === 'user') {
+      const [row] = await tx
+        .select({ name: users.shortName })
+        .from(users)
+        .where(eq(users.id, assigneeId))
+        .limit(1);
+      return row?.name ?? null;
+    }
+    if (assigneeType === 'position') {
+      const [row] = await tx
+        .select({ name: positions.name })
+        .from(positions)
+        .where(and(eq(positions.id, assigneeId), isNull(positions.deletedAt)))
+        .limit(1);
+      return row?.name ?? null;
+    }
+    const [row] = await tx
+      .select({ name: orgUnits.name })
+      .from(orgUnits)
+      .where(eq(orgUnits.id, assigneeId))
+      .limit(1);
+    return row?.name ?? null;
+  }
+
   async startRoute(
     documentId: string,
     input: StartRouteInput,
@@ -613,32 +715,33 @@ export class RoutesService {
         .returning({ id: routes.id });
       if (!route) throw new Error('Route insert did not return an id');
 
+      const now = new Date();
       const minOrder = Math.min(...stepDefs.map((s) => s.order));
       const perOrder = new Map<number, number>();
       for (const s of stepDefs) perOrder.set(s.order, (perOrder.get(s.order) ?? 0) + 1);
-      await tx.insert(routeSteps).values(
-        stepDefs.map((s) => ({
-          routeId: route.id,
-          stepOrder: s.order,
-          kind: s.kind,
-          mode: (perOrder.get(s.order) ?? 1) > 1 ? ('parallel' as const) : ('sequential' as const),
-          assigneeType: s.assigneeType,
-          assigneeId: s.assigneeId,
-          dueHours: s.dueHours ?? null,
-          status: s.order === minOrder ? ('active' as const) : ('pending' as const),
-        })),
-      );
+      const inserted = await tx
+        .insert(routeSteps)
+        .values(
+          stepDefs.map((s) => ({
+            routeId: route.id,
+            stepOrder: s.order,
+            kind: s.kind,
+            mode:
+              (perOrder.get(s.order) ?? 1) > 1 ? ('parallel' as const) : ('sequential' as const),
+            assigneeType: s.assigneeType,
+            assigneeId: s.assigneeId,
+            dueHours: s.dueHours ?? null,
+            // Inserted pending, then activated through the shared path so the first group
+            // gets its SLA clock exactly like every later one.
+            status: 'pending' as const,
+          })),
+        )
+        .returning({ id: routeSteps.id, stepOrder: routeSteps.stepOrder });
+      const firstGroup = inserted.filter((s) => s.stepOrder === minOrder).map((s) => s.id);
+      await this.activateSteps(tx, firstGroup, now);
       await tx.update(documents).set({ status: 'on_route' }).where(eq(documents.id, documentId));
       // A route that opens ON the chancellery hands the document over immediately.
-      const activated = await tx
-        .select({ id: routeSteps.id })
-        .from(routeSteps)
-        .where(and(eq(routeSteps.routeId, route.id), eq(routeSteps.status, 'active')));
-      await this.handOverToRegistry(
-        tx,
-        documentId,
-        activated.map((s) => s.id),
-      );
+      await this.handOverToRegistry(tx, documentId, firstGroup);
     });
     await this.audit.logAndWait({
       action: 'docflow.document.route_started',
@@ -718,6 +821,7 @@ export class RoutesService {
             actedBy: actor.id,
             actedFor: onBehalfOf,
             actedAt: now,
+            completedAt: now,
           })
           .where(eq(routeSteps.id, stepId));
         await tx
@@ -829,6 +933,9 @@ export class RoutesService {
           actedForName: s.actedFor ? (actedForNames.get(s.actedFor) ?? null) : null,
           actedAt: s.actedAt?.toISOString() ?? null,
           dueHours: s.dueHours,
+          activatedAt: s.activatedAt?.toISOString() ?? null,
+          dueAt: s.dueAt?.toISOString() ?? null,
+          completedAt: s.completedAt?.toISOString() ?? null,
           ...this.actAbility(s, ctx, actor.isSuperadmin, principalNames),
         })),
     }));

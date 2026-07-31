@@ -5,12 +5,15 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from '@nestjs/common';
-import { and, asc, eq, isNull, lte } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { notificationOutbox, type Database } from '@cuks/db';
 import {
   DOCFLOW_DEADLINE_TOPIC,
+  ROUTE_DEADLINE_TOPIC,
   docflowDeadlinePayloadSchema,
+  routeDeadlinePayloadSchema,
   type DocflowDeadlinePayload,
+  type RouteDeadlinePayload,
 } from '@cuks/shared';
 import { DB } from '../../common/db/db.module';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -69,7 +72,10 @@ export class DocflowDeadlineOutboxService implements OnModuleInit, OnModuleDestr
           .from(notificationOutbox)
           .where(
             and(
-              eq(notificationOutbox.topic, DOCFLOW_DEADLINE_TOPIC),
+              // Both docflow deadline topics share this poller: the claim, retry and
+              // dedupe mechanics are identical, and a second one would be the same code
+              // with a different constant.
+              inArray(notificationOutbox.topic, [DOCFLOW_DEADLINE_TOPIC, ROUTE_DEADLINE_TOPIC]),
               isNull(notificationOutbox.processedAt),
               lte(notificationOutbox.nextAttemptAt, now),
             ),
@@ -81,7 +87,14 @@ export class DocflowDeadlineOutboxService implements OnModuleInit, OnModuleDestr
         const result = { processed: 0, failed: 0 };
         for (const row of rows) {
           try {
-            await this.deliver(docflowDeadlinePayloadSchema.parse(row.payload), row.dedupeKey);
+            if (row.topic === ROUTE_DEADLINE_TOPIC) {
+              await this.deliverRouteStep(
+                routeDeadlinePayloadSchema.parse(row.payload),
+                row.dedupeKey,
+              );
+            } else {
+              await this.deliver(docflowDeadlinePayloadSchema.parse(row.payload), row.dedupeKey);
+            }
             await tx
               .update(notificationOutbox)
               .set({ processedAt: now, lastError: null, updatedAt: now })
@@ -113,6 +126,24 @@ export class DocflowDeadlineOutboxService implements OnModuleInit, OnModuleDestr
     } finally {
       this.dispatching = false;
     }
+  }
+
+  /** A route step's SLA reminder (docs/modules/11 §12.9). Same ДСП redaction as above: the
+   *  notification names the document by its number, never by its subject. */
+  private async deliverRouteStep(payload: RouteDeadlinePayload, dedupeKey: string): Promise<void> {
+    const overdue = payload.tier === 'overdue';
+    const body = payload.confidential ? (payload.regNumber ?? 'Документ ДСП') : payload.subject;
+    await this.notifications.notifyMany({
+      userIds: payload.recipientUserIds,
+      type: `docflow.route.${payload.tier}`,
+      title: overdue ? 'Шаг маршрута просрочен' : 'Приближается срок шага маршрута',
+      body,
+      entityType: 'document',
+      entityId: payload.documentId,
+      priority: overdue ? 'critical' : 'normal',
+      emailMode: 'offline',
+      dedupeKey,
+    });
   }
 
   private async deliver(payload: DocflowDeadlinePayload, dedupeKey: string): Promise<void> {

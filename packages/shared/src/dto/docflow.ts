@@ -197,6 +197,36 @@ export const startRouteSchema = z
   });
 export type StartRouteInput = z.infer<typeof startRouteSchema>;
 
+/** One step's verdict from the dry-run: who it would actually reach, and what is wrong. */
+export interface RouteStepValidationDto {
+  order: number;
+  kind: RouteStepKind;
+  assigneeType: RouteAssigneeType;
+  assigneeId: string;
+  /** Display name of the assignee (user / position / subdivision), if it resolves. */
+  assigneeName: string | null;
+  /** People who would actually be able to act — a position or subdivision may expand to
+   *  several, or to nobody. */
+  actorNames: string[];
+  /** Stable problem codes; an empty list means the step is startable. */
+  problems: RouteValidationProblem[];
+}
+
+export const ROUTE_VALIDATION_PROBLEMS = [
+  'no_assignee',
+  'assignee_not_found',
+  'action_kind_unsupported',
+] as const;
+export type RouteValidationProblem = (typeof ROUTE_VALIDATION_PROBLEMS)[number];
+
+/** The dry-run result: what the route would do, without writing anything. */
+export interface RouteValidationDto {
+  valid: boolean;
+  steps: RouteStepValidationDto[];
+  /** Parallel groups, in execution order — what the builder renders as barriers. */
+  groups: { order: number; stepCount: number }[];
+}
+
 export const approveRouteStepSchema = z.object({ comment: z.string().max(2000).nullish() });
 export type ApproveRouteStepInput = z.infer<typeof approveRouteStepSchema>;
 
@@ -230,6 +260,11 @@ export interface RouteStepDto {
   actedForName: string | null;
   actedAt: string | null;
   dueHours: number | null;
+  /** SLA timestamps (docs/modules/11 §12.9): the clock starts when the step activates, so
+   *  a long first step never eats a later step's budget. Null while the step waits. */
+  activatedAt: string | null;
+  dueAt: string | null;
+  completedAt: string | null;
   /** Whether the current caller may act on this step (assignee match + active). */
   canAct: boolean;
   /** Set when the caller may act only via a substitution: the principal they would act «за». */
@@ -613,6 +648,47 @@ export const docflowDeadlinePayloadSchema = z.object({
   recipientUserIds: z.array(z.string().uuid()).min(1),
 });
 export type DocflowDeadlinePayload = z.infer<typeof docflowDeadlinePayloadSchema>;
+
+// --- Route step SLA (docs/modules/11 §12.9) ---
+
+export const ROUTE_DEADLINE_TOPIC = 'docflow.route_deadline';
+
+/** A step is warned once as it approaches its `due_at`, then reminded while it is past it. */
+export const ROUTE_DEADLINE_TIERS = ['due_soon', 'overdue'] as const;
+export type RouteDeadlineTier = (typeof ROUTE_DEADLINE_TIERS)[number];
+
+/** How long before `due_at` the «due soon» warning fires. */
+export const ROUTE_DUE_SOON_HOURS = 4;
+
+/**
+ * Classify an active step against its deadline (docs/modules/11 §12.9). Pure, so the
+ * worker and its tests agree on the boundary without a clock.
+ *
+ * The window is hours, not Dushanbe days like resolution deadlines: a route step's SLA is
+ * set in hours by its author, and rounding a four-hour approval to a calendar day would
+ * make the warning useless.
+ */
+export function classifyRouteDeadline(dueAt: Date, now: Date): RouteDeadlineTier | null {
+  const msLeft = dueAt.getTime() - now.getTime();
+  if (msLeft < 0) return 'overdue';
+  if (msLeft <= ROUTE_DUE_SOON_HOURS * 60 * 60 * 1000) return 'due_soon';
+  return null;
+}
+
+/** Outbox payload for a route-step reminder. As with resolution deadlines, a ДСП document
+ *  shows only its `regNumber` in the notification (docs/09 §3). */
+export const routeDeadlinePayloadSchema = z.object({
+  stepId: z.string().uuid(),
+  documentId: z.string().uuid(),
+  tier: z.enum(ROUTE_DEADLINE_TIERS),
+  kind: z.enum(ROUTE_STEP_KINDS),
+  subject: z.string(),
+  regNumber: z.string().nullable().optional(),
+  confidential: z.boolean().optional(),
+  dueAt: z.string(),
+  recipientUserIds: z.array(z.string().uuid()).min(1),
+});
+export type RouteDeadlinePayload = z.infer<typeof routeDeadlinePayloadSchema>;
 
 // --- ДСП confidentiality / access list (docs/09-security.md §3, task 3.10) ---
 

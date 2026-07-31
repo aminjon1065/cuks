@@ -428,12 +428,25 @@ export const routeSteps = appSchema.table(
     // a superadmin override is not mislabeled.
     actedFor: uuid('acted_for').references(() => users.id, { onDelete: 'set null' }),
     actedAt: timestamp('acted_at', { withTimezone: true }),
+    /** When the step became `active` — the clock its SLA runs from (docs/modules/11 §12.9).
+     *  Null while the step is still waiting for its group. */
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    /** `activated_at + due_hours`, materialised so the SLA sweep can find overdue steps
+     *  with an index instead of recomputing the sum for every row. */
+    dueAt: timestamp('due_at', { withTimezone: true }),
+    /** When the step reached a terminal status — distinct from `acted_at`, which is when a
+     *  person decided; a skipped step is completed without anyone acting. */
+    completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
     index('route_steps_route_idx').on(t.routeId, t.stepOrder),
     // The "my queue" lookup: active steps by assignee identity.
     index('route_steps_assignee_idx').on(t.status, t.assigneeType, t.assigneeId),
+    // The SLA sweep: overdue/soon-due steps, narrowed to the ones that still have a clock.
+    index('route_steps_due_idx')
+      .on(t.dueAt)
+      .where(sql`${t.status} = 'active' and ${t.dueAt} is not null`),
   ],
 );
 

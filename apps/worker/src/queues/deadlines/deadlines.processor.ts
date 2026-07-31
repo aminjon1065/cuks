@@ -7,19 +7,25 @@ import {
   notificationOutbox,
   positions,
   resolutions,
+  routeSteps,
+  routes,
   taskProjects,
   tasks,
   userPositions,
+  users,
   type Database,
 } from '@cuks/db';
 import {
   DOCFLOW_DEADLINE_TOPIC,
   QUEUE,
+  ROUTE_DEADLINE_TOPIC,
   TASKS_DEADLINE_TOPIC,
   classifyDeadline,
+  classifyRouteDeadline,
   classifyTaskDeadline,
   type DocflowDeadlinePayload,
   type DocflowDeadlineTier,
+  type RouteDeadlinePayload,
   type TaskDeadlineTier,
   type TasksDeadlinePayload,
 } from '@cuks/shared';
@@ -125,10 +131,118 @@ export class DeadlinesProcessor extends WorkerHost {
       }
     }
     const taskEmitted = await this.sweepTasks(now, day);
+    const routeEmitted = await this.sweepRouteSteps(now);
     this.logger.log(
-      { jobId: job.id, scanned: rows.length, emitted, taskEmitted },
+      { jobId: job.id, scanned: rows.length, emitted, taskEmitted, routeEmitted },
       'deadline sweep',
     );
+  }
+
+  /**
+   * Route-step SLA sweep (docs/modules/11 §12.9). Scans ACTIVE steps that have a `due_at`
+   * and warns their actors as the deadline approaches, then daily while it is past.
+   *
+   * Unlike resolutions this is bucketed by the hour, not the Dushanbe day: a step's SLA is
+   * set in hours, and a four-hour approval rounded to a calendar day would warn nobody in
+   * time. The dedupe key therefore carries the hour for `due_soon` (fires once in its
+   * window) and the day for `overdue` (a daily nag, not an hourly one).
+   */
+  private async sweepRouteSteps(now: Date): Promise<number> {
+    const rows = await this.db
+      .select({
+        stepId: routeSteps.id,
+        kind: routeSteps.kind,
+        dueAt: routeSteps.dueAt,
+        assigneeType: routeSteps.assigneeType,
+        assigneeId: routeSteps.assigneeId,
+        documentId: documents.id,
+        subject: documents.subject,
+        regNumber: documents.regNumber,
+        confidentiality: documents.confidentiality,
+      })
+      .from(routeSteps)
+      .innerJoin(routes, eq(routes.id, routeSteps.routeId))
+      .innerJoin(documents, and(eq(documents.id, routes.documentId), isNull(documents.deletedAt)))
+      .where(
+        and(
+          eq(routeSteps.status, 'active'),
+          eq(routes.status, 'active'),
+          isNotNull(routeSteps.dueAt),
+        ),
+      );
+
+    let emitted = 0;
+    for (const r of rows) {
+      try {
+        const tier = classifyRouteDeadline(r.dueAt!, now);
+        if (!tier) continue;
+        const recipients = await this.stepActors(r.assigneeType, r.assigneeId);
+        if (recipients.length === 0) continue;
+        const bucket =
+          tier === 'due_soon'
+            ? now.toISOString().slice(0, 13) // hour — the warning fires once in its window
+            : new Date(now.getTime() + DUSHANBE_OFFSET_MS).toISOString().slice(0, 10);
+        const payload: RouteDeadlinePayload = {
+          stepId: r.stepId,
+          documentId: r.documentId,
+          tier,
+          kind: r.kind,
+          subject: r.subject,
+          regNumber: r.regNumber,
+          confidential: r.confidentiality === 'dsp',
+          dueAt: r.dueAt!.toISOString(),
+          recipientUserIds: recipients,
+        };
+        const inserted = await this.db
+          .insert(notificationOutbox)
+          .values({
+            topic: ROUTE_DEADLINE_TOPIC,
+            payload,
+            dedupeKey: `${ROUTE_DEADLINE_TOPIC}:${r.stepId}:${tier}:${bucket}`,
+          })
+          .onConflictDoNothing({ target: notificationOutbox.dedupeKey })
+          .returning({ id: notificationOutbox.id });
+        emitted += inserted.length;
+      } catch (error) {
+        // One unresolvable step must not abort the sweep — the rest still get warned.
+        this.logger.error({ error, stepId: r.stepId }, 'route deadline item failed');
+      }
+    }
+    return emitted;
+  }
+
+  /** The users behind a step's assignee — mirrors the API's resolver, active users only. */
+  private async stepActors(assigneeType: string, assigneeId: string): Promise<string[]> {
+    if (assigneeType === 'user') {
+      const [row] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, assigneeId), eq(users.status, 'active'), isNull(users.deletedAt)))
+        .limit(1);
+      return row ? [row.id] : [];
+    }
+    const stepPosition = aliasedTable(positions, 'step_position');
+    const rows = await this.db
+      .select({ userId: userPositions.userId })
+      .from(userPositions)
+      .innerJoin(
+        users,
+        and(
+          eq(users.id, userPositions.userId),
+          eq(users.status, 'active'),
+          isNull(users.deletedAt),
+        ),
+      )
+      .innerJoin(
+        stepPosition,
+        and(eq(stepPosition.id, userPositions.positionId), isNull(stepPosition.deletedAt)),
+      )
+      .where(
+        assigneeType === 'position'
+          ? eq(userPositions.positionId, assigneeId)
+          : eq(stepPosition.orgUnitId, assigneeId),
+      );
+    return [...new Set(rows.map((r) => r.userId))];
   }
 
   /**

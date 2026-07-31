@@ -12,6 +12,7 @@ import {
   type RejectRouteStepInput,
   type RouteDto,
   type RouteTemplateDto,
+  type RouteValidationDto,
   type StartRouteInput,
   type UpdateRouteTemplateInput,
 } from '@cuks/shared';
@@ -64,6 +65,19 @@ export class RoutesController {
     @Body(new ZodValidationPipe(approveRouteStepSchema)) body: ApproveRouteStepInput,
   ): Promise<RouteDto[]> {
     return this.routes.act(id, 'approve', body.comment?.trim() || null, user);
+  }
+
+  @Post('documents/:id/route/validate')
+  @RequirePermission('docflow.create')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Dry-run a route definition: who each step would reach and what is wrong',
+  })
+  validateRoute(
+    @Param('id', new ZodValidationPipe(uuidSchema)) _id: string,
+    @Body(new ZodValidationPipe(startRouteSchema)) body: StartRouteInput,
+  ): Promise<RouteValidationDto> {
+    return this.routes.validateRoute(body);
   }
 
   @Post('route-steps/:id/actions/complete')

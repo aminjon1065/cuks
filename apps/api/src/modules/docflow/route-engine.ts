@@ -56,6 +56,20 @@ export function planApproval(steps: RouteStepState[], actedStepId: string): Appr
   };
 }
 
+/**
+ * When a step activated at `activatedAt` falls due (docs/modules/11 §12.9). `dueHours` is
+ * the SLA the route author set; a step without one has no clock and never appears in the
+ * overdue sweep — deliberate, because plenty of steps are «when you get to it».
+ *
+ * Materialised on activation rather than computed on read: the sweep must be able to find
+ * overdue steps with an index, and a step's deadline must not silently move if someone
+ * later edits the template it came from.
+ */
+export function stepDueAt(activatedAt: Date, dueHours: number | null): Date | null {
+  if (dueHours === null || dueHours <= 0) return null;
+  return new Date(activatedAt.getTime() + dueHours * 60 * 60 * 1000);
+}
+
 function lowestOrder(steps: RouteStepState[]): number | null {
   if (steps.length === 0) return null;
   return steps.reduce((min, s) => (s.stepOrder < min ? s.stepOrder : min), steps[0]!.stepOrder);
