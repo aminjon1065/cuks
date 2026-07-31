@@ -20,6 +20,7 @@
     "seed": "tsx src/seed.ts",
     "seed:e2e": "tsx src/seed-e2e.ts",
     "seed:perf": "tsx src/seed-perf.ts",
+    "backfill:docflow-files": "tsx src/scripts/backfill-docflow-files.ts",
     "load:crosswalk": "tsx src/import/load-admin-crosswalk.ts",
     "load:incidents": "tsx src/import/load-incidents.ts",
     "load:casualties": "tsx src/import/load-casualties.ts",
