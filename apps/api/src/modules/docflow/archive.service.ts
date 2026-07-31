@@ -22,6 +22,7 @@ import type {
   PaginatedResult,
   RestoreDocumentInput,
 } from '@cuks/shared';
+import { likeContains } from '@cuks/shared';
 import { buildXlsx, type XlsxRow } from '@cuks/shared/office/xlsx';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
@@ -38,9 +39,10 @@ import {
 import { assertNoOpenObligations, DocumentsService } from './documents.service';
 import {
   canViewDocumentBase,
-  hasConfidentialAccess,
   hasRegistryAccess,
+  visibleDocumentsWhere,
 } from './document-visibility';
+import { RoutesService } from './routes.service';
 import { isUniqueViolation } from '../../common/db/unique-violation';
 
 /**
@@ -70,6 +72,7 @@ export class ArchiveService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly documents: DocumentsService,
+    private readonly routes: RoutesService,
     private readonly audit: AuditService,
   ) {}
 
@@ -248,28 +251,23 @@ export class ArchiveService {
       );
     }
     const archivedBy = aliasedTable(users, 'archive_archived_by');
-    const where = [isNull(documents.deletedAt), sql`${documents.archivedAt} is not null`];
+    // The SAME visibility predicate as the register and the search — the опись used to
+    // restate the ДСП rule in its own words, and a rule written twice is a rule that will
+    // eventually be written differently.
+    const assignments = await this.routes.actingAssignments(actor.id);
+    const where = [
+      isNull(documents.deletedAt),
+      sql`${documents.archivedAt} is not null`,
+      visibleDocumentsWhere(actor, assignments),
+    ];
     if (query.caseIndex) where.push(eq(documents.caseIndex, query.caseIndex));
     if (query.search) {
-      const q = `%${query.search}%`;
+      const q = likeContains(query.search);
       const match = or(ilike(documents.subject, q), ilike(documents.regNumber, q));
       if (match) where.push(match);
     }
     if (query.candidatesOnly) where.push(eq(documents.dispositionStatus, 'candidate'));
     if (query.legalHoldOnly) where.push(eq(documents.legalHold, true));
-    // The same ДСП guard the document list applies, restated here rather than trusted from
-    // elsewhere: an «опись» that leaked a ДСП subject would leak it in an exportable form.
-    if (!actor.isSuperadmin) {
-      const notDsp = ne(documents.confidentiality, 'dsp');
-      const visible = hasConfidentialAccess(actor)
-        ? or(
-            notDsp,
-            eq(documents.authorId, actor.id),
-            sql`${actor.id}::uuid = any(${documents.accessList})`,
-          )
-        : or(notDsp, eq(documents.authorId, actor.id));
-      if (visible) where.push(visible);
-    }
 
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([

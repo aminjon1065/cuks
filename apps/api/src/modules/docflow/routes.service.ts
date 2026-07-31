@@ -34,7 +34,10 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { NotificationsService } from '../notifications/notifications.service';
-import { canViewDocumentBase } from './document-visibility';
+import {
+  canViewDocumentBase,
+  type ActorAssignments as VisibilityAssignments,
+} from './document-visibility';
 import { planApproval, stepDueAt, type RouteStepState } from './route-engine';
 import { RealtimeService } from '../events/realtime.service';
 import { SubstitutionsService } from './substitutions.service';
@@ -53,13 +56,10 @@ export function assertStepActionAllowed(kind: RouteStepKind, action: RouteStepAc
   );
 }
 
-/** The identities a user matches for step assignment: self, held positions, and the
- *  org units they head (docs/modules/11 §3). */
-interface ActorAssignments {
-  userIds: string[];
-  positionIds: string[];
-  orgUnitIds: string[];
-}
+/** The identities a user matches for step assignment: self, held positions, and the org units
+ *  they head (docs/modules/11 §3). Owned by the visibility policy, because the document list
+ *  predicate needs exactly the same set. */
+type ActorAssignments = VisibilityAssignments;
 
 /** Document routes: start, approve/reject, the approval queue and templates
  *  (docs/modules/11 §3/§4, task 3.3). */
@@ -613,8 +613,17 @@ export class RoutesService {
   /** As {@link isRouteParticipant}, but also matching the steps of the principals the caller is an
    *  active deputy for (task 3.11) — so a deputy may view a document they act on «за». */
   async isRouteParticipantActing(documentId: string, userId: string): Promise<boolean> {
-    const ctx = await this.actingContext(userId, new Date());
-    return this.isRouteParticipant(documentId, this.flattenActing(ctx));
+    return this.isRouteParticipant(documentId, await this.actingAssignments(userId));
+  }
+
+  /**
+   * Everything the caller acts as right now, including every principal they are an active
+   * deputy for. The document visibility predicate takes this once per request: the
+   * substitution rules behind it (docs/05 §6) are time-dependent and cannot be expressed per
+   * row, so they are resolved first and the query only matches against the result.
+   */
+  async actingAssignments(userId: string): Promise<ActorAssignments> {
+    return this.flattenActing(await this.actingContext(userId, new Date()));
   }
 
   // --- Route lifecycle -------------------------------------------------------

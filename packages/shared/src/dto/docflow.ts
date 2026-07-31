@@ -373,6 +373,37 @@ export const DOCUMENT_QUEUES = [
 ] as const;
 export type DocumentQueue = (typeof DOCUMENT_QUEUES)[number];
 
+/**
+ * The columns a document list may be ordered by — an ALLOW-LIST, not a hint.
+ *
+ * A sort parameter is a column name travelling from the client into an ORDER BY, which is the
+ * classic place a register grows an injection. Naming the permitted columns here means the
+ * server never has to decide whether a string is safe: anything outside this list is a 400
+ * from the DTO, and the service maps the survivor through a literal table of drizzle columns
+ * (plan §12.1 «search query builder allow-list»).
+ *
+ * `relevance` is only meaningful for a search with a query behind it; the search endpoint
+ * refuses it otherwise rather than silently ordering by nothing.
+ */
+export const DOCUMENT_SORT_FIELDS = [
+  'created_at',
+  'reg_date',
+  'due_date',
+  'subject',
+  'reg_number',
+  'status',
+  'relevance',
+] as const;
+export type DocumentSortField = (typeof DOCUMENT_SORT_FIELDS)[number];
+
+/** `-field` is descending, `field` ascending — the convention in docs/04 §Списки. */
+export const documentSortSchema = z
+  .string()
+  .max(40)
+  .refine((v) => DOCUMENT_SORT_FIELDS.includes(v.replace(/^-/, '') as DocumentSortField), {
+    message: 'Unsupported sort field',
+  });
+
 export const listDocumentsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -383,6 +414,7 @@ export const listDocumentsQuerySchema = z.object({
   search: z.string().max(200).optional(),
   /** Registration year (by reg_date) — the journals register view (docs/modules/11 §7). */
   year: z.coerce.number().int().min(2000).max(2100).optional(),
+  sort: documentSortSchema.optional(),
 });
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 

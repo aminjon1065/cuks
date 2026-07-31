@@ -9,6 +9,7 @@ export * from './permissions/index';
 export * from './notifications/index';
 export * from './ordering/fractional-index';
 export * from './queues/index';
+export * from './text/index';
 export * from './time/index';
 export * from './ws-events/index';
 export * from './utils/index';

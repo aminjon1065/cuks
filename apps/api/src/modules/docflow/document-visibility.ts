@@ -1,4 +1,13 @@
-import type { documents } from '@cuks/db';
+import { and, eq, ne, or, sql, type SQL } from 'drizzle-orm';
+import {
+  acquaintances,
+  documentCollaborators,
+  documents,
+  resolutionProposals,
+  resolutions,
+  routeSteps,
+  routes,
+} from '@cuks/db';
 import type { AuthUser } from '../../common/auth/auth-user';
 
 /** Permissions that let a user see the whole (non-ДСП) registry, not just their own. */
@@ -71,4 +80,131 @@ export function canManageDocumentAccess(
   if (user.isSuperadmin) return true;
   if (doc.authorId === user.id) return true;
   return canViewDocumentBase(doc, user) && user.permissions.includes('docflow.confidential.view');
+}
+
+/**
+ * The assignments a caller acts under — their own user id, the positions they hold and the
+ * org units they head, plus everything they hold as an active deputy (docs/05 §6). Resolved
+ * ONCE per request by `RoutesService`, never per row.
+ */
+export interface ActorAssignments {
+  userIds: string[];
+  positionIds: string[];
+  orgUnitIds: string[];
+}
+
+/**
+ * The ONE SQL expression for «which documents may this caller see» (docs/09-security.md §3,
+ * docs/modules/11 §2, plan §6.11).
+ *
+ * Until now the same question had three different answers: this module's `canViewDocumentBase`
+ * (row-by-row, knows no participation), `DocumentsService.assertVisible` (the card gate, knows
+ * five kinds of participant) and a hand-built predicate inside the list query (knew two). They
+ * disagreed in both directions — a route approver could open a document by link that the
+ * register would not show them, and the acknowledgement report dropped rows for documents the
+ * reader could in fact open. A search endpoint on top of three answers would just be a fourth.
+ *
+ * Two independent parts, ANDed:
+ *
+ *  1. **Involvement** — author, allow-list, collaborator, proposal signer, route assignee,
+ *     resolution author/executor/co-executor, assigned reader — or, for the registry roles,
+ *     the whole non-ДСП registry.
+ *  2. **The ДСП guard** — allow-list ∩ `docflow.confidential.view`, applied on top and never
+ *     widened by involvement. Being asked to approve a ДСП document does not admit you to it;
+ *     the допуск-список does.
+ *
+ * The guard is a separate AND rather than a branch inside part 1 precisely so that no future
+ * clause added to «involvement» can accidentally open ДСП: it would have to survive the guard.
+ */
+export function visibleDocumentsWhere(
+  user: Pick<AuthUser, 'id' | 'permissions' | 'isSuperadmin'>,
+  assignments: ActorAssignments,
+): SQL {
+  // Superadmin sees everything that is not deleted; the caller adds the deleted-at filter.
+  if (user.isSuperadmin) return sql`true`;
+
+  const involved = or(
+    documentInvolvementWhere(user, assignments),
+    // The registry roles see the registry — but only its non-ДСП half; the guard below is
+    // what stops this clause from being a back door into the grif.
+    hasRegistryAccess(user) ? ne(documents.confidentiality, 'dsp') : undefined,
+  );
+
+  const guard = hasConfidentialAccess(user)
+    ? or(
+        ne(documents.confidentiality, 'dsp'),
+        eq(documents.authorId, user.id),
+        sql`${user.id}::uuid = any(${documents.accessList})`,
+      )
+    : or(ne(documents.confidentiality, 'dsp'), eq(documents.authorId, user.id));
+
+  // `and`/`or` return undefined only for an empty argument list, which cannot happen here —
+  // but a silently-dropped visibility predicate is the one bug this file must never have, so
+  // the fallback is «see nothing» rather than a non-null assertion.
+  const both = and(involved ?? sql`false`, guard ?? sql`false`);
+  return both ?? sql`false`;
+}
+
+/**
+ * The caller's OWN involvement with a document — «моё», as opposed to «всё, что мне положено
+ * видеть». Author, allow-list, collaborator, proposal signer, route assignee, resolution
+ * author/executor/co-executor, assigned reader.
+ *
+ * Split out from {@link visibleDocumentsWhere} because the «Мои документы» queue means exactly
+ * this and must NOT include the registry-wide clause: a clerk holding `docflow.register` sees
+ * the whole register on the register tab, and their own documents on the personal one. Both
+ * are the same rule applied at different widths, not two rules.
+ *
+ * On its own this expression does NOT carry the ДСП guard — it is only ever ANDed with the
+ * full predicate, which does.
+ */
+export function documentInvolvementWhere(
+  user: Pick<AuthUser, 'id'>,
+  assignments: ActorAssignments,
+): SQL {
+  const involved = or(
+    eq(documents.authorId, user.id),
+    sql`${user.id}::uuid = any(${documents.accessList})`,
+    sql`exists (select 1 from ${documentCollaborators} dc
+      where dc.document_id = ${documents.id} and dc.user_id = ${user.id}::uuid
+        and dc.deleted_at is null)`,
+    sql`exists (select 1 from ${resolutionProposals} rp
+      where rp.document_id = ${documents.id} and rp.signer_id = ${user.id}::uuid
+        and rp.deleted_at is null)`,
+    // Resolutions are never soft-deleted — an instruction that was given stays on the record,
+    // so there is no `deleted_at` to filter on here.
+    sql`exists (select 1 from ${resolutions} r
+      where r.document_id = ${documents.id}
+        and (r.author_id = ${user.id}::uuid or r.executor_id = ${user.id}::uuid
+             or ${user.id}::uuid = any(r.co_executors)))`,
+    sql`exists (select 1 from ${acquaintances} a
+      where a.document_id = ${documents.id} and a.user_id = ${user.id}::uuid)`,
+    routeAssigneeExists(assignments),
+  );
+  return involved ?? sql`false`;
+}
+
+/**
+ * Route participation, as SQL. A step is matched by whatever the caller acts as — themselves,
+ * a position they hold, a unit they head — which is why the assignments arrive resolved: the
+ * substitution rules that produce them (docs/05 §6) are not expressible per row.
+ *
+ * No assignments at all means no route can match, and that is `false`, not «no filter».
+ */
+function routeAssigneeExists(a: ActorAssignments): SQL | undefined {
+  const kinds: SQL[] = [];
+  if (a.userIds.length) {
+    kinds.push(sql`(rs.assignee_type = 'user' and rs.assignee_id in ${a.userIds})`);
+  }
+  if (a.positionIds.length) {
+    kinds.push(sql`(rs.assignee_type = 'position' and rs.assignee_id in ${a.positionIds})`);
+  }
+  if (a.orgUnitIds.length) {
+    kinds.push(sql`(rs.assignee_type = 'org_unit' and rs.assignee_id in ${a.orgUnitIds})`);
+  }
+  const match = or(...kinds);
+  if (!match) return undefined;
+  return sql`exists (select 1 from ${routeSteps} rs
+    join ${routes} rt on rt.id = rs.route_id
+    where rt.document_id = ${documents.id} and ${match})`;
 }

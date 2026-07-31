@@ -8,7 +8,6 @@ import {
   ilike,
   inArray,
   isNull,
-  ne,
   or,
   sql,
   type SQL,
@@ -74,9 +73,12 @@ import {
 import {
   canManageDocumentAccess,
   canViewDocumentBase,
-  hasConfidentialAccess,
+  documentInvolvementWhere,
   hasRegistryAccess,
+  visibleDocumentsWhere,
+  type ActorAssignments,
 } from './document-visibility';
+import { documentOrderBy, parseDocumentSort } from './document-sort';
 import { ReadLogService } from './read-log.service';
 import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
@@ -633,7 +635,8 @@ export class DocumentsService {
     } else if (query.queue === 'my_tasks') {
       queueDocIds = await this.resolutions.myTasksDocumentIds(user.id);
     }
-    const where = and(...this.whereFor(query, user, queueDocIds));
+    const assignments = await this.routes.actingAssignments(user.id);
+    const where = and(...this.whereFor(query, user, assignments, queueDocIds));
     const offset = (query.page - 1) * query.limit;
     const [rows, totalRows] = await Promise.all([
       this.db
@@ -657,7 +660,7 @@ export class DocumentsService {
         .leftJoin(users, eq(users.id, documents.authorId))
         .leftJoin(correspondents, eq(correspondents.id, documents.correspondentId))
         .where(where)
-        .orderBy(desc(documents.createdAt))
+        .orderBy(...documentOrderBy(parseDocumentSort(query.sort)))
         .limit(query.limit)
         .offset(offset),
       this.db
@@ -1343,8 +1346,19 @@ export class DocumentsService {
     return new Map(rows.map((r) => [r.id, r.name]));
   }
 
-  private whereFor(query: ListDocumentsQuery, user: AuthUser, queueDocIds?: string[]): SQL[] {
-    const where: SQL[] = [isNull(documents.deletedAt)];
+  /**
+   * The list's WHERE. Visibility comes from the shared predicate — the same expression the
+   * search, the archive and the reports use — and everything here on top is a NARROWING:
+   * a filter or a queue, never a widening. Nothing in this method may re-open a document the
+   * predicate excluded.
+   */
+  private whereFor(
+    query: ListDocumentsQuery,
+    user: AuthUser,
+    assignments: ActorAssignments,
+    queueDocIds?: string[],
+  ): SQL[] {
+    const where: SQL[] = [isNull(documents.deletedAt), visibleDocumentsWhere(user, assignments)];
     if (query.status) where.push(eq(documents.status, query.status));
     if (query.docClass) where.push(eq(documents.docClass, query.docClass));
     if (query.journalId) where.push(eq(documents.journalId, query.journalId));
@@ -1356,37 +1370,6 @@ export class DocumentsService {
       const text = `%${query.search}%`;
       const cond = or(ilike(documents.subject, text), ilike(documents.regNumber, text));
       if (cond) where.push(cond);
-    }
-
-    const onAccessList = sql`${user.id}::uuid = any(${documents.accessList})`;
-    // A live collaborator grant is involvement too — otherwise an assigned preparer could
-    // not even find the document they were asked to prepare (plan этап 2). ДСП is not
-    // widened by it: the guard below still admits only the author and the allow-list.
-    const isCollaborator = sql`exists (
-      select 1 from ${documentCollaborators} dc
-      where dc.document_id = ${documents.id}
-        and dc.user_id = ${user.id}::uuid
-        and dc.deleted_at is null
-    )`;
-    // A proposal's signer must be able to FIND the document they were asked to decide on,
-    // not only open it by link (plan этап 5).
-    const isPendingSigner = sql`exists (
-      select 1 from ${resolutionProposals} rp
-      where rp.document_id = ${documents.id}
-        and rp.signer_id = ${user.id}::uuid
-        and rp.deleted_at is null
-    )`;
-    const mine = or(eq(documents.authorId, user.id), onAccessList, isCollaborator, isPendingSigner);
-
-    // ДСП guard (docs/09-security.md §3): a ДСП document surfaces in ANY list/search only to its
-    // author, or — when the caller holds docflow.confidential.view — to access-list members. This
-    // keeps ДСП out of search for the non-допущенные regardless of the queue below.
-    if (!user.isSuperadmin) {
-      const notDsp = ne(documents.confidentiality, 'dsp');
-      const dspVisible = hasConfidentialAccess(user)
-        ? or(notDsp, eq(documents.authorId, user.id), onAccessList)
-        : or(notDsp, eq(documents.authorId, user.id));
-      if (dspVisible) where.push(dspVisible);
     }
 
     switch (query.queue) {
@@ -1406,18 +1389,12 @@ export class DocumentsService {
         where.push(inArray(documents.id, queueDocIds ?? []));
         break;
       case 'registry':
-        // The chancellery/control registry: all non-ДСП docs + one's own ДСП-access.
-        if (hasRegistryAccess(user)) {
-          if (!user.isSuperadmin) {
-            const registryVisible = or(eq(documents.confidentiality, 'normal'), mine);
-            if (registryVisible) where.push(registryVisible);
-          }
-        } else if (mine) {
-          where.push(mine); // no registry rights → fall back to own involvement
-        }
+        // The register itself: the visibility predicate already decides how wide that is —
+        // the whole non-ДСП register for the chancellery and control, one's own involvement
+        // for everybody else. Nothing to add.
         break;
-      default: // 'mine'
-        if (mine) where.push(mine);
+      default: // 'mine' — narrowed to the caller's own involvement, without the register.
+        if (!user.isSuperadmin) where.push(documentInvolvementWhere(user, assignments));
         break;
     }
     return where;
