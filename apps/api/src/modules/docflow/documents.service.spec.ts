@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planDocumentStatusChange } from './documents.service';
+import { assertIncomingJournal, planDocumentStatusChange } from './documents.service';
 
 /** Assert that the lifecycle policy rejects the change with the given error code. */
 function expectRejected(fn: () => unknown, code: string): void {
@@ -70,6 +70,34 @@ describe('planDocumentStatusChange', () => {
     expectRejected(
       () => planDocumentStatusChange('rejected', { status: 'recalled' }),
       'docflow.document.reason_required',
+    );
+  });
+});
+
+describe('assertIncomingJournal', () => {
+  it('accepts an active incoming book', () => {
+    expect(() => assertIncomingJournal({ docClass: 'incoming', isActive: true })).not.toThrow();
+  });
+
+  it('rejects a missing journal', () => {
+    expectRejected(() => assertIncomingJournal(undefined), 'docflow.journal.not_found');
+  });
+
+  it('rejects a closed journal — a retired book must not keep minting numbers', () => {
+    expectRejected(
+      () => assertIncomingJournal({ docClass: 'incoming', isActive: false }),
+      'docflow.journal.inactive',
+    );
+  });
+
+  it('rejects a book of the wrong class', () => {
+    expectRejected(
+      () => assertIncomingJournal({ docClass: 'outgoing', isActive: true }),
+      'docflow.journal.class_mismatch',
+    );
+    expectRejected(
+      () => assertIncomingJournal({ docClass: 'internal', isActive: true }),
+      'docflow.journal.class_mismatch',
     );
   });
 });

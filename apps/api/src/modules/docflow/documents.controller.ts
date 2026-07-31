@@ -7,6 +7,7 @@ import {
   createDocumentSchema,
   listDocumentsQuerySchema,
   registerDocumentSchema,
+  registerIncomingSchema,
   setDocumentAccessSchema,
   updateDocumentSchema,
   type AddDocumentFileInput,
@@ -21,6 +22,7 @@ import {
   type PaginatedResult,
   type ReadLogEntryDto,
   type RegisterDocumentInput,
+  type RegisterIncomingInput,
   type SetDocumentAccessInput,
   type UpdateDocumentInput,
 } from '@cuks/shared';
@@ -58,6 +60,19 @@ export class DocumentsController {
   @ApiOperation({ summary: 'Pending-work counts for the cabinet queue badges' })
   queueCounts(@CurrentUser() user: AuthUser): Promise<DocumentQueueCountsDto> {
     return this.documents.queueCounts(user);
+  }
+
+  // Literal path — declared before the `:id` handlers so it is never taken for a uuid.
+  @Post('register-incoming')
+  @RequirePermission('docflow.register')
+  @ApiOperation({
+    summary: 'Create and register an incoming document atomically (idempotent on a client key)',
+  })
+  registerIncoming(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(registerIncomingSchema)) body: RegisterIncomingInput,
+  ): Promise<DocumentDetailDto> {
+    return this.documents.registerIncoming(body, user);
   }
 
   @Post()

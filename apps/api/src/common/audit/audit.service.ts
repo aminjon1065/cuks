@@ -45,6 +45,28 @@ export class AuditService {
     await this.persist(enriched);
   }
 
+  /**
+   * Append inside the caller's transaction, so the audit entry and the business fact it
+   * records commit or roll back together — no «registered» trail for a registration that
+   * was rolled back, and no silently missing entry for one that succeeded. Unlike
+   * {@link log}/{@link logAndWait} a failure here is *fatal to the transaction*: that is
+   * the point, so use it only where the atomicity is part of the contract.
+   */
+  async logWithin(tx: Database, event: AuditEvent): Promise<void> {
+    const enriched = this.enrich(event);
+    this.writeLog(enriched);
+    await tx.insert(auditLog).values({
+      actorId: enriched.actorId ?? null,
+      action: enriched.action,
+      entityType: enriched.entityType ?? null,
+      entityId: enriched.entityId ?? null,
+      orgUnitId: enriched.orgUnitId ?? null,
+      ip: enriched.ip ?? null,
+      userAgent: enriched.userAgent ?? null,
+      meta: enriched.meta ?? null,
+    });
+  }
+
   private enrich(event: AuditEvent): AuditEvent {
     const ctx = getRequestContext();
     return {

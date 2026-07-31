@@ -1,0 +1,2 @@
+ALTER TABLE "app"."documents" ADD COLUMN "registration_key" uuid;--> statement-breakpoint
+CREATE UNIQUE INDEX "documents_registration_key_uq" ON "app"."documents" USING btree ("registration_key") WHERE "app"."documents"."registration_key" is not null;

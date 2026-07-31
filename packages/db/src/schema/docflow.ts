@@ -193,6 +193,11 @@ export const documents = appSchema.table(
     outgoingNumber: text('outgoing_number'),
     outgoingDate: timestamp('outgoing_date', { withTimezone: true }),
     delivery: text('delivery', { enum: DOCUMENT_DELIVERY }),
+    /** Idempotency key of the atomic incoming-registration command that created this
+     *  document (docs/modules/11 §12.2). A retried command carrying the same key returns
+     *  the original document instead of minting a second number; null for documents
+     *  created any other way. */
+    registrationKey: uuid('registration_key'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -207,6 +212,11 @@ export const documents = appSchema.table(
     uniqueIndex('documents_journal_reg_number_uq')
       .on(t.journalId, t.regNumber)
       .where(sql`${t.regNumber} is not null`),
+    // The idempotency guarantee: a concurrent replay of the same registration command
+    // loses the race here (23505) instead of minting a second number.
+    uniqueIndex('documents_registration_key_uq')
+      .on(t.registrationKey)
+      .where(sql`${t.registrationKey} is not null`),
     index('documents_status_idx').on(t.status),
     index('documents_author_idx').on(t.authorId),
     index('documents_org_unit_idx').on(t.orgUnitId),

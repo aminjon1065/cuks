@@ -8,6 +8,7 @@ import {
   createJournalSchema,
   createNomenclatureSchema,
   registerDocumentSchema,
+  registerIncomingSchema,
 } from './docflow';
 
 describe('createJournalSchema', () => {
@@ -93,6 +94,47 @@ describe('registerDocumentSchema', () => {
       registerDocumentSchema.safeParse({ journalId: '0190a000-0000-7000-8000-000000000001' })
         .success,
     ).toBe(true);
+  });
+});
+
+describe('registerIncomingSchema', () => {
+  const uuid = (n: number) => `0190a000-0000-7000-8000-00000000000${n}`;
+  const base = {
+    idempotencyKey: uuid(1),
+    journalId: uuid(2),
+    typeCode: 'letter',
+    subject: 'Письмо о паводке',
+  };
+
+  it('accepts a minimal command and defaults confidentiality and files', () => {
+    const parsed = registerIncomingSchema.parse(base);
+    expect(parsed.confidentiality).toBe('normal');
+    expect(parsed.files).toEqual([]);
+  });
+
+  it('requires the idempotency key — without it a retry would mint a second number', () => {
+    const { idempotencyKey: _omitted, ...withoutKey } = base;
+    expect(registerIncomingSchema.safeParse(withoutKey).success).toBe(false);
+    expect(
+      registerIncomingSchema.safeParse({ ...base, idempotencyKey: 'not-a-uuid' }).success,
+    ).toBe(false);
+  });
+
+  it('requires a subject and a document type', () => {
+    expect(registerIncomingSchema.safeParse({ ...base, subject: '' }).success).toBe(false);
+    expect(registerIncomingSchema.safeParse({ ...base, typeCode: '' }).success).toBe(false);
+  });
+
+  it('allows one main file plus attachments, never two main bodies', () => {
+    const main = { fileId: uuid(3), kind: 'main' };
+    const attachment = { fileId: uuid(4), kind: 'attachment' };
+    expect(registerIncomingSchema.safeParse({ ...base, files: [main, attachment] }).success).toBe(
+      true,
+    );
+    expect(
+      registerIncomingSchema.safeParse({ ...base, files: [main, { ...attachment, kind: 'main' }] })
+        .success,
+    ).toBe(false);
   });
 });
 

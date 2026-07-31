@@ -27,8 +27,10 @@ import {
   type DocumentStatus,
   type ListDocumentsQuery,
   type PaginatedResult,
+  type DocClass,
   type ReadLogEntryDto,
   type RegisterDocumentInput,
+  type RegisterIncomingInput,
   type SetDocumentAccessInput,
   type UpdateDocumentInput,
 } from '@cuks/shared';
@@ -81,6 +83,39 @@ export function planDocumentStatusChange(
   return { status: input.status, reason: input.reason?.trim() || null };
 }
 
+/** True for a Postgres unique-violation error (SQLSTATE 23505). */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === '23505';
+}
+
+/** The journal fields the incoming-registration policy needs. */
+export interface IncomingJournalCheck {
+  docClass: DocClass;
+  isActive: boolean;
+}
+
+/**
+ * Pure precondition policy for the atomic incoming registration (docs/modules/11 §12.2)
+ * — the chancellery may only mint a number from an existing, active, incoming book.
+ * Throws; used by the command and its tests.
+ */
+export function assertIncomingJournal(journal: IncomingJournalCheck | undefined): void {
+  if (!journal) throw AppException.notFound('docflow.journal.not_found', 'Journal not found');
+  if (!journal.isActive) {
+    throw AppException.unprocessable(
+      'docflow.journal.inactive',
+      'The journal is closed for registration',
+    );
+  }
+  if (journal.docClass !== 'incoming') {
+    throw AppException.unprocessable(
+      'docflow.journal.class_mismatch',
+      'An incoming document must be registered in an incoming journal',
+      { journalClass: journal.docClass },
+    );
+  }
+}
+
 /** Documents: the card, its files, registration and lifecycle (docs/modules/11 §3/§4). */
 @Injectable()
 export class DocumentsService {
@@ -124,6 +159,146 @@ export class DocumentsService {
       meta: { docClass: input.docClass, confidentiality: input.confidentiality },
     });
     return this.detail(created.id, actor);
+  }
+
+  /**
+   * Create *and* register an incoming document in one transaction (docs/modules/11 §12.2,
+   * plan этап 1B). The card, the minted number, the file links and the audit entry commit
+   * together: a failure at any step leaves no orphan draft behind and burns no number
+   * (the counter increment rolls back with the rest).
+   *
+   * Idempotent on `idempotencyKey` — a retry after a network error that dropped the
+   * response, or a double-submitted form, returns the original document and number. The
+   * partial unique index on `registration_key` decides the race between two simultaneous
+   * replays; the loser reads the winner's result instead of minting a second number.
+   */
+  async registerIncoming(
+    input: RegisterIncomingInput,
+    actor: AuthUser,
+  ): Promise<DocumentDetailDto> {
+    if (!hasRegistryAccess(actor)) {
+      throw AppException.forbidden(
+        'docflow.document.register_forbidden',
+        'Registration requires chancellery rights',
+      );
+    }
+    const replayed = await this.findByRegistrationKey(input.idempotencyKey, actor);
+    if (replayed) return this.detail(replayed, actor);
+
+    // A missing file is the caller's mistake, not a rollback — check before opening the tx.
+    await this.assertFilesExist(input.files.map((f) => f.fileId));
+
+    let documentId: string;
+    try {
+      documentId = await this.db.transaction(async (tx) => {
+        const [journal] = await tx
+          .select()
+          .from(journals)
+          .where(and(eq(journals.id, input.journalId), isNull(journals.deletedAt)))
+          .limit(1);
+        assertIncomingJournal(journal);
+        if (!journal) throw new Error('unreachable: assertIncomingJournal guarantees a journal');
+        const now = new Date();
+        const { number } = await this.numbering.allocate(tx, journal, now);
+        const [created] = await tx
+          .insert(documents)
+          .values({
+            journalId: journal.id,
+            regNumber: number,
+            regDate: now,
+            status: 'registered',
+            docClass: 'incoming',
+            typeCode: input.typeCode,
+            subject: input.subject,
+            summary: input.summary ?? null,
+            orgUnitId: input.orgUnitId ?? null,
+            authorId: actor.id,
+            confidentiality: input.confidentiality,
+            accessList: input.accessList ?? [],
+            dueDate: input.dueDate ? new Date(input.dueDate) : null,
+            caseIndex: input.caseIndex ?? null,
+            correspondentId: input.correspondentId ?? null,
+            outgoingNumber: input.outgoingNumber ?? null,
+            outgoingDate: input.outgoingDate ? new Date(input.outgoingDate) : null,
+            delivery: input.delivery ?? null,
+            registrationKey: input.idempotencyKey,
+            createdBy: actor.id,
+          })
+          .returning({ id: documents.id });
+        if (!created) throw new Error('Document insert did not return an id');
+        if (input.files.length > 0) {
+          await tx.insert(documentFiles).values(
+            input.files.map((f) => ({
+              documentId: created.id,
+              fileId: f.fileId,
+              kind: f.kind,
+              version: 1,
+              title: f.title ?? null,
+              isCurrent: true,
+              createdBy: actor.id,
+            })),
+          );
+        }
+        // One entry, not created+registered: the two would share this transaction's
+        // timestamp and the history tab orders by it, so the pair would read arbitrarily.
+        await this.audit.logWithin(tx, {
+          action: 'docflow.document.registered',
+          actorId: actor.id,
+          entityType: 'document',
+          entityId: created.id,
+          meta: {
+            journalId: journal.id,
+            regNumber: number,
+            atomic: true,
+            fileCount: input.files.length,
+            confidentiality: input.confidentiality,
+          },
+        });
+        return created.id;
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      // A simultaneous replay of the same key committed first — return its result rather
+      // than a 500. Any other unique violation (a duplicate number) is a real fault.
+      const winner = await this.findByRegistrationKey(input.idempotencyKey, actor);
+      if (!winner) throw err;
+      return this.detail(winner, actor);
+    }
+    return this.detail(documentId, actor);
+  }
+
+  /** The document a previous run of this command produced, if the key was already used. */
+  private async findByRegistrationKey(key: string, actor: AuthUser): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: documents.id, createdBy: documents.createdBy })
+      .from(documents)
+      .where(and(eq(documents.registrationKey, key), isNull(documents.deletedAt)))
+      .limit(1);
+    if (!row) return null;
+    if (row.createdBy !== actor.id) {
+      // Someone else's key: replaying it would disclose their document. Never reuse.
+      throw AppException.conflict(
+        'docflow.document.idempotency_conflict',
+        'This idempotency key belongs to another registration',
+      );
+    }
+    return row.id;
+  }
+
+  /** Every referenced fs node must exist (deleted/unknown ids are a 400, not a rollback). */
+  private async assertFilesExist(fileIds: string[]): Promise<void> {
+    if (fileIds.length === 0) return;
+    const unique = [...new Set(fileIds)];
+    const rows = await this.db
+      .select({ id: fsNodes.id })
+      .from(fsNodes)
+      .where(and(inArray(fsNodes.id, unique), isNull(fsNodes.deletedAt)));
+    if (rows.length !== unique.length) {
+      throw AppException.badRequest(
+        'docflow.document.file_missing',
+        'The referenced file does not exist',
+      );
+    }
   }
 
   async list(
