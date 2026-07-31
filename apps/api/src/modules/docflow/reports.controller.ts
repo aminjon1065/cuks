@@ -2,7 +2,10 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import {
+  acknowledgementReportQuerySchema,
   disciplineReportQuerySchema,
+  type AcknowledgementReportDto,
+  type AcknowledgementReportQuery,
   type DisciplineReportDto,
   type DisciplineReportQuery,
 } from '@cuks/shared';
@@ -12,8 +15,12 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { ReportsService } from './reports.service';
 
-/** Executive-discipline reports (docs/modules/11 §5, task 3.9). Gated by `docflow.reports.view`;
- *  the report exposes counts only, so it carries no document content. */
+/**
+ * Docflow reports (docs/modules/11 §5, plan этап 7). Both are gated by
+ * `docflow.reports.view`, but that permission means different things to them: the discipline
+ * report exposes counts only, while the acknowledgement report names documents and readers
+ * and therefore filters every row against the caller's own visibility inside the service.
+ */
 @ApiTags('docflow')
 @Controller('docflow/reports')
 export class ReportsController {
@@ -41,5 +48,31 @@ export class ReportsController {
     reply.header('content-disposition', 'attachment; filename="discipline.xlsx"');
     reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     return this.reports.disciplineXlsx(query, user);
+  }
+
+  @Get('acknowledgement')
+  @RequirePermission('docflow.reports.view')
+  @ApiOperation({ summary: 'Who was told to read what, and who actually did' })
+  acknowledgement(
+    @Query(new ZodValidationPipe(acknowledgementReportQuerySchema))
+    query: AcknowledgementReportQuery,
+    @CurrentUser() user: AuthUser,
+  ): Promise<AcknowledgementReportDto> {
+    return this.reports.acknowledgement(query, user);
+  }
+
+  @Get('acknowledgement/export')
+  @RequirePermission('docflow.reports.view')
+  @ApiOperation({ summary: 'Acknowledgement report as an XLSX workbook' })
+  @ApiOkResponse({ description: 'XLSX workbook attachment' })
+  async acknowledgementExport(
+    @Query(new ZodValidationPipe(acknowledgementReportQuerySchema))
+    query: AcknowledgementReportQuery,
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    reply.header('content-disposition', 'attachment; filename="acknowledgement.xlsx"');
+    reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return this.reports.acknowledgementXlsx(query, user);
   }
 }

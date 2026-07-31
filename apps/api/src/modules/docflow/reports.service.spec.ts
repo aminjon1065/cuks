@@ -44,7 +44,10 @@ const agg = (over: Partial<Record<string, unknown>>) => ({
 
 describe('ReportsService.discipline', () => {
   it('derives the discipline percentage from the buckets', async () => {
-    const service = new ReportsService(makeDb([agg({ onTime: 3, late: 1, notDone: 1 })]) as never);
+    const service = new ReportsService(
+      makeDb([agg({ onTime: 3, late: 1, notDone: 1 })]) as never,
+      null as never,
+    );
     const report = await service.discipline(QUERY, ACTOR);
     const row = report.groups[0]!.rows[0]!;
     expect(row.total).toBe(5);
@@ -66,6 +69,7 @@ describe('ReportsService.discipline', () => {
           onTime: 1,
         }),
       ]) as never,
+      null as never,
     );
     const report = await service.discipline(QUERY, ACTOR);
 
@@ -88,6 +92,7 @@ describe('ReportsService.discipline', () => {
         agg({ executorId: 'e1', orgUnitId: null, orgUnitName: null, onTime: 1 }),
         agg({ executorId: 'e2', orgUnitId: 'ou1', orgUnitName: 'Управление А', onTime: 1 }),
       ]) as never,
+      null as never,
     );
     const report = await service.discipline(QUERY, ACTOR);
     expect(report.groups.map((g) => g.orgUnitName)).toEqual(['Управление А', 'Без подразделения']);
@@ -95,7 +100,7 @@ describe('ReportsService.discipline', () => {
   });
 
   it('reports an empty period as zeros with a null percentage', async () => {
-    const service = new ReportsService(makeDb([]) as never);
+    const service = new ReportsService(makeDb([]) as never, null as never);
     const report = await service.discipline(QUERY, ACTOR);
     expect(report.groups).toHaveLength(0);
     expect(report.totals).toMatchObject({
@@ -108,7 +113,10 @@ describe('ReportsService.discipline', () => {
   });
 
   it('exports a valid XLSX workbook (ZIP magic bytes)', async () => {
-    const service = new ReportsService(makeDb([agg({ onTime: 2, late: 1, notDone: 0 })]) as never);
+    const service = new ReportsService(
+      makeDb([agg({ onTime: 2, late: 1, notDone: 0 })]) as never,
+      null as never,
+    );
     const buffer = await service.disciplineXlsx(QUERY, ACTOR);
     expect(buffer.length).toBeGreaterThan(100);
     expect(buffer[0]).toBe(0x50); // 'P'

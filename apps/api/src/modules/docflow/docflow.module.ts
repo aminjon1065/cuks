@@ -23,6 +23,8 @@ import { ResolutionProposalsController } from './resolution-proposals.controller
 import { ResolutionProposalsService } from './resolution-proposals.service';
 import { ResolutionTypesService } from './resolution-types.service';
 import { DispatchesController } from './dispatches.controller';
+import { DistributionsController } from './distributions.controller';
+import { DistributionsService } from './distributions.service';
 import { DispatchesService } from './dispatches.service';
 import { DocumentResponsesService } from './document-responses.service';
 import { DocumentsService } from './documents.service';
@@ -56,6 +58,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ResolutionsController,
     ResolutionProposalsController,
     DispatchesController,
+    DistributionsController,
     SignaturesController,
     AcknowledgementsController,
     DocumentLinksController,
@@ -72,6 +75,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentsService,
     DocumentResponsesService,
     DispatchesService,
+    DistributionsService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

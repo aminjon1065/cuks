@@ -134,5 +134,15 @@ export function documentAvailableActions(
   ) {
     actions.push('dispatch');
   }
+  // Distributing an internal order is the author's own act — the chancellery may do it too,
+  // but it is not a chancellery privilege (docs/modules/11 §12.4).
+  if (
+    doc.docClass === 'internal' &&
+    !!doc.regNumber &&
+    doc.status !== 'archived' &&
+    (isOwner || hasRegistryAccess(actor))
+  ) {
+    actions.push('distribute');
+  }
   return actions;
 }

@@ -5,6 +5,7 @@ import {
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
   DISPATCH_CHANNELS,
+  DISTRIBUTION_TARGET_TYPES,
   DOCUMENT_FILE_KINDS,
   DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
@@ -1224,4 +1225,93 @@ export interface DocumentDispatchDto {
   /** Whether THIS caller may still act on the attempt — the chancellery, while pending. */
   canAct: boolean;
   createdAt: string;
+}
+
+// --- Internal distribution (docs/modules/11 §12.4, plan этап 7) ---
+
+/**
+ * One address a distribution is sent to. `includeSubtree` only applies to an org unit and
+ * must be asked for explicitly: «отделу» and «управлению со всеми отделами» are different
+ * instructions, and silently choosing the wider one puts an order in front of people the
+ * author never meant to reach.
+ */
+export const distributionTargetSchema = z.object({
+  type: z.enum(DISTRIBUTION_TARGET_TYPES),
+  id: z.string().uuid(),
+  includeSubtree: z.boolean().default(false),
+});
+export type DistributionTargetInput = z.infer<typeof distributionTargetSchema>;
+
+export const createDistributionSchema = z.object({
+  targets: z.array(distributionTargetSchema).min(1).max(100),
+  /** Optional deadline; the batch opens by itself once it passes, marking silence expired. */
+  dueAt: z.string().datetime().nullish(),
+  note: z.string().max(2000).nullish(),
+});
+export type CreateDistributionInput = z.infer<typeof createDistributionSchema>;
+
+export interface DistributionReaderDto {
+  userId: string;
+  userName: string | null;
+  position: string | null;
+  status: AcquaintanceStatus;
+  acknowledgedAt: string | null;
+}
+
+export interface DistributionDto {
+  id: string;
+  documentId: string;
+  /** When it opens by itself; null means it waits for everyone, however long that takes. */
+  releaseAt: string | null;
+  releasedAt: string | null;
+  releasedReason: AcquaintanceReleaseReason | null;
+  createdByName: string | null;
+  createdAt: string;
+  readers: DistributionReaderDto[];
+  /** Whether THIS caller still owes a reading on this batch. */
+  canAcknowledge: boolean;
+}
+
+// --- Acknowledgement report (plan этап 7 «отчёт по ознакомлению») ---
+
+export const acknowledgementReportQuerySchema = z
+  .object({
+    from: z.string().datetime({ offset: true }),
+    to: z.string().datetime({ offset: true }),
+    orgUnitId: z.string().uuid().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (new Date(v.from) > new Date(v.to)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'from must be before to',
+        path: ['to'],
+      });
+    }
+  });
+export type AcknowledgementReportQuery = z.infer<typeof acknowledgementReportQuerySchema>;
+
+export interface AcknowledgementReportRowDto {
+  documentId: string;
+  regNumber: string | null;
+  subject: string;
+  userName: string | null;
+  orgUnitName: string | null;
+  status: AcquaintanceStatus;
+  acknowledgedAt: string | null;
+}
+
+export interface AcknowledgementReportDto {
+  from: string;
+  to: string;
+  rows: AcknowledgementReportRowDto[];
+  totals: {
+    total: number;
+    acknowledged: number;
+    pending: number;
+    /** The gate opened without them — never counted as compliance. */
+    expired: number;
+  };
+  /** Rows the caller may not see were dropped, not redacted; this says how many. */
+  hiddenCount: number;
 }

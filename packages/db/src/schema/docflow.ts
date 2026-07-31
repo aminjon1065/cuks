@@ -801,6 +801,12 @@ export const acquaintances = appSchema.table(
   (t) => [
     // One acknowledgement line per user per generating step (idempotent expansion).
     uniqueIndex('acquaintances_step_user_uq').on(t.routeStepId, t.userId),
+    // …and per batch, for lines a batch generates instead of a step. A separate index is
+    // needed because `route_step_id` is NULL for those, and Postgres treats every NULL as
+    // distinct — the step index would let one person appear twice on one distribution.
+    uniqueIndex('acquaintances_batch_user_uq')
+      .on(t.batchId, t.userId)
+      .where(sql`${t.batchId} is not null`),
     index('acquaintances_document_idx').on(t.documentId),
     // The «На ознакомление» queue: the user's pending lines.
     index('acquaintances_user_pending_idx').on(t.userId, t.acknowledgedAt),

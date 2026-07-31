@@ -68,9 +68,12 @@ export class AcknowledgementsService {
         );
       }
       if (!mine.acknowledgedAt) {
+        // `status` as well as the timestamp: the gate and distribution paths read `status`,
+        // and a route line that stayed `pending` forever made the same fact read two
+        // different ways depending on which query asked (plan этап 7).
         await tx
           .update(acquaintances)
-          .set({ acknowledgedAt: new Date() })
+          .set({ acknowledgedAt: new Date(), status: 'acknowledged' })
           .where(eq(acquaintances.id, mine.id));
       }
       // When no one is left pending, the acknowledge step is complete.

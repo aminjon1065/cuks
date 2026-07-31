@@ -89,6 +89,16 @@ export interface WsEventPayloads {
     action: 'created' | 'sent' | 'failed' | 'cancelled';
     actorId: string | null;
   };
+  /**
+   * A document was distributed for acknowledgement, or a reader confirmed theirs
+   * (docs/modules/11 §12.4). Delivered to the document's room so an open «Ознакомление» tab
+   * shows the sheet moving. Ids and an action only — an internal order may be ДСП.
+   */
+  'docflow.distribution.updated': {
+    documentId: string;
+    action: 'created' | 'acknowledged' | 'released';
+    actorId: string | null;
+  };
   /** Incoming 1:1 call (docs/modules/14 §2): the DM caller is ringing this user — show the accept/
    *  decline prompt + ringtone. Delivered to the recipient's `user:{id}` room only. */
   'meet.ring': {

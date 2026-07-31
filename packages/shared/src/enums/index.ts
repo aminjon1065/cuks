@@ -253,6 +253,8 @@ export const DOCUMENT_ACTIONS = [
   'createResponse',
   /** Record how the registered outgoing document was actually sent. */
   'dispatch',
+  /** Send a registered internal document round for acknowledgement. */
+  'distribute',
 ] as const;
 export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
 
@@ -407,6 +409,14 @@ export function routeStepRowAction(kind: RouteStepKind): 'approve' | 'complete' 
   if (kind === 'execute') return 'complete';
   return null;
 }
+
+/**
+ * Who a distribution reaches (docs/modules/11 §12.4, plan этап 7). The same three shapes a
+ * route step is addressed by — an order goes «отделу», «начальникам смен» or to named
+ * people — resolved to concrete readers at the moment of distribution.
+ */
+export const DISTRIBUTION_TARGET_TYPES = ['user', 'position', 'org_unit'] as const;
+export type DistributionTargetType = (typeof DISTRIBUTION_TARGET_TYPES)[number];
 
 /** Who a step is assigned to (docs/modules/11 §3): a user, a position, or an org unit. */
 export const ROUTE_ASSIGNEE_TYPES = ['user', 'position', 'org_unit'] as const;
