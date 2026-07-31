@@ -326,13 +326,25 @@ function AcknowledgementReport({
       </div>
     );
   }
+  const hidden = report.data?.hiddenCount ?? 0;
   if (rows.length === 0) {
     return (
-      <EmptyState
-        icon={BarChart3}
-        title={t('reportsAck.empty.title')}
-        description={t('reportsAck.empty.description')}
-      />
+      <div className="flex flex-col gap-3">
+        {/* The banner belongs here most of all: an all-dropped sheet that says «записей нет»
+            would report «никого не направляли» when in fact the caller may see none of it. */}
+        {hidden > 0 ? (
+          <p role="status" className="rounded-sm bg-warning/10 px-3 py-2 text-[13px] text-warning">
+            {t('reportsAck.hidden', { count: hidden })}
+          </p>
+        ) : null}
+        <EmptyState
+          icon={BarChart3}
+          title={t('reportsAck.empty.title')}
+          description={t(
+            hidden > 0 ? 'reportsAck.empty.allHidden' : 'reportsAck.empty.description',
+          )}
+        />
+      </div>
     );
   }
 
@@ -364,7 +376,7 @@ function AcknowledgementReport({
         </TableHeader>
         <TableBody>
           {rows.map((row, i) => (
-            <TableRow key={`${row.documentId}-${row.userName ?? i}`}>
+            <TableRow key={`${row.documentId}-${row.userName ?? ''}-${i}`}>
               <TableCell className="font-mono text-xs text-text-muted">
                 {row.regNumber ?? '—'}
               </TableCell>

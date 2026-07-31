@@ -555,10 +555,14 @@ export class DocumentsService {
       .select({ n: sql<number>`count(*)::int` })
       .from(resolutions)
       .where(and(eq(resolutions.documentId, documentId), eq(resolutions.status, 'active')));
+    // By STATUS, not by the timestamp: a line the gate released as `expired` never gets an
+    // `acknowledged_at` and can never be closed by anyone, so counting it as outstanding
+    // would refuse «Завершён» and «В архив» on that document forever (plan этап 7 review).
+    // The document still owes nothing — the sheet closed, the silence is on the record.
     const [acquaintanceRows] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(acquaintances)
-      .where(and(eq(acquaintances.documentId, documentId), isNull(acquaintances.acknowledgedAt)));
+      .where(and(eq(acquaintances.documentId, documentId), eq(acquaintances.status, 'pending')));
     return {
       activeRouteSteps: steps?.n ?? 0,
       activeResolutions: resolutionRows?.n ?? 0,
@@ -609,7 +613,15 @@ export class DocumentsService {
           return [s.documentId, { stepId: s.stepId, onBehalfOf }] as const;
         }),
       );
-      queueDocIds = [...actionSteps.keys()];
+      // The step map is only for the ROW ACTION. The id set comes from the queue's own
+      // source, which for acknowledgement also includes batch-driven lines (a distribution
+      // has no route step, and building the list from the step join hid it entirely —
+      // plan этап 7 review). Those rows simply carry no inline action: the card is where
+      // such a sheet is signed.
+      queueDocIds =
+        query.queue === 'to_acknowledge'
+          ? await this.acknowledgements.toAcknowledgeDocumentIds(user.id)
+          : [...actionSteps.keys()];
       onBehalfNames = await this.userShortNames(
         [...actionSteps.values()].map((v) => v.onBehalfOf).filter((v): v is string => !!v),
       );

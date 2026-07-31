@@ -81,6 +81,25 @@ export function foldReaders(
 }
 
 /**
+ * A ДСП document goes only to its allow-list (docs/09 §3).
+ *
+ * Distribution addresses whole subdivisions, so without this a ДСП order sent «отделу» would
+ * mint acquaintance lines for everyone in it — and being on the sheet is itself participation
+ * elsewhere in the module, so the readers would gain a view of a document the allow-list
+ * never admitted them to. The readers outside the list are DROPPED rather than the whole
+ * command refused: the operator addressed the subdivision, and the people who may read it
+ * should still get it.
+ */
+export function restrictToAllowList(
+  readers: readonly ResolvedReader[],
+  doc: { confidentiality: 'normal' | 'dsp'; accessList: readonly string[] },
+): { readers: ResolvedReader[]; excluded: number } {
+  if (doc.confidentiality !== 'dsp') return { readers: [...readers], excluded: 0 };
+  const allowed = readers.filter((r) => doc.accessList.includes(r.userId));
+  return { readers: allowed, excluded: readers.length - allowed.length };
+}
+
+/**
  * A distribution that reaches nobody is refused rather than created empty: an order shown as
  * «распространён» with a sheet of zero readers is indistinguishable from one nobody has read
  * yet, and the difference matters to whoever answers for it.

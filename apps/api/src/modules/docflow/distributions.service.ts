@@ -27,6 +27,7 @@ import {
   assertDocumentDistributable,
   assertHasReaders,
   foldReaders,
+  restrictToAllowList,
   type ResolvedReader,
 } from './distribution-policy';
 import { DocumentsService } from './documents.service';
@@ -109,17 +110,28 @@ export class DistributionsService {
     for (const target of input.targets) {
       expansions.push({ target, userIds: await this.expandTarget(target) });
     }
-    const readers = foldReaders(expansions);
+    // A ДСП order reaches only its allow-list, whatever the targets said: being on the sheet
+    // is participation, and participation must never widen a ДСП document (docs/09 §3).
+    const { readers, excluded } = restrictToAllowList(foldReaders(expansions), doc);
     assertHasReaders(readers);
 
     const now = new Date();
+    const releaseAt = input.dueAt ? new Date(input.dueAt) : null;
+    if (releaseAt && releaseAt.getTime() <= now.getTime()) {
+      // A deadline already past would be swept within the minute and mark everyone
+      // `expired` before anyone could open the document — a sheet that fails on arrival.
+      throw AppException.unprocessable(
+        'docflow.distribution.due_in_past',
+        'The acknowledgement deadline is already past',
+      );
+    }
     const batchId = await this.db.transaction(async (tx) => {
       const [batch] = await tx
         .insert(acquaintanceBatches)
         .values({
           documentId,
           kind: 'distribution',
-          releaseAt: input.dueAt ? new Date(input.dueAt) : null,
+          releaseAt,
           createdBy: actor.id,
         })
         .returning({ id: acquaintanceBatches.id });
@@ -142,7 +154,14 @@ export class DistributionsService {
       actorId: actor.id,
       entityType: 'document',
       entityId: documentId,
-      meta: { batchId, readers: readers.length, targets: input.targets.length },
+      meta: {
+        batchId,
+        readers: readers.length,
+        targets: input.targets.length,
+        // Named in the audit: the operator addressed more people than the ДСП list admits,
+        // and the difference between «направил отделу» and «дошло до троих» must be on record.
+        ...(excluded > 0 ? { excludedByAccessList: excluded } : {}),
+      },
     });
     for (const reader of readers) {
       void this.notifications.notify({

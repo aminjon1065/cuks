@@ -5,6 +5,7 @@ import {
   assertDocumentDistributable,
   assertHasReaders,
   foldReaders,
+  restrictToAllowList,
   type DistributableDocument,
 } from './distribution-policy';
 
@@ -110,5 +111,36 @@ describe('assertHasReaders', () => {
 
   it('passes as soon as one person is reached', () => {
     expect(() => assertHasReaders([{ userId: 'a', viaType: 'user', viaId: 'a' }])).not.toThrow();
+  });
+});
+
+describe('restrictToAllowList', () => {
+  const reader = (id: string) => ({ userId: id, viaType: 'org_unit' as const, viaId: 'u1' });
+
+  it('leaves an ordinary document alone', () => {
+    const readers = [reader('a'), reader('b')];
+    const out = restrictToAllowList(readers, { confidentiality: 'normal', accessList: [] });
+    expect(out.readers).toHaveLength(2);
+    expect(out.excluded).toBe(0);
+  });
+
+  it('drops readers a ДСП order was never cleared to reach', () => {
+    // Being on the sheet counts as participation elsewhere in the module, so an unfiltered
+    // subdivision target would hand a ДСП document to everybody in it (docs/09 §3).
+    const out = restrictToAllowList([reader('a'), reader('b'), reader('c')], {
+      confidentiality: 'dsp',
+      accessList: ['a', 'c'],
+    });
+    expect(out.readers.map((r) => r.userId)).toEqual(['a', 'c']);
+    expect(out.excluded, 'and says how many it dropped, for the audit').toBe(1);
+  });
+
+  it('can leave nothing, which the caller then refuses', () => {
+    const out = restrictToAllowList([reader('a')], {
+      confidentiality: 'dsp',
+      accessList: ['someone-else'],
+    });
+    expect(out.readers).toHaveLength(0);
+    expect(() => assertHasReaders(out.readers)).toThrow(AppException);
   });
 });

@@ -408,7 +408,7 @@ export class ResolutionProposalsService {
     } else {
       // Not on the sheet at all is a different thing from having already answered.
       const [line] = await this.db
-        .select({ id: acquaintances.id })
+        .select({ status: acquaintances.status })
         .from(acquaintances)
         .where(and(eq(acquaintances.batchId, batchId), eq(acquaintances.userId, actor.id)))
         .limit(1);
@@ -416,6 +416,17 @@ export class ResolutionProposalsService {
         throw AppException.forbidden(
           'docflow.acquaintance.not_assigned',
           'You are not on this acquaintance sheet',
+        );
+      }
+      // `acknowledged` twice is harmless — a double click must not strand a batch. But a
+      // line the sheet closed WITHOUT this person (`expired`) cannot be answered after the
+      // fact: returning 200 would let a stale button report a reading that never happened
+      // and that nothing recorded (plan этап 7 review).
+      if (line.status === 'expired' || line.status === 'cancelled') {
+        throw AppException.conflict(
+          'docflow.acquaintance.line_closed',
+          'This acknowledgement sheet is already closed',
+          { status: line.status },
         );
       }
     }

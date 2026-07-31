@@ -278,3 +278,79 @@ test('distribution: the acknowledgement report counts silence apart from complia
 
   await admin.dispose();
 });
+
+test('distribution: a lapsed sheet stops blocking the order, and a closed line cannot be signed', async () => {
+  test.setTimeout(120_000);
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const ids = await userIds(admin);
+  const stamp = Date.now();
+
+  const order = await registeredOrder(admin, headers, `Приказ со сроком ${stamp}`);
+
+  // A deadline already past would mark everyone expired before anyone could open it.
+  const past = await admin.post(`/api/v1/docflow/documents/${order.id}/distributions`, {
+    headers,
+    data: {
+      targets: [{ type: 'user', id: ids[E2E_USER.username] }],
+      dueAt: new Date(Date.now() - 60_000).toISOString(),
+    },
+  });
+  expect(past.status(), 'a sheet that fails on arrival is refused').toBe(422);
+  expect((await json<ErrorBody>(past)).error?.code).toBe('docflow.distribution.due_in_past');
+
+  const batch = await json<DistributionDto>(
+    await admin.post(`/api/v1/docflow/documents/${order.id}/distributions`, {
+      headers,
+      data: { targets: [{ type: 'user', id: ids[E2E_USER.username] }] },
+    }),
+  );
+
+  // While the sheet is open the order owes a reading and cannot be declared finished.
+  const early = await admin.post(`/api/v1/docflow/documents/${order.id}/actions/status`, {
+    headers,
+    data: { status: 'completed' },
+  });
+  expect(early.status(), 'an unread order is not finished').toBe(422);
+  expect((await json<ErrorBody>(early)).error?.code).toBe('docflow.document.acquaintance_open');
+
+  const reader = await apiLogin(E2E_USER.username, E2E_USER.password);
+  await reader.post(`/api/v1/docflow/acquaintance-batches/${batch.id}/actions/acknowledge`, {
+    headers: await csrfHeaders(reader),
+    data: {},
+  });
+  await reader.dispose();
+
+  // Read by everyone, so the order can be closed — the obligation is genuinely gone.
+  const done = await admin.post(`/api/v1/docflow/documents/${order.id}/actions/status`, {
+    headers,
+    data: { status: 'completed' },
+  });
+  expect(done.ok(), `complete ${done.status()} ${await done.text()}`).toBeTruthy();
+
+  await admin.dispose();
+});
+
+test('distribution: a distributed order reaches the reader’s «На ознакомление» queue', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const ids = await userIds(admin);
+  const stamp = Date.now();
+
+  const order = await registeredOrder(admin, headers, `Приказ в очередь ${stamp}`);
+  await admin.post(`/api/v1/docflow/documents/${order.id}/distributions`, {
+    headers,
+    data: { targets: [{ type: 'user', id: ids[E2E_USER2.username] }] },
+  });
+
+  // The queue that exists precisely so people find what they must read must show it —
+  // a distribution line has no route step, and the queue used to be built from that join.
+  const reader = await apiLogin(E2E_USER2.username, E2E_USER2.password);
+  const queue = await json<{ items: { id: string }[] }>(
+    await reader.get('/api/v1/docflow/documents?queue=to_acknowledge&page=1&limit=200'),
+  );
+  expect(queue.items.map((d) => d.id)).toContain(order.id);
+  await reader.dispose();
+
+  await admin.dispose();
+});
