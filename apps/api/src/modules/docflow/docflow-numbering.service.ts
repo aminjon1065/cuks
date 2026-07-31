@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { journalCounters, type Database } from '@cuks/db';
-import type { JournalSeqReset } from '@cuks/shared';
+import { businessDateParts, type JournalSeqReset } from '@cuks/shared';
 
 /**
  * Registration numbering (docs/modules/11 §3). Each journal owns a per-year (or
@@ -12,19 +12,24 @@ import type { JournalSeqReset } from '@cuks/shared';
  * inside the caller's transaction, a rolled-back registration also rolls back the
  * increment, so no number is ever burned. No separate advisory lock is needed (the
  * counter table makes the incident-style `max()+lock` idiom unnecessary here).
+ *
+ * The registration *period* is the Asia/Dushanbe calendar (CLAUDE.md §2) — the
+ * chancellery's book turns over at local midnight, which is 19:00 UTC. Using the UTC
+ * year would file the last five hours of 31 December under the outgoing year.
  */
 @Injectable()
 export class DocflowNumberingService {
   /**
    * Mint the next registration number for a journal, within the caller's tx.
    * `seqReset: 'never'` keeps a single continuous book (bucketed under year 0).
+   * `now` is a UTC instant; the year/month it is filed under are Dushanbe-local.
    */
   async allocate(
     tx: Database,
     journal: { id: string; numberTemplate: string; seqReset: JournalSeqReset },
     now: Date,
   ): Promise<{ number: string; year: number; seq: number }> {
-    const year = now.getUTCFullYear();
+    const { year, month } = businessDateParts(now);
     const bucket = journal.seqReset === 'never' ? 0 : year;
     const [row] = await tx
       .insert(journalCounters)
@@ -36,7 +41,7 @@ export class DocflowNumberingService {
       .returning({ lastSeq: journalCounters.lastSeq });
     const seq = row?.lastSeq ?? 1;
     return {
-      number: formatRegNumber(journal.numberTemplate, { year, month: now.getUTCMonth() + 1, seq }),
+      number: formatRegNumber(journal.numberTemplate, { year, month, seq }),
       year: bucket,
       seq,
     };

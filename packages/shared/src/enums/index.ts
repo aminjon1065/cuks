@@ -4,6 +4,8 @@
  * never drift (docs/04 §TypeScript — `as const` unions, no TS `enum`).
  */
 
+import { dushanbeDayNumber } from '../time/index';
+
 export const USER_STATUSES = ['active', 'blocked'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
@@ -370,17 +372,10 @@ export type MeetingStatus = (typeof MEETING_STATUS)[number];
 export const RECORDING_STATUS = ['processing', 'ready', 'failed'] as const;
 export type RecordingStatus = (typeof RECORDING_STATUS)[number];
 
-/** Display timezone is Asia/Dushanbe (UTC+5, no DST) — deadline day boundaries are local. */
-const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
-
-/** The Asia/Dushanbe calendar day of a UTC instant, as a day number (floored). */
-function dushanbeDay(ms: number): number {
-  return Math.floor((ms + DUSHANBE_OFFSET_MS) / 86_400_000);
-}
-
-/** Whole Asia/Dushanbe calendar days from `now` until `due` (negative = overdue). */
+/** Whole Asia/Dushanbe calendar days from `now` until `due` (negative = overdue).
+ *  Day boundaries are local — see `../time/index` for the shared conversion. */
 export function deadlineDaysLeft(dueIso: string, now: Date): number {
-  return dushanbeDay(new Date(dueIso).getTime()) - dushanbeDay(now.getTime());
+  return dushanbeDayNumber(new Date(dueIso).getTime()) - dushanbeDayNumber(now.getTime());
 }
 
 export function deadlineSeverity(dueIso: string | null, now: Date): ControlSeverity {
