@@ -1210,30 +1210,43 @@ Commit: `feat(docflow): add complete document editing workflow`.
 Не добавлять тяжёлый редактор без проверки `docs/02-stack.md` и записи обоснования.
 Предпочесть уже имеющийся одобренный editor либо лёгкую schema-driven модель.
 
-Схема/API:
+Схема/API — **готово (2026-07-31)**, миграция `0049_slimy_layla_miller`:
 
-- [ ] `content_json`, `content_text`, template tables/version.
-- [ ] Zod recursive schema с ограничением depth, blocks и payload size.
-- [ ] Санитизация на server render/export.
-- [ ] CRUD/version/publish/deactivate/instantiate.
-- [ ] Published version immutable.
-- [ ] Render variables только из allow-list.
+- [x] `content_json`, `content_text`, template tables/version. — плюс
+  `documents.template_version_id`, чтобы результат оставался воспроизводимым.
+- [x] Zod recursive schema с ограничением depth, blocks и payload size. — глубина ≤ 12
+  (через факторную схему с бюджетом, а не `z.lazy`), тело ≤ 512 КБ, allow-list узлов и
+  марок, `.strict()` на всех объектах.
+- [x] Санитизация на server render/export. — реализовано **строже**: недопустимый контент
+  отклоняется на записи (400) и не попадает в БД вовсе.
+- [x] CRUD/version/publish/deactivate/instantiate.
+- [x] Published version immutable. — правка = новая версия; повторная публикация — 409.
+- [x] Render variables только из allow-list. — явный поимённый список, подстановка только
+  в текстовых листьях, неизвестный плейсхолдер остаётся в тексте.
 
 UI:
 
-- [ ] Editor: headings, paragraphs, lists, table, links; без произвольного HTML/JS.
-- [ ] Autosave с debounce и явным состоянием сохранения.
-- [ ] Template picker по class/type/org scope.
-- [ ] Preview заполненных переменных.
-- [ ] Admin page версий шаблона.
+- [x] Template picker по class/type/org scope. — `TemplatePickerDialog` на реестре
+  документов: только активные шаблоны с опубликованной версией.
+- [x] Preview заполненных переменных. — предпросмотр тела как **текста** плюс
+  предупреждение о плейсхолдерах, которые не подставятся.
+- [ ] Editor: headings, paragraphs, lists, table, links; без произвольного HTML/JS. —
+  **не сделано**: модель и валидация готовы, сам TipTap-редактор с таблицами — следующий
+  срез.
+- [ ] Autosave с debounce и явным состоянием сохранения. — вместе с редактором.
+- [ ] Admin page версий шаблона. — вместе с редактором (создание версий сейчас только
+  через API).
 
 Тесты:
 
-- malicious HTML/URL sanitation;
-- template variable deny;
-- immutable version;
-- instantiate сохраняет source version;
-- Playwright создать документ из шаблона и отредактировать таблицу.
+- [x] malicious HTML/URL sanitation — unit (11 кейсов, включая обфускации
+  `java\tscript:` / ` javascript:`, которые наивная проверка префикса пропускает) + e2e;
+- [x] template variable deny — unit (9 кейсов) + e2e (`author.totpSecret`,
+  `user.passwordHash`, `{{1+1}}` остаются в тексте);
+- [x] immutable version — e2e: публикация v2 не переписала документ, созданный из v1;
+- [x] instantiate сохраняет source version — e2e проверяет `templateVersionId`;
+- [ ] Playwright создать документ из шаблона и отредактировать таблицу. — редактирование
+  таблицы придёт вместе с редактором; создание из шаблона покрыто API-уровнем e2e.
 
 Приёмка:
 
