@@ -387,7 +387,9 @@ export function useActRouteStep(documentId: string) {
       comment,
     }: {
       stepId: string;
-      action: 'approve' | 'reject';
+      /** Only the actions a step row itself performs — `sign`/`acknowledge`/`register`
+       *  steps are completed from their own surfaces (docs/modules/11 §4). */
+      action: 'approve' | 'reject' | 'complete';
       comment?: string;
     }) => api.post<RouteDto[]>(`/v1/docflow/route-steps/${stepId}/actions/${action}`, { comment }),
     onSuccess: () => invalidateRoutes(qc, documentId),

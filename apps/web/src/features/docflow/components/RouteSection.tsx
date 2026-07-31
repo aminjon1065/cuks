@@ -16,12 +16,13 @@ import {
   toast,
   type BadgeProps,
 } from '@cuks/ui';
-import type {
-  DocumentDetailDto,
-  RouteDto,
-  RouteStatus,
-  RouteStepDto,
-  RouteStepStatus,
+import {
+  routeStepRowAction,
+  type DocumentDetailDto,
+  type RouteDto,
+  type RouteStatus,
+  type RouteStepDto,
+  type RouteStepStatus,
 } from '@cuks/shared';
 import { formatDateTime } from '@/lib/format';
 import { useActRouteStep, useDocumentRoutes } from '../api/queries';
@@ -49,11 +50,20 @@ export function RouteSection({ doc }: { doc: DocumentDetailDto }): React.JSX.Ele
   const canSendToRoute = doc.canEdit && doc.status === 'draft';
   const routes = routesQuery.data ?? [];
 
-  const approve = (step: RouteStepDto) => {
+  // Only the action the step's kind actually accepts is ever sent (ROUTE_STEP_KIND_ACTIONS):
+  // a `sign`/`acknowledge`/`register` step is closed from its own surface, so its row shows
+  // a hint rather than a button the server would refuse.
+  const runRowAction = (step: RouteStepDto) => {
+    const action = routeStepRowAction(step.kind);
+    if (!action) return;
     act.mutate(
-      { stepId: step.id, action: 'approve' },
+      { stepId: step.id, action },
       {
-        onSuccess: () => toast({ title: t('route.approved'), tone: 'success' }),
+        onSuccess: () =>
+          toast({
+            title: action === 'complete' ? t('route.completed') : t('route.approved'),
+            tone: 'success',
+          }),
         onError: () => toast({ title: t('common.actionFailed'), tone: 'danger' }),
       },
     );
@@ -84,7 +94,7 @@ export function RouteSection({ doc }: { doc: DocumentDetailDto }): React.JSX.Ele
             <RouteBlock
               key={route.id}
               route={route}
-              onApprove={approve}
+              onRowAction={runRowAction}
               onReject={setRejecting}
               acting={act.isPending}
             />
@@ -117,12 +127,12 @@ export function RouteSection({ doc }: { doc: DocumentDetailDto }): React.JSX.Ele
 
 function RouteBlock({
   route,
-  onApprove,
+  onRowAction,
   onReject,
   acting,
 }: {
   route: RouteDto;
-  onApprove: (step: RouteStepDto) => void;
+  onRowAction: (step: RouteStepDto) => void;
   onReject: (step: RouteStepDto) => void;
   acting: boolean;
 }): React.JSX.Element {
@@ -160,29 +170,60 @@ function RouteBlock({
               <span className="w-full text-xs italic text-text-muted">«{step.comment}»</span>
             ) : null}
             {step.canAct ? (
-              <span className="flex items-center gap-1.5">
-                {step.actOnBehalfOfName ? (
-                  <span className="text-xs font-medium text-warning">
-                    {t('route.onBehalfOf', { name: step.actOnBehalfOfName })}
-                  </span>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={acting}
-                  onClick={() => onApprove(step)}
-                >
-                  <Check className="size-4" /> {t('route.approve')}
-                </Button>
-                <Button size="sm" variant="ghost" disabled={acting} onClick={() => onReject(step)}>
-                  <X className="size-4 text-danger" /> {t('route.reject')}
-                </Button>
-              </span>
+              <StepActions
+                step={step}
+                acting={acting}
+                onRowAction={onRowAction}
+                onReject={onReject}
+              />
             ) : null}
           </li>
         ))}
       </ol>
     </div>
+  );
+}
+
+/**
+ * The actions an actionable step row offers. Driven by `routeStepRowAction`, the same
+ * shared table the server guards with — so the card can never present an action the
+ * server would refuse (docs/modules/11 §4). Steps completed elsewhere (a signature, the
+ * acquaintance sheet, registration) show where to do it instead of a dead button.
+ */
+function StepActions({
+  step,
+  acting,
+  onRowAction,
+  onReject,
+}: {
+  step: RouteStepDto;
+  acting: boolean;
+  onRowAction: (step: RouteStepDto) => void;
+  onReject: (step: RouteStepDto) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation('docflow');
+  const rowAction = routeStepRowAction(step.kind);
+  return (
+    <span className="flex items-center gap-1.5">
+      {step.actOnBehalfOfName ? (
+        <span className="text-xs font-medium text-warning">
+          {t('route.onBehalfOf', { name: step.actOnBehalfOfName })}
+        </span>
+      ) : null}
+      {rowAction ? (
+        <Button size="sm" variant="outline" disabled={acting} onClick={() => onRowAction(step)}>
+          <Check className="size-4" aria-hidden />{' '}
+          {rowAction === 'complete' ? t('route.complete') : t('route.approve')}
+        </Button>
+      ) : (
+        <span className="text-xs text-text-muted">
+          {t(`route.completedElsewhere.${step.kind}`)}
+        </span>
+      )}
+      <Button size="sm" variant="ghost" disabled={acting} onClick={() => onReject(step)}>
+        <X className="size-4 text-danger" aria-hidden /> {t('route.reject')}
+      </Button>
+    </span>
   );
 }
 
