@@ -8,7 +8,11 @@ import {
   type DocumentStatus,
 } from '@cuks/shared';
 import type { AuthUser } from '../../common/auth/auth-user';
-import { canManageDocumentAccess, hasRegistryAccess } from './document-visibility';
+import {
+  canManageDocumentAccess,
+  hasChancelleryRights,
+  hasRegistryAccess,
+} from './document-visibility';
 
 /**
  * The live collaborator roles a user holds on a document — the one input the action policy
@@ -95,8 +99,11 @@ export function documentAvailableActions(
   if (canEditDocument(doc, actor, collaboratorRoles)) actions.push('edit');
   // Only the owner sends a document round: a preparer's job ends at the text.
   if (isOwner && doc.status === 'draft') actions.push('startRoute');
+  // Registering is the chancellery's own act — control may SEE the registry but the
+  // endpoint is guarded by docflow.register alone, so the looser predicate would render a
+  // button that always 403s.
   if (
-    hasRegistryAccess(actor) &&
+    hasChancelleryRights(actor) &&
     !doc.regNumber &&
     (doc.status === 'draft' || doc.status === 'pending_registration')
   ) {
@@ -117,8 +124,14 @@ export function documentAvailableActions(
   ) {
     actions.push('createResponse');
   }
-  // Recording a send is the chancellery's act, and only once the letter has a number.
-  if (doc.docClass === 'outgoing' && !!doc.regNumber && hasRegistryAccess(actor)) {
+  // Recording a send is the chancellery's act, only once the letter has a number, and not
+  // on an archived document — the same three facts assertDocumentDispatchable checks.
+  if (
+    doc.docClass === 'outgoing' &&
+    !!doc.regNumber &&
+    doc.status !== 'archived' &&
+    hasChancelleryRights(actor)
+  ) {
     actions.push('dispatch');
   }
   return actions;

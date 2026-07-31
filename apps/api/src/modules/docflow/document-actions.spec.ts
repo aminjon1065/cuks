@@ -180,6 +180,29 @@ describe('documentAvailableActions — the outgoing half (plan этап 6)', () 
     const internal = doc({ docClass: 'internal', status: 'registered', regNumber: 'П-1' });
     expect(documentAvailableActions(internal, clerk, [])).not.toContain('dispatch');
   });
+
+  it('never offers a chancellery act to control-only rights', () => {
+    // `docflow.control` may SEE the whole registry, but both endpoints are guarded by
+    // `docflow.register` alone — offering the button would render a permanent 403.
+    const control = {
+      id: OTHER,
+      permissions: ['docflow.use', 'docflow.control'],
+      isSuperadmin: false,
+    };
+    const outgoing = doc({ docClass: 'outgoing', status: 'registered', regNumber: 'ИСХ-1' });
+    expect(documentAvailableActions(outgoing, control, [])).not.toContain('dispatch');
+
+    const draft = doc({ docClass: 'internal', status: 'draft', regNumber: null });
+    expect(documentAvailableActions(draft, control, [])).not.toContain('register');
+    // …while the chancellery still gets both.
+    expect(documentAvailableActions(draft, clerk, [])).toContain('register');
+  });
+
+  it('does not offer a send on an archived document', () => {
+    // assertDocumentDispatchable refuses it, so the card must not ask for it.
+    const archived = doc({ docClass: 'outgoing', status: 'archived', regNumber: 'ИСХ-1' });
+    expect(documentAvailableActions(archived, clerk, [])).not.toContain('dispatch');
+  });
 });
 
 describe('documentAvailableActions — superadmin wildcards (plan этап 6)', () => {

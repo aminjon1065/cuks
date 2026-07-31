@@ -11,6 +11,21 @@ export function hasRegistryAccess(user: Pick<AuthUser, 'permissions' | 'isSupera
   );
 }
 
+/**
+ * True if the user may actually REGISTER and DISPATCH — the chancellery's own acts.
+ *
+ * Narrower than `hasRegistryAccess` on purpose: control (`docflow.control`) may see the
+ * whole registry to supervise it, but minting a number and recording a send are not
+ * supervision. The endpoints are guarded by `docflow.register` alone, so any capability flag
+ * or available-action computed with the broader predicate would promise a button the
+ * server's own guard then refuses.
+ */
+export function hasChancelleryRights(
+  user: Pick<AuthUser, 'permissions' | 'isSuperadmin'>,
+): boolean {
+  return user.isSuperadmin || user.permissions.includes('docflow.register');
+}
+
 /** Whether the user may view ДСП documents at all — holds `docflow.confidential.view`
  *  (docs/09-security.md §3). The permission is necessary but not sufficient: the user must
  *  ALSO be on the document's access list (checked by the caller). */

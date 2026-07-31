@@ -117,4 +117,44 @@ describe('DispatchSection', () => {
       screen.queryByRole('button', { name: /Зафиксировать отправку/ }),
     ).not.toBeInTheDocument();
   });
+  it('keeps the track number recorded when the attempt was opened', async () => {
+    renderSection([attempt({ externalReference: 'RB123456789TJ' })]);
+    fireEvent.click(await screen.findByRole('button', { name: /Подтвердить отправку/ }));
+    // Seeded from the attempt: an empty field here would clear what the clerk typed days ago.
+    expect(screen.getByLabelText('Трек-номер / идентификатор')).toHaveValue('RB123456789TJ');
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Подтвердить отправку/ }).at(-1)!);
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith('/v1/docflow/dispatches/a1/actions/confirm', {
+        externalReference: 'RB123456789TJ',
+        receiptFileId: null,
+      }),
+    );
+  });
+
+  it('does not offer a receipt link the antivirus has not cleared', async () => {
+    renderSection([
+      attempt({
+        status: 'sent',
+        receipt: {
+          fileId: 'f1',
+          name: 'kvitanciya.pdf',
+          size: 10,
+          mime: null,
+          avStatus: 'pending',
+        },
+      }),
+    ]);
+    // The download endpoint serves only a clean version — a link would land on a raw 403.
+    expect(await screen.findByText('kvitanciya.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /kvitanciya/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Идёт проверка')).toBeInTheDocument();
+  });
+
+  it('says a send is not applicable at all outside an outgoing document', async () => {
+    renderSection([], doc({ docClass: 'internal', regNumber: 'П-1', availableActions: [] }));
+    expect(
+      await screen.findByText('Отправка ведётся только по исходящим документам.'),
+    ).toBeInTheDocument();
+  });
 });

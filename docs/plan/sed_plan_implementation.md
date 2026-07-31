@@ -1400,28 +1400,44 @@ Commit: `feat(docflow): add approved incoming resolutions`.
 
 Схема:
 
-- [ ] типизированная связь `response_to`/расширение существующих links;
-- [ ] `document_dispatches` и при необходимости attempts;
-- [ ] индексы pending/failed.
+- [x] типизированная связь `response_to`/расширение существующих links;
+- [x] `document_dispatches` и при необходимости attempts;
+- [x] индексы pending/failed.
 
 Backend:
 
-- [ ] `create-response` transaction;
-- [ ] preset route: head approval → optional approvals → sign → register;
-- [ ] регистрация только после обязательной подписи, если тип её требует;
-- [ ] dispatch state machine;
-- [ ] ручные каналы полностью;
-- [ ] adapter interface для email/integration без внешней зависимости;
-- [ ] успешная отправка и completion policy.
+- [x] `create-response` transaction;
+- [x] preset route: head approval → optional approvals → sign → register;
+- [x] регистрация только после обязательной подписи, если тип её требует;
+- [x] dispatch state machine;
+- [x] ручные каналы полностью;
+- [x] adapter interface для email/integration без внешней зависимости;
+- [x] успешная отправка и completion policy.
 
 Frontend:
 
-- [ ] «Создать ответ»;
-- [ ] relation banner;
-- [ ] preparer;
-- [ ] панель отправки и receipt upload;
-- [ ] история попыток;
-- [ ] failure/retry.
+- [x] «Создать ответ»;
+- [x] relation banner;
+- [x] preparer;
+- [x] панель отправки и receipt upload;
+- [x] история попыток;
+- [x] failure/retry.
+
+Три пункта закрыты с оговоркой:
+
+- «типизированная связь `response_to`» — использован **существующий** вид `reply`
+  («src отвечает dst»): семантика та же, а второй почти такой же вид разошёлся бы с
+  первым. Плановое имя в схеме не заводилось;
+- «preset route … → register» — шаг `register` в пресет не добавлен: завершение маршрута
+  само переводит ненумерованный документ в `pending_registration` (этап 1D), а
+  канцелярское подразделение в модели ничем не помечено, так что шаг пришлось бы
+  адресовать выдуманным uuid. Пресет-функция параметр принимает — на случай, когда
+  подразделение названо явно;
+- «если тип её требует» — требование объявляется флагом `requiresSignature` в
+  `dictionaries.meta` записи `doc_type`, а не отдельной таблицей видов документов:
+  `type_code` и так разрешается по этому справочнику, и вторая таблица тех же видов
+  разошлась бы с первой. Проверка пока применяется только к исходящим — внутренние
+  получат своё правило вместе с этапом 7.
 
 Тесты:
 

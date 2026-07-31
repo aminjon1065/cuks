@@ -1,5 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import {
   documentCollaborators,
   documentLinks,
@@ -83,6 +83,8 @@ export function planResponseDraft(
  */
 @Injectable()
 export class DocumentResponsesService {
+  private readonly logger = new Logger(DocumentResponsesService.name);
+
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly documents: DocumentsService,
@@ -127,6 +129,13 @@ export class DocumentResponsesService {
       },
       input,
     );
+
+    // Build and dry-run the preset BEFORE anything is written. Both the builder (a vacant
+    // head with no named signer) and the dry-run (a step that reaches nobody) refuse with a
+    // 422, and the caller reads that as total failure — so a draft answer committed first
+    // would be an orphan the operator never sees and re-creates on every retry.
+    const steps = input.startRoute ? await this.presetSteps(draft.orgUnitId, input, actor) : null;
+    if (steps) await this.assertRouteStartable(steps);
 
     const responseId = await this.db.transaction(async (tx) => {
       const [created] = await tx
@@ -179,13 +188,36 @@ export class DocumentResponsesService {
       meta: { sourceId, regNumber: source.regNumber },
     });
 
-    if (input.startRoute) {
+    if (steps) {
       // Outside the transaction on purpose: startRoute opens its own and takes FOR UPDATE
       // on the document row, so calling it from inside would deadlock against ourselves.
-      const steps = await this.presetSteps(draft.orgUnitId, input, actor);
-      await this.routes.startRoute(responseId, { steps }, actor);
+      // Pre-validated above, so what remains here is an infrastructure failure — and the
+      // draft is already real and usable, so it is reported, not hidden behind a 500 that
+      // would tempt the operator into creating a second answer.
+      try {
+        await this.routes.startRoute(responseId, { steps }, actor);
+      } catch (error) {
+        this.logger.error({ error, responseId }, 'response created but its route did not start');
+      }
     }
     return this.documents.detail(responseId, actor);
+  }
+
+  /**
+   * Dry-run the preset without writing anything (docs/modules/11 §12.9). `validateRoute`
+   * reports per step who it would actually reach; a step that reaches nobody would strand
+   * the answer, so it is refused here rather than after the draft exists.
+   */
+  private async assertRouteStartable(steps: RouteStepInput[]): Promise<void> {
+    const validation = await this.routes.validateRoute({ steps });
+    const broken = validation.steps.filter((s) => s.problems.length > 0);
+    if (broken.length > 0) {
+      throw AppException.unprocessable(
+        'docflow.route.step_has_no_assignee',
+        'A step of the preset route reaches nobody',
+        { steps: broken.map((s) => ({ order: s.order, kind: s.kind, problems: s.problems })) },
+      );
+    }
   }
 
   /**
@@ -237,7 +269,9 @@ export class DocumentResponsesService {
       .innerJoin(positions, eq(positions.id, userPositions.positionId))
       .innerJoin(users, eq(users.id, userPositions.userId))
       .where(and(eq(userPositions.userId, userId), isNull(positions.deletedAt)))
-      .orderBy(asc(positions.rank))
+      // The PRIMARY post decides, not the lowest rank: rank is a within-unit display sort
+      // that defaults to 0, so comparing it across units picks a unit at random.
+      .orderBy(desc(userPositions.isPrimary), asc(positions.rank))
       .limit(1);
     return row?.orgUnitId ? this.headPositionOf(row.orgUnitId) : null;
   }

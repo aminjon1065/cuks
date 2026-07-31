@@ -56,9 +56,13 @@ test('docflow UI: the card shows its tabs and a history feed', async ({ page }) 
   await createAndRegister(page);
 
   // The card tabs are present.
-  for (const name of ['Обзор', 'Маршрут', 'Резолюции', 'Отправка', 'Связи', 'История']) {
+  for (const name of ['Обзор', 'Маршрут', 'Резолюции', 'Связи', 'История']) {
     await expect(page.getByRole('tab', { name })).toBeVisible();
   }
+  // «Отправка» is not among them: this is an internal приказ, which is distributed by
+  // acknowledgement and never dispatched — an empty tab would read as an unused feature
+  // rather than an inapplicable one (plan этап 6).
+  await expect(page.getByRole('tab', { name: 'Отправка' })).toBeHidden();
   // История lists the document's audit events, attributed to the actor (the actor name
   // appears only in the history feed, not in the header/status badge).
   await page.getByRole('tab', { name: 'История' }).click();

@@ -77,7 +77,13 @@ export function DispatchSection({ doc }: { doc: DocumentDetailDto }): React.JSX.
         <EmptyState title={t('common.loadError')} description={t('common.loadErrorHint')} />
       ) : attempts.length === 0 ? (
         <p className="text-[13px] text-text-muted">
-          {doc.regNumber ? t('dispatch.empty') : t('dispatch.emptyUnregistered')}
+          {doc.docClass !== 'outgoing'
+            ? // An internal document is distributed by acquaintance and an incoming one
+              // arrived here — neither is ever dispatched, at any status.
+              t('dispatch.notApplicable')
+            : doc.regNumber
+              ? t('dispatch.empty')
+              : t('dispatch.emptyUnregistered')}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -145,12 +151,29 @@ function AttemptCard({
         </p>
       ) : null}
       {d.receipt ? (
-        <a
-          href={documentFileDownloadUrl(documentId, d.receipt.fileId)}
-          className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-        >
-          <Paperclip className="size-3.5" /> {d.receipt.name}
-        </a>
+        // The download endpoint serves only a `clean` version, so a link on a pending or
+        // infected scan would drop the operator on a raw 403 outside the SPA — the file
+        // section states the verdict instead, and so does this one.
+        d.receipt.avStatus === 'clean' ? (
+          <a
+            href={documentFileDownloadUrl(documentId, d.receipt.fileId)}
+            className="mt-1 inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+          >
+            <Paperclip className="size-3.5" /> {d.receipt.name}
+          </a>
+        ) : (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
+            <Paperclip className="size-3.5" /> {d.receipt.name}
+            <StatusBadge
+              tone={d.receipt.avStatus === 'infected' ? 'danger' : 'warning'}
+              label={t(
+                d.receipt.avStatus === 'infected'
+                  ? 'documents.files.infected'
+                  : 'documents.files.scanning',
+              )}
+            />
+          </p>
+        )
       ) : null}
       <p className="mt-0.5 text-xs text-text-muted">
         {t('dispatch.by', { name: d.confirmedByName ?? d.createdByName ?? '—' })}
@@ -196,6 +219,7 @@ function AttemptCard({
 
       {confirming ? (
         <ConfirmDialog
+          initialReference={d.externalReference ?? ''}
           pending={act.isPending}
           onClose={() => setConfirming(false)}
           onSubmit={(body) =>
@@ -356,16 +380,19 @@ function CreateDispatchDialog({
 }
 
 function ConfirmDialog({
+  initialReference,
   onClose,
   onSubmit,
   pending,
 }: {
+  /** Whatever the attempt already carries — an empty field here must not erase it. */
+  initialReference: string;
   onClose: () => void;
   onSubmit: (body: { externalReference: string | null; receiptFileId: string | null }) => void;
   pending: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation('docflow');
-  const [reference, setReference] = useState('');
+  const [reference, setReference] = useState(initialReference);
   const [receiptFileId, setReceiptFileId] = useState<string | null>(null);
 
   return (

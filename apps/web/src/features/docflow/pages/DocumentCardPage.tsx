@@ -62,6 +62,12 @@ const CARD_TABS = [
 ] as const;
 type CardTab = (typeof CARD_TABS)[number];
 
+/** Only an outgoing document is ever dispatched, so the tab is not offered elsewhere —
+ *  an empty «Отправка» on an incoming letter reads as a feature that is merely unused. */
+function tabsFor(doc: DocumentDetailDto): readonly CardTab[] {
+  return doc.docClass === 'outgoing' ? CARD_TABS : CARD_TABS.filter((k) => k !== 'dispatch');
+}
+
 const selectClass = cn(
   'h-9 w-full rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
@@ -167,7 +173,7 @@ export function DocumentCardPage(): React.JSX.Element {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-4">
           <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-border">
-            {CARD_TABS.map((key) => (
+            {tabsFor(data).map((key) => (
               <button
                 key={key}
                 role="tab"

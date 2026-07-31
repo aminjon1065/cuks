@@ -34,7 +34,7 @@ import {
   planDispatchDecision,
 } from './dispatch-policy';
 import { assertNoOpenObligations, DocumentsService } from './documents.service';
-import { hasRegistryAccess } from './document-visibility';
+import { hasChancelleryRights } from './document-visibility';
 
 /** Title given to the scan the chancellery attaches when confirming a send. */
 const RECEIPT_TITLE = 'Квитанция об отправке';
@@ -190,10 +190,13 @@ export class DispatchesService {
           confirmedBy: actor.id,
           receiptFileId,
           updatedAt: new Date(),
-          ...(input.externalReference !== undefined
-            ? { externalReference: input.externalReference ?? null }
+          // Only a non-empty value overwrites: the confirm form always sends the key, and
+          // treating its blank default as «clear it» would erase the track number the clerk
+          // typed when the attempt was opened.
+          ...(input.externalReference?.trim()
+            ? { externalReference: input.externalReference.trim() }
             : {}),
-          ...(input.note !== undefined ? { note: input.note ?? null } : {}),
+          ...(input.note?.trim() ? { note: input.note.trim() } : {}),
         })
         // The old state in the predicate, not a re-read: two clerks confirming at once must
         // not both win, or the second write would move `sent_at` after the fact.
@@ -406,7 +409,7 @@ export class DispatchesService {
     if (!row) throw AppException.notFound('docflow.dispatch.not_found', 'Dispatch not found');
     // Visibility first: an invisible document must not leak through its dispatch id.
     await this.documents.assertVisible(row.documentId, actor);
-    if (!hasRegistryAccess(actor)) {
+    if (!hasChancelleryRights(actor)) {
       throw AppException.forbidden(
         'docflow.dispatch.forbidden',
         'Recording a send requires chancellery rights',
@@ -474,7 +477,10 @@ export class DispatchesService {
               avStatus: row.receiptAv ?? null,
             }
           : null,
-      canAct: hasRegistryAccess(actor),
+      // The same predicate the controller guard uses, so the card never renders a button
+      // the API refuses. Only what the attempt still allows is decided client-side, from its
+      // own status.
+      canAct: hasChancelleryRights(actor),
       createdAt: d.createdAt.toISOString(),
     };
   }
