@@ -20,6 +20,8 @@ import type {
   DirectoryUserDto,
   AddDocumentCollaboratorInput,
   DocumentCollaboratorDto,
+  CreateDocumentTemplateInput,
+  CreateTemplateVersionInput,
   DocumentHistoryEntryDto,
   DocumentTemplateDto,
   DocumentTimelineEntryDto,
@@ -366,6 +368,54 @@ export function useDocumentTemplates(enabled = true): UseQueryResult<DocumentTem
     queryKey: documentTemplatesKey,
     queryFn: () => api.get<DocumentTemplateDto[]>('/v1/docflow/document-templates'),
     enabled,
+  });
+}
+
+export function useCreateDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDocumentTemplateInput) =>
+      api.post<DocumentTemplateDto>('/v1/docflow/document-templates', input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentTemplatesKey }),
+  });
+}
+
+export function useAddTemplateVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      templateId,
+      input,
+    }: {
+      templateId: string;
+      input: CreateTemplateVersionInput;
+    }) =>
+      api.post<DocumentTemplateDto>(`/v1/docflow/document-templates/${templateId}/versions`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentTemplatesKey }),
+  });
+}
+
+export function usePublishTemplateVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ templateId, version }: { templateId: string; version: number }) =>
+      api.post<DocumentTemplateDto>(
+        `/v1/docflow/document-templates/${templateId}/versions/${version}/actions/publish`,
+        {},
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentTemplatesKey }),
+  });
+}
+
+export function useDeactivateDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (templateId: string) =>
+      api.post<DocumentTemplateDto>(
+        `/v1/docflow/document-templates/${templateId}/actions/deactivate`,
+        {},
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentTemplatesKey }),
   });
 }
 

@@ -38,6 +38,7 @@ import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
 import { AccessSection } from '../components/AccessSection';
 import { CollaboratorsSection } from '../components/CollaboratorsSection';
+import { DocumentContentSection } from '../components/DocumentContentSection';
 import { DocumentFilesSection } from '../components/DocumentFilesSection';
 import { EditDocumentDialog } from '../components/EditDocumentDialog';
 import { LinksSection } from '../components/LinksSection';
@@ -165,6 +166,7 @@ export function DocumentCardPage(): React.JSX.Element {
           {tab === 'overview' ? (
             <>
               <Requisites data={data} />
+              <DocumentContentSection doc={data} />
               <DocumentFilesSection documentId={data.id} files={data.files} />
               <CollaboratorsSection doc={data} />
               <SignatureSection doc={data} />

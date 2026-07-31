@@ -36,6 +36,7 @@ import type {
 } from '@cuks/shared';
 import { ApiError } from '@/lib/api-client';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { TemplatesPanel } from '../components/TemplatesPanel';
 import {
   useCorrespondentCategories,
   useCorrespondents,
@@ -58,8 +59,8 @@ const selectClass = cn(
 );
 const DOC_CLASS_VALUES: readonly DocClass[] = ['incoming', 'outgoing', 'internal', 'citizens'];
 const SEQ_RESET_VALUES: readonly JournalSeqReset[] = ['yearly', 'never'];
-type Tab = 'journals' | 'correspondents' | 'nomenclature';
-const TABS: readonly Tab[] = ['journals', 'correspondents', 'nomenclature'];
+type Tab = 'journals' | 'correspondents' | 'nomenclature' | 'templates';
+const TABS: readonly Tab[] = ['journals', 'correspondents', 'nomenclature', 'templates'];
 
 /** Map a known error code to a message; fall back to the generic failure toast. */
 function useActionError() {
@@ -106,6 +107,7 @@ export function DocflowSettingsPage(): React.JSX.Element {
       {tab === 'journals' && <JournalsPanel />}
       {tab === 'correspondents' && <CorrespondentsPanel />}
       {tab === 'nomenclature' && <NomenclaturePanel />}
+      {tab === 'templates' && <TemplatesPanel />}
     </div>
   );
 }
