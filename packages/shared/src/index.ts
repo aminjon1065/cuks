@@ -1,5 +1,7 @@
 export * from './ability/index';
 export * from './constants/index';
+export * from './docflow/content';
+export * from './docflow/template-variables';
 export * from './dto/index';
 export * from './enums/index';
 export * from './gis/slug';

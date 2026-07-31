@@ -15,6 +15,8 @@ import { DocflowDictionariesService } from './docflow-dictionaries.service';
 import { DocflowFilesService } from './docflow-files.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
 import { DocumentCollaboratorsService } from './document-collaborators.service';
+import { DocumentTemplatesController } from './document-templates.controller';
+import { DocumentTemplatesService } from './document-templates.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
@@ -41,6 +43,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
   controllers: [
     DocflowController,
     DocumentsController,
+    DocumentTemplatesController,
     RoutesController,
     ResolutionsController,
     SignaturesController,
@@ -59,6 +62,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentsService,
     DocflowFilesService,
     DocumentCollaboratorsService,
+    DocumentTemplatesService,
     RoutesService,
     ResolutionsService,
     CaService,

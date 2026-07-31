@@ -34,8 +34,10 @@ import {
 import {
   DOCUMENT_EDITING_ROLES,
   DOCUMENT_STATUS_TRANSITIONS,
+  documentContentText,
   documentTransitionAllowed,
   type AddDocumentFileInput,
+  type DocumentContent,
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
   type DocumentAccessDto,
@@ -257,6 +259,15 @@ export class DocumentsService {
         outgoingNumber: input.outgoingNumber ?? null,
         outgoingDate: input.outgoingDate ? new Date(input.outgoingDate) : null,
         delivery: input.delivery ?? null,
+        senderName: input.senderName ?? null,
+        senderContact: input.senderContact ?? null,
+        recipientName: input.recipientName ?? null,
+        recipientContact: input.recipientContact ?? null,
+        responseDueAt: input.responseDueAt ? new Date(input.responseDueAt) : null,
+        // The body arrives already validated against the allow-list (the DTO); the text
+        // mirror is derived here so search can never drift from what is stored.
+        contentJson: input.content ?? null,
+        contentText: input.content ? documentContentText(input.content) : null,
         createdBy: actor.id,
       })
       .returning({ id: documents.id });
@@ -674,6 +685,8 @@ export class DocumentsService {
       recipientName: row.recipientName,
       recipientContact: row.recipientContact,
       responseDueAt: row.responseDueAt?.toISOString() ?? null,
+      content: (row.contentJson ?? null) as DocumentContent | null,
+      templateVersionId: row.templateVersionId,
       version: row.version,
       files,
       collaborators,
@@ -753,6 +766,12 @@ export class DocumentsService {
       ...(input.recipientName !== undefined ? { recipientName: input.recipientName ?? null } : {}),
       ...(input.recipientContact !== undefined
         ? { recipientContact: input.recipientContact ?? null }
+        : {}),
+      ...(input.content !== undefined
+        ? {
+            contentJson: input.content ?? null,
+            contentText: input.content ? documentContentText(input.content) : null,
+          }
         : {}),
     };
     const changedFields = Object.keys(patch);

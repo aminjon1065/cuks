@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { documentContentSchema, type DocumentContent } from '../docflow/content';
 import {
   DOC_CLASSES,
   DOCUMENT_CONFIDENTIALITY,
@@ -282,6 +283,8 @@ export const createDocumentSchema = z.object({
   outgoingNumber: z.string().max(64).nullish(),
   outgoingDate: z.string().datetime().nullish(),
   delivery: z.enum(DOCUMENT_DELIVERY).nullish(),
+  /** Structured body, validated against the allow-list on write (docs/modules/11 §12.7). */
+  content: documentContentSchema.nullish(),
   ...partyFields,
 });
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
@@ -450,6 +453,10 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   recipientName: string | null;
   recipientContact: string | null;
   responseDueAt: string | null;
+  /** Structured body, or null for a document that carries only files. */
+  content: DocumentContent | null;
+  /** The template version this document was instantiated from, if any. */
+  templateVersionId: string | null;
   /** Optimistic-concurrency token to echo back in `expectedVersion` when saving. */
   version: number;
   files: DocumentFileDto[];
@@ -478,6 +485,71 @@ export interface DocumentCollaboratorDto {
   role: DocumentCollaboratorRole;
   assignedByName: string | null;
   createdAt: string;
+}
+
+// --- Document templates (docs/modules/11 §12.7, plan §6.3) ---
+
+export const createDocumentTemplateSchema = z.object({
+  code: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9_-]+$/i, 'The code may contain only letters, digits, "-" and "_"'),
+  name: z.string().min(1).max(200),
+  docClass: z.enum(DOC_CLASSES),
+  documentTypeCode: z.string().max(64).nullish(),
+  orgUnitId: z.string().uuid().nullish(),
+  routeTemplateId: z.string().uuid().nullish(),
+});
+export type CreateDocumentTemplateInput = z.infer<typeof createDocumentTemplateSchema>;
+
+/** Code is immutable after creation (it identifies the template). */
+export const updateDocumentTemplateSchema = createDocumentTemplateSchema.partial().omit({
+  code: true,
+});
+export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateSchema>;
+
+/** A new draft version's body. Published versions are never edited (see the service). */
+export const createTemplateVersionSchema = z.object({
+  content: documentContentSchema,
+});
+export type CreateTemplateVersionInput = z.infer<typeof createTemplateVersionSchema>;
+
+/** Create a draft document from a published template version. */
+export const instantiateDocumentTemplateSchema = z.object({
+  /** Which published version to use; omitted means the latest published one. */
+  version: z.number().int().min(1).optional(),
+  subject: z.string().min(1).max(500),
+  orgUnitId: z.string().uuid().nullish(),
+  correspondentId: z.string().uuid().nullish(),
+});
+export type InstantiateDocumentTemplateInput = z.infer<typeof instantiateDocumentTemplateSchema>;
+
+export interface DocumentTemplateVersionDto {
+  id: string;
+  version: number;
+  content: DocumentContent | null;
+  isPublished: boolean;
+  publishedAt: string | null;
+  publishedByName: string | null;
+  createdAt: string;
+  /** Variables the body uses — `unknown` ones will never resolve and are shown as a warning. */
+  variables: { known: string[]; unknown: string[] };
+}
+
+export interface DocumentTemplateDto {
+  id: string;
+  code: string;
+  name: string;
+  docClass: DocClass;
+  documentTypeCode: string | null;
+  orgUnitId: string | null;
+  orgUnitName: string | null;
+  routeTemplateId: string | null;
+  isActive: boolean;
+  /** The highest published version, or null when the template has never been published. */
+  publishedVersion: number | null;
+  versions: DocumentTemplateVersionDto[];
 }
 
 // --- Timeline (docs/modules/11 §12.5) ---

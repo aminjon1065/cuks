@@ -207,6 +207,13 @@ export const documents = appSchema.table(
     /** Optimistic-concurrency token: every accepted edit bumps it, and an edit carrying a
      *  stale value is refused instead of silently overwriting the other editor. */
     version: integer('version').notNull().default(1),
+    /** Structured body (docs/modules/11 §12.7) — TipTap/ProseMirror JSON constrained to
+     *  the shared allow-list, with `content_text` as its flattened mirror for search. */
+    contentJson: jsonb('content_json'),
+    contentText: text('content_text'),
+    /** The template version this document was instantiated from, so the result stays
+     *  reproducible after the template moves on. */
+    templateVersionId: uuid('template_version_id'),
     /** Idempotency key of the atomic incoming-registration command that created this
      *  document (docs/modules/11 §12.2). A retried command carrying the same key returns
      *  the original document instead of minting a second number; null for documents
@@ -236,6 +243,66 @@ export const documents = appSchema.table(
     index('documents_org_unit_idx').on(t.orgUnitId),
     index('documents_journal_idx').on(t.journalId),
     index('documents_search_idx').using('gin', t.searchTsv),
+  ],
+);
+
+/**
+ * app.document_templates — reusable document blanks (docs/modules/11 §12.7, plan §6.3).
+ * The template is the stable identity; its body lives in versions, so publishing a new
+ * one never rewrites documents already produced from an older one. `org_unit_id` null
+ * means the template is available across the whole committee.
+ */
+export const documentTemplates = appSchema.table(
+  'document_templates',
+  {
+    id: primaryId(),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    docClass: text('doc_class', { enum: DOC_CLASSES }).notNull(),
+    documentTypeCode: text('document_type_code'),
+    orgUnitId: uuid('org_unit_id').references(() => orgUnits.id, { onDelete: 'restrict' }),
+    routeTemplateId: uuid('route_template_id').references(() => routeTemplates.id, {
+      onDelete: 'set null',
+    }),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    uniqueIndex('document_templates_code_uq')
+      .on(t.code)
+      .where(sql`${t.deletedAt} is null`),
+    index('document_templates_pick_idx').on(t.docClass, t.isActive),
+  ],
+);
+
+/**
+ * app.document_template_versions — one immutable draft/published body per version.
+ * A published version is never edited: documents carry `template_version_id`, and letting
+ * the body move underneath them would silently rewrite what was already issued.
+ */
+export const documentTemplateVersions = appSchema.table(
+  'document_template_versions',
+  {
+    id: primaryId(),
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => documentTemplates.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    contentJson: jsonb('content_json'),
+    contentText: text('content_text'),
+    /** Set when the version is published; null while it is still a draft. */
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    uniqueIndex('document_template_versions_uq').on(t.templateId, t.version),
+    index('document_template_versions_template_idx').on(t.templateId),
   ],
 );
 
