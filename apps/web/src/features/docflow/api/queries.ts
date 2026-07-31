@@ -32,6 +32,7 @@ import type {
   ReportResolutionInput,
   ResolutionDto,
   RouteDto,
+  RouteValidationDto,
   SignatureDto,
   SignDocumentInput,
   SignPayloadDto,
@@ -491,6 +492,14 @@ export function useStartRoute(documentId: string) {
     mutationFn: (input: StartRouteInput) =>
       api.post<RouteDto[]>(`/v1/docflow/documents/${documentId}/route`, input),
     onSuccess: () => invalidateRoutes(qc, documentId),
+  });
+}
+
+/** Dry-run a route definition before starting it (docs/modules/11 §12.9). */
+export function useValidateRoute(documentId: string) {
+  return useMutation({
+    mutationFn: (input: StartRouteInput) =>
+      api.post<RouteValidationDto>(`/v1/docflow/documents/${documentId}/route/validate`, input),
   });
 }
 

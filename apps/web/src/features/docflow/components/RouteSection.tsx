@@ -26,7 +26,7 @@ import {
 } from '@cuks/shared';
 import { formatDateTime } from '@/lib/format';
 import { useActRouteStep, useDocumentRoutes } from '../api/queries';
-import { StartRouteDialog } from './StartRouteDialog';
+import { RouteBuilderDialog } from './RouteBuilderDialog';
 
 const stepTone: Record<RouteStepStatus, NonNullable<BadgeProps['tone']>> = {
   pending: 'neutral',
@@ -103,7 +103,7 @@ export function RouteSection({ doc }: { doc: DocumentDetailDto }): React.JSX.Ele
         </div>
       )}
 
-      <StartRouteDialog documentId={doc.id} open={startOpen} onOpenChange={setStartOpen} />
+      <RouteBuilderDialog documentId={doc.id} open={startOpen} onOpenChange={setStartOpen} />
       {rejecting ? (
         <RejectDialog
           onClose={() => setRejecting(null)}
