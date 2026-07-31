@@ -36,18 +36,34 @@ export function SearchPage(): React.JSX.Element {
 
   // The URL follows the debounced value, not the keystroke: one history entry per search, not
   // one per letter, so Back means «предыдущий поиск».
+  //
+  // Guarded by what is ALREADY in the URL rather than by the effect's own dependencies:
+  // react-router hands back a new `setSearchParams` identity every time the query string
+  // changes, so an unguarded effect re-fires after every page change and strips `page` again —
+  // Next/Prev would advance for one frame and snap back to page 1 forever.
+  const urlQuery = params.get('q') ?? '';
   useEffect(() => {
+    const next = debounced.trim();
+    if (next === urlQuery) return;
     setParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
-        if (debounced.trim()) next.set('q', debounced.trim());
-        else next.delete('q');
-        next.delete('page');
-        return next;
+        const p = new URLSearchParams(prev);
+        if (next) p.set('q', next);
+        else p.delete('q');
+        // A NEW query starts at page 1; paging within the same query must survive.
+        p.delete('page');
+        return p;
       },
       { replace: true },
     );
-  }, [debounced, setParams]);
+  }, [debounced, urlQuery, setParams]);
+
+  // A `q` written by somebody else — the command palette's «искать во всех документах», a
+  // pasted link, the Back button — becomes what the box shows, instead of being overwritten
+  // by this component's older local state.
+  useEffect(() => {
+    setQuery((current) => (urlQuery && urlQuery !== current.trim() ? urlQuery : current));
+  }, [urlQuery]);
 
   const { data, isPending, isError, isFetching } = useDocumentSearch(debounced, {
     page,
@@ -185,10 +201,10 @@ function SearchHit({ hit }: { hit: DocumentSearchHitDto }): React.JSX.Element {
         ) : null}
         <StatusBadge
           tone={documentStatusTone[hit.status]}
-          label={t(`documents.status.${hit.status}`)}
+          label={t(`documentStatus.${hit.status}`)}
         />
         {hit.confidentiality === 'dsp' ? (
-          <StatusBadge tone="danger" label={t('documents.card.dsp')} />
+          <StatusBadge tone="danger" label={t('documents.dsp')} />
         ) : null}
       </div>
 

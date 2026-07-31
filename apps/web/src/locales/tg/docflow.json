@@ -567,7 +567,10 @@
     "retry": "Такрор кардан",
     "active": "Фаъол",
     "inactive": "Пинҳон",
-    "activeField": "Фаъол"
+    "activeField": "Фаъол",
+    "loading": "Загрузка…",
+    "prev": "Назад",
+    "next": "Вперёд"
   },
   "collaborators": {
     "title": "Соисполнители",
@@ -1034,13 +1037,15 @@
     "group_outgoing": "Исходящие",
     "group_internal": "Внутренние",
     "group_citizens": "Обращения граждан",
-    "group_paper": "Бумажный",
     "group_email": "Электронная почта",
     "group_courier": "Курьер",
     "group_integration": "Интеграция",
     "emptyTitle": "За период нет данных",
     "emptyHint": "Измените период или проверьте, есть ли доступные вам документы",
     "failedTitle": "Не удалось построить отчёт",
-    "failedHint": "Повторите попытку через несколько секунд"
+    "failedHint": "Повторите попытку через несколько секунд",
+    "group_postal": "Почта",
+    "group_hand_delivery": "Лично в руки",
+    "group_other": "Иное"
   }
 }

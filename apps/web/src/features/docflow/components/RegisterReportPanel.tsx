@@ -88,7 +88,15 @@ export function RegisterReportPanel({
 
       <p className="text-xs text-text-muted">{t(`registerReport.hint.${kind}`)}</p>
 
-      {isPending ? (
+      {!valid ? (
+        // `enabled: false` keeps the query pending forever, so an invalid period would have
+        // shown skeletons that never resolve.
+        <EmptyState
+          icon={FileBarChart}
+          title={t('reports.invalidPeriod')}
+          description={t('registerReport.emptyHint')}
+        />
+      ) : isPending ? (
         <div className="flex flex-col gap-2" aria-busy="true">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-9 w-full" />
@@ -124,7 +132,7 @@ export function RegisterReportPanel({
                 <TableCell>
                   <span className="text-text">{groupLabel(row.label, t)}</span>
                   {row.hint ? (
-                    <span className="ml-2 text-xs text-text-muted">{row.hint}</span>
+                    <span className="ml-2 text-xs text-text-muted">{groupLabel(row.hint, t)}</span>
                   ) : null}
                 </TableCell>
                 {row.values.map((v, i) => (
@@ -135,7 +143,7 @@ export function RegisterReportPanel({
               </TableRow>
             ))}
             <TableRow className="font-semibold">
-              <TableCell>{t('reports.total')}</TableCell>
+              <TableCell>{t('reports.grandTotal')}</TableCell>
               {data.totals.map((v, i) => (
                 <TableCell key={data.columns[i] ?? i} className="text-right tabular-nums">
                   {v}

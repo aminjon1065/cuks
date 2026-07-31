@@ -331,6 +331,9 @@ export const documents = appSchema.table(
     index('documents_reg_number_prefix_idx')
       .on(t.regNumber.op('text_pattern_ops'))
       .where(sql`${t.regNumber} is not null`),
+    // The default order of every register list: newest first, tie-broken by id. Without it
+    // the planner sorts the whole visible register before it can take fifty rows.
+    index('documents_created_at_idx').on(t.createdAt.desc(), t.id.desc()),
     // The deadline widgets and the «сроки» report read exactly this shape.
     index('documents_due_date_idx')
       .on(t.dueDate)

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import {
   acquaintanceBatches,
   acquaintances,
@@ -224,9 +224,13 @@ export class AcknowledgementsService {
    * reachable both through an active step and through an open batch is one document owed, not
    * two, and the outer `count(distinct …)` is what says so.
    */
-  async toAcknowledgeCount(userId: string): Promise<number> {
+  async toAcknowledgeCount(userId: string, visible: SQL): Promise<number> {
+    // The outer join onto `documents` carries the caller's visibility. An acknowledge step
+    // expands over a whole subdivision without consulting any допуск-список, so without it a
+    // ДСП order would be COUNTED for people the list then refuses to show it to — a badge
+    // that says «на ознакомлении: 1» over an empty list is a disclosure (AC-SED-06).
     const rows = await this.db.execute<{ n: number }>(sql`
-      select count(distinct document_id)::int as n from (
+      select count(distinct owed.document_id)::int as n from (
         select ${acquaintances.documentId} as document_id
           from ${acquaintances}
           join ${routeSteps} on ${routeSteps.id} = ${acquaintances.routeStepId}
@@ -240,7 +244,9 @@ export class AcknowledgementsService {
           where ${acquaintances.userId} = ${userId}::uuid
             and ${acquaintances.status} = 'pending'
             and ${acquaintanceBatches.releasedAt} is null
-      ) owed`);
+      ) owed
+      join ${documents} on ${documents.id} = owed.document_id
+      where ${documents.deletedAt} is null and ${visible}`);
     return rows.rows[0]?.n ?? 0;
   }
 

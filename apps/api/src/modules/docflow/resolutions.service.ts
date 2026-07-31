@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, arrayContains, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, arrayContains, asc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { documents, resolutionExtensions, resolutions, users, type Database } from '@cuks/db';
 import type {
   CreateResolutionInput,
@@ -62,15 +62,25 @@ export class ResolutionsService {
     return rows.map((r) => r.documentId);
   }
 
-  /** The same queue as one number — the dashboard badge needs a count, not the ids. */
-  async myTasksCount(userId: string): Promise<number> {
+  /**
+   * The same queue as one number — the dashboard badge needs a count, not the ids.
+   *
+   * Joined onto `documents` and filtered by the caller's visibility for the same reason the
+   * list is: being named the executor of an instruction on a ДСП document does not admit you
+   * to the document. A badge that counts what the list refuses to show tells its reader that
+   * a ДСП document exists and names them (AC-SED-06).
+   */
+  async myTasksCount(userId: string, visible: SQL): Promise<number> {
     const [row] = await this.db
       .select({ n: sql<number>`count(distinct ${resolutions.documentId})::int` })
       .from(resolutions)
+      .innerJoin(documents, eq(documents.id, resolutions.documentId))
       .where(
         and(
           eq(resolutions.status, 'active'),
           sql`(${resolutions.availableAt} is null or ${resolutions.availableAt} <= now())`,
+          isNull(documents.deletedAt),
+          visible,
           or(eq(resolutions.executorId, userId), arrayContains(resolutions.coExecutors, [userId])),
         ),
       );

@@ -130,6 +130,25 @@ export function visibleDocumentsWhere(
     hasRegistryAccess(user) ? ne(documents.confidentiality, 'dsp') : undefined,
   );
 
+  // `and`/`or` return undefined only for an empty argument list, which cannot happen here —
+  // but a silently-dropped visibility predicate is the one bug this file must never have, so
+  // the fallback is «see nothing» rather than a non-null assertion.
+  const both = and(involved ?? sql`false`, confidentialityGuard(user));
+  return both ?? sql`false`;
+}
+
+/**
+ * The ДСП half on its own: allow-list ∩ `docflow.confidential.view`, never widened by
+ * anything (docs/09-security.md §3).
+ *
+ * Exported so a caller that has ALREADY narrowed to involvement — the «Мои документы» queue —
+ * can apply the guard without paying for the involvement subqueries a second time. On a
+ * register of two hundred thousand rows that duplication was worth about 100 ms a page.
+ */
+export function confidentialityGuard(
+  user: Pick<AuthUser, 'id' | 'permissions' | 'isSuperadmin'>,
+): SQL {
+  if (user.isSuperadmin) return sql`true`;
   const guard = hasConfidentialAccess(user)
     ? or(
         ne(documents.confidentiality, 'dsp'),
@@ -137,12 +156,7 @@ export function visibleDocumentsWhere(
         sql`${user.id}::uuid = any(${documents.accessList})`,
       )
     : or(ne(documents.confidentiality, 'dsp'), eq(documents.authorId, user.id));
-
-  // `and`/`or` return undefined only for an empty argument list, which cannot happen here —
-  // but a silently-dropped visibility predicate is the one bug this file must never have, so
-  // the fallback is «see nothing» rather than a non-null assertion.
-  const both = and(involved ?? sql`false`, guard ?? sql`false`);
-  return both ?? sql`false`;
+  return guard ?? sql`false`;
 }
 
 /**

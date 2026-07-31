@@ -53,7 +53,8 @@ export class AttentionService {
     // the chancellery is waiting on somebody to look at.
     const newIncoming = sql`${documents.docClass} = 'incoming'
       and ${documents.status} = 'registered'
-      and not exists (select 1 from ${resolutions} r where r.document_id = ${documents.id})`;
+      and not exists (select 1 from ${resolutions} r
+        where r.document_id = ${documents.id} and r.status <> 'cancelled')`;
     const candidates = sql`${documents.dispositionStatus} = 'candidate'`;
 
     const [wide, approve, sign, ack, tasks] = await Promise.all([
@@ -67,10 +68,13 @@ export class AttentionService {
         })
         .from(documents)
         .where(base),
-      this.routes.approvalQueueCount(actor.id),
-      this.routes.signQueueCount(actor.id),
-      this.acknowledgements.toAcknowledgeCount(actor.id),
-      this.resolutions.myTasksCount(actor.id),
+      // The SAME predicate the four document-wide counters use. A queue count that skipped it
+      // would disagree with the list its badge links to — and the disagreement would be exactly
+      // the ДСП documents the caller must not learn about.
+      this.routes.approvalQueueCount(actor.id, visible),
+      this.routes.signQueueCount(actor.id, visible),
+      this.acknowledgements.toAcknowledgeCount(actor.id, visible),
+      this.resolutions.myTasksCount(actor.id, visible),
     ]);
 
     const row = wide[0];

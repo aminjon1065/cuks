@@ -42,6 +42,7 @@ import {
   hasRegistryAccess,
   visibleDocumentsWhere,
 } from './document-visibility';
+import { DOCUMENT_TIE_BREAKER } from './document-sort';
 import { RoutesService } from './routes.service';
 import { isUniqueViolation } from '../../common/db/unique-violation';
 
@@ -296,7 +297,11 @@ export class ArchiveService {
           and(eq(nomenclature.index, documents.caseIndex), isNull(nomenclature.deletedAt)),
         )
         .where(and(...where))
-        .orderBy(desc(documents.archivedAt))
+        // The unique tie-breaker every other paginated list carries: `archived_at` is a
+        // per-transaction timestamp, so a batch filing gives several rows the same value and
+        // the order among them would otherwise be whatever the planner chose that execution —
+        // a row on both pages, or on neither, and an export that drops what it counted.
+        .orderBy(desc(documents.archivedAt), DOCUMENT_TIE_BREAKER)
         .limit(query.limit)
         .offset(offset),
       this.db

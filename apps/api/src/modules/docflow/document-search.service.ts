@@ -99,8 +99,11 @@ export class DocumentSearchService {
             else null end`,
           hitDocument: sql<boolean>`${documents.searchTsv} @@ ${tsq}`,
           hitNumber: sql<boolean>`(${this.numberMatch(query.q)})`,
-          hitFile: sql<boolean>`(${this.fileMatch(tsq)})`,
-          hitCorrespondent: sql<boolean>`(${this.correspondentMatch(tsq)})`,
+          // The correspondent flag is free: the row is already joined. The ATTACHMENT flag is
+          // not — re-running the three-table EXISTS per returned row doubles the work of the
+          // page — so it is derived instead: the WHERE already proved the row matched
+          // somehow, and if none of the cheap surfaces explain it, the attachment did.
+          hitCorrespondent: sql<boolean>`(${correspondents.searchTsv} @@ ${tsq})`,
         })
         .from(documents)
         .leftJoin(correspondents, eq(correspondents.id, documents.correspondentId))
@@ -245,13 +248,15 @@ const LOCAL_TZ_FROM = sql.raw("at time zone 'Asia/Dushanbe'");
 function sources(row: {
   hitNumber: boolean;
   hitDocument: boolean;
-  hitCorrespondent: boolean;
-  hitFile: boolean;
+  hitCorrespondent: boolean | null;
 }): SearchMatchSource[] {
   const out: SearchMatchSource[] = [];
   if (row.hitNumber) out.push('number');
   if (row.hitDocument) out.push('document');
   if (row.hitCorrespondent) out.push('correspondent');
-  if (row.hitFile) out.push('file');
+  // By elimination. The row is in the result set, so SOMETHING matched; if none of the three
+  // surfaces the query already evaluated did, the only remaining branch is the attachment
+  // text — and asking the database again for an answer it has already implied is waste.
+  if (out.length === 0) out.push('file');
   return out;
 }

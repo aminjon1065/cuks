@@ -291,30 +291,37 @@ export class RoutesService {
    * `count(distinct document_id)`, because a document with two active steps assigned to the
    * caller is still one document waiting for them.
    */
-  async queueCount(userId: string, kind: 'approve' | 'sign'): Promise<number> {
+  async queueCount(userId: string, kind: 'approve' | 'sign', visible: SQL): Promise<number> {
     const match = this.actingPredicate(await this.actingContext(userId, new Date()));
     if (!match) return 0;
     const [row] = await this.db
       .select({ n: sql<number>`count(distinct ${routes.documentId})::int` })
       .from(routeSteps)
       .innerJoin(routes, eq(routes.id, routeSteps.routeId))
+      // The join onto `documents` is not decoration: being NAMED on a step of a ДСП document
+      // does not admit you to it — only the допуск-список does. Without this the badge would
+      // count a document the list behind it refuses to show, and a count that disagrees with
+      // its own list is how somebody learns a ДСП document exists (AC-SED-06).
+      .innerJoin(documents, eq(documents.id, routes.documentId))
       .where(
         and(
           eq(routes.status, 'active'),
           eq(routeSteps.status, 'active'),
           eq(routeSteps.kind, kind),
+          isNull(documents.deletedAt),
+          visible,
           match,
         ),
       );
     return row?.n ?? 0;
   }
 
-  approvalQueueCount(userId: string): Promise<number> {
-    return this.queueCount(userId, 'approve');
+  approvalQueueCount(userId: string, visible: SQL): Promise<number> {
+    return this.queueCount(userId, 'approve', visible);
   }
 
-  signQueueCount(userId: string): Promise<number> {
-    return this.queueCount(userId, 'sign');
+  signQueueCount(userId: string, visible: SQL): Promise<number> {
+    return this.queueCount(userId, 'sign', visible);
   }
 
   /**

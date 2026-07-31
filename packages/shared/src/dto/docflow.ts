@@ -415,6 +415,20 @@ export const listDocumentsQuerySchema = z.object({
   /** Registration year (by reg_date) — the journals register view (docs/modules/11 §7). */
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   sort: documentSortSchema.optional(),
+  /**
+   * The two attention-widget drill-downs. They exist so a badge can link to a list that
+   * reproduces its own number: «Просрочено: 3» opening a screen of forty rows teaches people
+   * to stop trusting the badge. Query strings only, so the boolean is parsed explicitly —
+   * `z.coerce.boolean()` would turn the string "false" into true.
+   */
+  overdue: z.preprocess(
+    (v) => (v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional(),
+  ),
+  awaitingDispatch: z.preprocess(
+    (v) => (v === undefined ? undefined : v === 'true' || v === true),
+    z.boolean().optional(),
+  ),
 });
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 

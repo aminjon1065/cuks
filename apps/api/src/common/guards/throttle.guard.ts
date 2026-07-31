@@ -26,20 +26,27 @@ export class ThrottleGuard implements CanActivate {
     if (!options) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
-    // Keyed on the SESSION when the request carries one, on the IP otherwise.
+    const route = `${context.getClass().name}.${context.getHandler().name}`;
+
+    // TWO buckets, both of which must pass.
     //
-    // An IP-only bucket is both too tight and too loose behind one office NAT: the whole floor
-    // shares a single budget, so one person typing quickly into a search box locks out their
-    // colleagues, while an authenticated abuser only has to change address to get a fresh
-    // allowance. The cookie is read raw rather than taken from `authUser` because this guard
-    // deliberately runs BEFORE the session guard — a flood must be turned away before it costs
-    // a session lookup. An unauthenticated route (login) has no cookie and stays IP-keyed,
-    // which is exactly right for a route whose whole purpose is to be hit by strangers.
+    // The IP bucket is the ceiling, and it is not optional: it is the only key the caller
+    // cannot choose. The session cookie is read here raw — this guard deliberately runs BEFORE
+    // the session guard, so a flood is turned away before it costs a session lookup — and a
+    // raw cookie is just a header the client writes. Keying ONLY on it would let anybody defeat
+    // the login limit by sending a fresh random value with every request.
+    //
+    // The session bucket is added on top for fairness behind one office NAT, where an IP-only
+    // limit means one person typing quickly into a search box spends the whole floor's budget.
+    // It can be forged, which is exactly why it can only ever make the limit stricter.
     const sessionId = request.cookies?.[SESSION_COOKIE];
-    const subject = sessionId ? `s:${sessionId}` : `ip:${request.ip}`;
-    const bucket = `${context.getClass().name}.${context.getHandler().name}:${subject}`;
-    if (await this.lockout.hitRate(bucket, options.limit, options.windowSeconds)) {
-      throw AppException.tooManyRequests('common.rate_limited', 'Too many requests');
+    const buckets = [`${route}:ip:${request.ip}`];
+    if (sessionId) buckets.push(`${route}:s:${sessionId}`);
+
+    for (const bucket of buckets) {
+      if (await this.lockout.hitRate(bucket, options.limit, options.windowSeconds)) {
+        throw AppException.tooManyRequests('common.rate_limited', 'Too many requests');
+      }
     }
     return true;
   }

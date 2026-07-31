@@ -1,0 +1,1 @@
+CREATE INDEX "documents_created_at_idx" ON "app"."documents" USING btree ("created_at" DESC NULLS LAST,"id" DESC NULLS LAST);

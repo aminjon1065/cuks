@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileStack, FileText, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button, DataTable, EmptyState, PageHeader, StatusBadge, cn } from '@cuks/ui';
@@ -44,13 +44,38 @@ export function DocumentsPage(): React.JSX.Element {
     'drafts',
     ...(canRegistry ? (['registry'] as const) : []),
   ];
-  const [queue, setQueue] = useState<DocumentQueue>('mine');
-  const [status, setStatus] = useState('');
-  const [docClass, setDocClass] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  // Filters live in the URL, so the register is linkable: the dashboard's «Просрочено: 3»
+  // opens exactly the three, a colleague can be sent «вот этот срез», and Back means the
+  // previous filter rather than the previous page.
+  const [params, setParams] = useSearchParams();
+  const rawQueue = params.get('queue') ?? 'mine';
+  const queue = (queues as readonly string[]).includes(rawQueue)
+    ? (rawQueue as DocumentQueue)
+    : 'mine';
+  const status = params.get('status') ?? '';
+  const docClass = params.get('docClass') ?? '';
+  const search = params.get('search') ?? '';
+  const overdue = params.get('overdue') === 'true';
+  const awaitingDispatch = params.get('awaitingDispatch') === 'true';
+  const page = Math.max(1, Number(params.get('page') ?? 1));
   const [createOpen, setCreateOpen] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
+
+  /** Set one filter; any change but paging returns to page 1, because it is a new question. */
+  const setParam = (key: string, value: string): void => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      if (key !== 'page') next.delete('page');
+      return next;
+    });
+  };
+  const setQueue = (next: DocumentQueue): void => setParam('queue', next);
+  const setStatus = (next: string): void => setParam('status', next);
+  const setDocClass = (next: string): void => setParam('docClass', next);
+  const setSearch = (next: string): void => setParam('search', next);
+  const setPage = (next: number): void => setParam('page', String(next));
 
   const query: ListDocumentsQuery = {
     page,
@@ -59,6 +84,8 @@ export function DocumentsPage(): React.JSX.Element {
     ...(status ? { status: status as ListDocumentsQuery['status'] } : {}),
     ...(docClass ? { docClass: docClass as ListDocumentsQuery['docClass'] } : {}),
     ...(search.trim() ? { search: search.trim() } : {}),
+    ...(overdue ? { overdue: true } : {}),
+    ...(awaitingDispatch ? { awaitingDispatch: true } : {}),
   };
   const list = useDocuments(query);
   const counts = useQueueCounts();
@@ -142,11 +169,6 @@ export function DocumentsPage(): React.JSX.Element {
     [t, isActionQueue, queue],
   );
 
-  const resetPageAnd = (fn: () => void) => {
-    fn();
-    setPage(1);
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -172,7 +194,7 @@ export function DocumentsPage(): React.JSX.Element {
             key={key}
             role="tab"
             aria-selected={queue === key}
-            onClick={() => resetPageAnd(() => setQueue(key))}
+            onClick={() => setQueue(key)}
             className={cn(
               '-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] font-medium transition-colors',
               queue === key
@@ -195,7 +217,7 @@ export function DocumentsPage(): React.JSX.Element {
           aria-label={t('documents.columns.status')}
           className={selectClass}
           value={status}
-          onChange={(e) => resetPageAnd(() => setStatus(e.target.value))}
+          onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">{t('documents.filters.allStatuses')}</option>
           {DOCUMENT_STATUSES.map((s) => (
@@ -208,7 +230,7 @@ export function DocumentsPage(): React.JSX.Element {
           aria-label={t('documents.columns.class')}
           className={selectClass}
           value={docClass}
-          onChange={(e) => resetPageAnd(() => setDocClass(e.target.value))}
+          onChange={(e) => setDocClass(e.target.value)}
         >
           <option value="">{t('documents.filters.allClasses')}</option>
           {DOC_CLASSES.map((c) => (
@@ -221,7 +243,7 @@ export function DocumentsPage(): React.JSX.Element {
           className={cn(selectClass, 'min-w-48 flex-1')}
           placeholder={t('documents.filters.searchPlaceholder')}
           value={search}
-          onChange={(e) => resetPageAnd(() => setSearch(e.target.value))}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
@@ -258,7 +280,7 @@ export function DocumentsPage(): React.JSX.Element {
             size="icon"
             aria-label={t('documents.prevPage')}
             disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setPage(Math.max(1, page - 1))}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -267,7 +289,7 @@ export function DocumentsPage(): React.JSX.Element {
             size="icon"
             aria-label={t('documents.nextPage')}
             disabled={page >= pageCount}
-            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            onClick={() => setPage(Math.min(pageCount, page + 1))}
           >
             <ChevronRight className="size-4" />
           </Button>

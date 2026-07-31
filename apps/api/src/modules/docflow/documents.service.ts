@@ -18,6 +18,7 @@ import {
   correspondents,
   dictionaries,
   documentCollaborators,
+  documentDispatches,
   documentFiles,
   documents,
   fileVersions,
@@ -36,6 +37,7 @@ import {
   DOCUMENT_EDITING_ROLES,
   DOCUMENT_STATUS_TRANSITIONS,
   documentContentText,
+  likeContains,
   documentTransitionAllowed,
   type AddDocumentFileInput,
   type DocumentContent,
@@ -73,6 +75,7 @@ import {
 import {
   canManageDocumentAccess,
   canViewDocumentBase,
+  confidentialityGuard,
   documentInvolvementWhere,
   hasRegistryAccess,
   visibleDocumentsWhere,
@@ -697,11 +700,15 @@ export class DocumentsService {
    * integers, on a screen that renders them as badges.
    */
   async queueCounts(user: AuthUser): Promise<DocumentQueueCountsDto> {
+    // Visibility-scoped exactly like the lists these badges link to: a badge counting a
+    // document its own list refuses to show is how somebody learns a ДСП document exists.
+    const assignments = await this.routes.actingAssignments(user.id);
+    const visible = visibleDocumentsWhere(user, assignments);
     const [approve, sign, ack, tasks] = await Promise.all([
-      this.routes.approvalQueueCount(user.id),
-      this.routes.signQueueCount(user.id),
-      this.acknowledgements.toAcknowledgeCount(user.id),
-      this.resolutions.myTasksCount(user.id),
+      this.routes.approvalQueueCount(user.id, visible),
+      this.routes.signQueueCount(user.id, visible),
+      this.acknowledgements.toAcknowledgeCount(user.id, visible),
+      this.resolutions.myTasksCount(user.id, visible),
     ]);
     return { to_approve: approve, to_sign: sign, to_acknowledge: ack, my_tasks: tasks };
   }
@@ -1359,7 +1366,18 @@ export class DocumentsService {
     assignments: ActorAssignments,
     queueDocIds?: string[],
   ): SQL[] {
-    const where: SQL[] = [isNull(documents.deletedAt), visibleDocumentsWhere(user, assignments)];
+    // «Мои» is the caller's own involvement, which is already a NARROWER predicate than the
+    // full visibility one — running both would evaluate the same seven EXISTS twice per row.
+    // The ДСП guard is still applied, because narrowing must never be a way around the grif.
+    // Superadmin included: «Мои документы» means «мои» for everybody, and the one account
+    // that can see the whole register is the one that most needs the two tabs to differ.
+    const mineOnly = query.queue === 'mine';
+    const where: SQL[] = [
+      isNull(documents.deletedAt),
+      ...(mineOnly
+        ? [documentInvolvementWhere(user, assignments), confidentialityGuard(user)]
+        : [visibleDocumentsWhere(user, assignments)]),
+    ];
     if (query.status) where.push(eq(documents.status, query.status));
     if (query.docClass) where.push(eq(documents.docClass, query.docClass));
     if (query.journalId) where.push(eq(documents.journalId, query.journalId));
@@ -1367,8 +1385,21 @@ export class DocumentsService {
     if (query.year) {
       where.push(sql`extract(year from ${documents.regDate}) = ${query.year}`);
     }
+    // The same two predicates the attention counts use, so a badge and the list it links to
+    // are answers to one question rather than two (plan §8.8).
+    if (query.overdue) {
+      where.push(sql`${documents.dueDate} is not null and ${documents.dueDate} < now()
+        and ${documents.status} in ('registered', 'in_progress', 'on_route', 'pending_registration')`);
+    }
+    if (query.awaitingDispatch) {
+      where.push(sql`${documents.docClass} = 'outgoing'
+        and ${documents.regNumber} is not null
+        and ${documents.status} in ('registered', 'in_progress', 'on_route', 'pending_registration')
+        and not exists (select 1 from ${documentDispatches} d
+          where d.document_id = ${documents.id} and d.status in ('sent', 'pending'))`);
+    }
     if (query.search) {
-      const text = `%${query.search}%`;
+      const text = likeContains(query.search);
       const cond = or(ilike(documents.subject, text), ilike(documents.regNumber, text));
       if (cond) where.push(cond);
     }
@@ -1394,8 +1425,7 @@ export class DocumentsService {
         // the whole non-ДСП register for the chancellery and control, one's own involvement
         // for everybody else. Nothing to add.
         break;
-      default: // 'mine' — narrowed to the caller's own involvement, without the register.
-        if (!user.isSuperadmin) where.push(documentInvolvementWhere(user, assignments));
+      default: // 'mine' — already narrowed above to the caller's own involvement.
         break;
     }
     return where;

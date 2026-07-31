@@ -1559,22 +1559,29 @@ Commit: `feat(docflow): add governed archive retention`.
 
 Backend:
 
-- [ ] Document search vector и file text search.
-- [ ] Расширенные filters/sort allow-list.
-- [ ] Search snippets с visibility.
+- [x] Document search vector и file text search.
+- [x] Расширенные filters/sort allow-list.
+- [x] Search snippets с visibility.
 - [ ] Saved searches либо интеграция с общими saved views.
-- [ ] Dashboard aggregate одним/несколькими индексируемыми запросами.
-- [ ] Reports: движение, регистрация, сроки, отправка, ознакомление, архив.
+- [x] Dashboard aggregate одним/несколькими индексируемыми запросами.
+- [x] Reports: движение, регистрация, сроки, отправка, ознакомление, архив.
 - [ ] Export jobs для больших выборок.
 
 Frontend:
 
 - [ ] Расширенный filter panel;
 - [ ] chips/saved views;
-- [ ] Cmd+K provider;
-- [ ] реальный AttentionWidget;
-- [ ] dashboard KPI и drill-down;
-- [ ] отчёты с loading/empty/error/export progress.
+- [x] Cmd+K provider;
+- [x] реальный AttentionWidget;
+- [x] dashboard KPI и drill-down;
+- [x] отчёты с loading/empty/error/export progress.
+
+Открыто на конец сессии (честно, не «почти сделано»): **сохранённые представления**
+(`saved searches`), **расширенная фильтр-панель с чипами** и **фоновые export jobs для
+больших выборок**. Выгрузки сейчас синхронные и ограничены страницей: XLSX описи предупреждает
+об усечении строкой в самом файле, отчёты реестра — агрегаты и умещаются целиком. Порог
+«большой выборки», очередь, TTL артефакта и способ доставки не заданы ни в одном документе
+(см. §6 карты вопросов), поэтому очередь не заводилась вслепую.
 
 Тесты:
 

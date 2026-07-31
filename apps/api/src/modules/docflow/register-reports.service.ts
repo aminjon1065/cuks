@@ -42,7 +42,17 @@ export class RegisterReportsService {
     );
     const base = and(isNull(documents.deletedAt), visible);
 
-    const built = await this.rowsFor(query.kind, base, period);
+    // Two reports are not about registration at all, so they get their own ranges over the
+    // date each is actually named after.
+    const filedRange = and(
+      sql`${documents.archivedAt} >= (${query.from}::date ${LOCAL_TZ})`,
+      sql`${documents.archivedAt} < ((${query.to}::date + 1) ${LOCAL_TZ})`,
+    );
+    const sentRange = and(
+      sql`${documentDispatches.createdAt} >= (${query.from}::date ${LOCAL_TZ})`,
+      sql`${documentDispatches.createdAt} < ((${query.to}::date + 1) ${LOCAL_TZ})`,
+    );
+    const built = await this.rowsFor(query.kind, base, period, filedRange, sentRange);
     return {
       kind: query.kind,
       from: query.from,
@@ -76,6 +86,8 @@ export class RegisterReportsService {
     kind: RegisterReportKind,
     base: SQL | undefined,
     period: SQL | undefined,
+    filedRange: SQL | undefined,
+    sentRange: SQL | undefined,
   ): Promise<RegisterReportRow[]> {
     switch (kind) {
       case 'movement':
@@ -85,9 +97,9 @@ export class RegisterReportsService {
       case 'deadlines':
         return this.deadlines(base, period);
       case 'dispatch':
-        return this.dispatch(base, period);
+        return this.dispatch(base, period, sentRange);
       case 'archive':
-        return this.archive(base, period);
+        return this.archive(base, period, filedRange);
     }
   }
 
@@ -174,9 +186,15 @@ export class RegisterReportsService {
   /**
    * Отправка, by channel. Counted over DISPATCHES, not documents: a letter sent twice down
    * two channels is two sends, and a report about sending that says otherwise is wrong about
-   * the thing it is named after.
+   * the thing it is named after. For the same reason the period ranges over when the dispatch
+   * was RECORDED, not when its document was registered — «отправлено за март» is a question
+   * about March sends, and a letter registered in January can be sent in March.
    */
-  private async dispatch(base: SQL | undefined, period: SQL | undefined): Promise<Row[]> {
+  private async dispatch(
+    base: SQL | undefined,
+    _period: SQL | undefined,
+    sentRange: SQL | undefined,
+  ): Promise<Row[]> {
     const rows = await this.db
       .select({
         label: sql<string>`${documentDispatches.channel}`,
@@ -187,7 +205,7 @@ export class RegisterReportsService {
       })
       .from(documentDispatches)
       .innerJoin(documents, eq(documents.id, documentDispatches.documentId))
-      .where(and(base, period))
+      .where(and(base, sentRange))
       .groupBy(documentDispatches.channel)
       .orderBy(documentDispatches.channel);
     return rows.map((r) => ({
@@ -198,11 +216,17 @@ export class RegisterReportsService {
   }
 
   /**
-   * The archive by case. Filed in the period — so this one ranges over `archived_at` rather
+   * The archive by case, FILED IN THE PERIOD — so this one ranges over `archived_at` rather
    * than `reg_date`: «сколько сдали в дело за март» is a question about filing, not about
-   * when the documents were originally registered.
+   * when the documents were originally registered. The range is applied, not merely described:
+   * the workbook prints «за период …» in its header, and a report that ignores the period it
+   * advertises is worse than one that offers none.
    */
-  private async archive(base: SQL | undefined, _period: SQL | undefined): Promise<Row[]> {
+  private async archive(
+    base: SQL | undefined,
+    _period: SQL | undefined,
+    filedRange: SQL | undefined,
+  ): Promise<Row[]> {
     const rows = await this.db
       .select({
         label: sql<string>`coalesce(${documents.caseIndex}, ${NO_CASE})`,
@@ -218,7 +242,7 @@ export class RegisterReportsService {
         nomenclature,
         and(eq(nomenclature.index, documents.caseIndex), isNull(nomenclature.deletedAt)),
       )
-      .where(and(base, sql`${documents.archivedAt} is not null`))
+      .where(and(base, sql`${documents.archivedAt} is not null`, filedRange))
       .groupBy(documents.caseIndex, nomenclature.title)
       .orderBy(sql`coalesce(${documents.caseIndex}, ${NO_CASE})`);
     return rows.map((r) => ({

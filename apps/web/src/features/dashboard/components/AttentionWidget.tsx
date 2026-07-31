@@ -44,8 +44,11 @@ const QUEUE_LINKS: Record<AttentionQueue, string> = {
   to_sign: '/app/docs?queue=to_sign',
   to_acknowledge: '/app/docs?queue=to_acknowledge',
   my_tasks: '/app/docs?queue=my_tasks',
-  overdue: '/app/docs/control',
-  awaiting_dispatch: '/app/docs?queue=registry&docClass=outgoing',
+  // These two carry the SAME predicates the counts use (`overdue`, `awaitingDispatch` on the
+  // list DTO), so the screen behind a badge reproduces its number instead of showing a
+  // superset the reader has to re-filter by eye.
+  overdue: '/app/docs?queue=registry&overdue=true',
+  awaiting_dispatch: '/app/docs?queue=registry&docClass=outgoing&awaitingDispatch=true',
   new_incoming: '/app/docs?queue=registry&docClass=incoming&status=registered',
   disposition_candidates: '/app/docs/archive?tab=candidates',
 };
