@@ -2,6 +2,9 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import {
+  registerReportQuerySchema,
+  type RegisterReportDto,
+  type RegisterReportQuery,
   acknowledgementReportQuerySchema,
   disciplineReportQuerySchema,
   type AcknowledgementReportDto,
@@ -14,6 +17,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { ReportsService } from './reports.service';
+import { RegisterReportsService } from './register-reports.service';
 
 /**
  * Docflow reports (docs/modules/11 §5, plan этап 7). Both are gated by
@@ -24,7 +28,10 @@ import { ReportsService } from './reports.service';
 @ApiTags('docflow')
 @Controller('docflow/reports')
 export class ReportsController {
-  constructor(private readonly reports: ReportsService) {}
+  constructor(
+    private readonly reports: ReportsService,
+    private readonly registerReports: RegisterReportsService,
+  ) {}
 
   @Get('discipline')
   @RequirePermission('docflow.reports.view')
@@ -74,5 +81,30 @@ export class ReportsController {
     reply.header('content-disposition', 'attachment; filename="acknowledgement.xlsx"');
     reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     return this.reports.acknowledgementXlsx(query, user);
+  }
+
+  @Get('register')
+  @RequirePermission('docflow.reports.view')
+  @ApiOperation({
+    summary: 'Register reports: movement, registration, deadlines, dispatch, archive',
+  })
+  register(
+    @Query(new ZodValidationPipe(registerReportQuerySchema)) query: RegisterReportQuery,
+    @CurrentUser() user: AuthUser,
+  ): Promise<RegisterReportDto> {
+    return this.registerReports.report(query, user);
+  }
+
+  @Get('register/export')
+  @RequirePermission('docflow.reports.view')
+  @ApiOperation({ summary: 'The same report as an XLSX workbook' })
+  async registerExport(
+    @Query(new ZodValidationPipe(registerReportQuerySchema)) query: RegisterReportQuery,
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    reply.header('content-disposition', `attachment; filename="report-${query.kind}.xlsx"`);
+    reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return this.registerReports.xlsx(query, user);
   }
 }

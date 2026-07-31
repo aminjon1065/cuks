@@ -540,6 +540,61 @@ export const ATTENTION_QUEUES = [
 ] as const;
 export type AttentionQueue = (typeof ATTENTION_QUEUES)[number];
 
+// --- Register reports (plan этап 9 «движение, регистрация, сроки, отправка, архив») ---
+
+/**
+ * The five register reports. The plan names them and stops there — no columns, no grouping,
+ * no period semantics — so each one is defined here by the question it answers, and the
+ * choice is recorded in STATUS.md:
+ *
+ * - `movement` — оборот по журналам: what came in, what was registered, what closed;
+ * - `registration` — the registration book itself: how many numbers each journal minted;
+ * - `deadlines` — исполнительские сроки по документам (the resolution-level view is the
+ *   existing discipline report, which this deliberately does not duplicate);
+ * - `dispatch` — отправка: what left, through which channel, and how long it took;
+ * - `archive` — что сдано в дело, на каких сроках и что под запретом.
+ */
+export const REGISTER_REPORT_KINDS = [
+  'movement',
+  'registration',
+  'deadlines',
+  'dispatch',
+  'archive',
+] as const;
+export type RegisterReportKind = (typeof REGISTER_REPORT_KINDS)[number];
+
+export const registerReportQuerySchema = z.object({
+  kind: z.enum(REGISTER_REPORT_KINDS),
+  /** Inclusive Asia/Dushanbe days — the same calendar registration numbering uses. */
+  from: z.string().date(),
+  to: z.string().date(),
+});
+export type RegisterReportQuery = z.infer<typeof registerReportQuerySchema>;
+
+/**
+ * One line of a register report. Deliberately generic: five reports with five row shapes
+ * would be five screens, five exporters and five sets of tests for what is one table with a
+ * different question above it. `label` names the group (a journal, a channel, a case);
+ * `values` are the numbers, in the order `columns` declares.
+ */
+export interface RegisterReportRow {
+  label: string;
+  /** Second line under the label — a journal's class, a case's title. */
+  hint: string | null;
+  values: number[];
+}
+
+export interface RegisterReportDto {
+  kind: RegisterReportKind;
+  from: string;
+  to: string;
+  /** Column keys, for i18n on the client. The server never sends display text. */
+  columns: string[];
+  rows: RegisterReportRow[];
+  /** Column-wise totals, same order as `columns`. */
+  totals: number[];
+}
+
 export interface AttentionCountsDto {
   /** Counts for every queue the caller may see. A queue they may not see is simply absent —
    *  a zero would still admit that the queue exists and that it is empty for them. */

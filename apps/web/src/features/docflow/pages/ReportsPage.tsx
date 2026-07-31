@@ -32,6 +32,7 @@ import {
 } from '../api/queries';
 import { formatDateTime } from '@/lib/format';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { RegisterReportPanel } from '../components/RegisterReportPanel';
 
 interface Period {
   from: string;
@@ -46,7 +47,7 @@ const ACK_TONE: Record<AcquaintanceStatus, 'success' | 'warning' | 'danger' | 'n
   cancelled: 'neutral',
 };
 
-const REPORT_TABS = ['discipline', 'acknowledgement'] as const;
+const REPORT_TABS = ['discipline', 'acknowledgement', 'register'] as const;
 type ReportTab = (typeof REPORT_TABS)[number];
 
 const inputClass = cn(
@@ -157,12 +158,20 @@ export function ReportsPage(): React.JSX.Element {
                 : 'border-transparent text-text-muted hover:text-text',
             )}
           >
-            {t(key === 'discipline' ? 'reportsAck.disciplineTab' : 'reportsAck.tab')}
+            {t(
+              key === 'discipline'
+                ? 'reportsAck.disciplineTab'
+                : key === 'acknowledgement'
+                  ? 'reportsAck.tab'
+                  : 'registerReport.tab',
+            )}
           </button>
         ))}
       </div>
 
-      {tab === 'acknowledgement' ? (
+      {tab === 'register' ? (
+        <RegisterReportPanel from={period.from} to={period.to} valid={valid} />
+      ) : tab === 'acknowledgement' ? (
         !valid ? (
           <p className="text-[13px] text-danger">{t('reports.invalidPeriod')}</p>
         ) : (

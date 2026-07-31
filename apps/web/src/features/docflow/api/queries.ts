@@ -4,6 +4,8 @@ import type {
   AttentionCountsDto,
   DocumentSearchHitDto,
   QuickSearchHitDto,
+  RegisterReportDto,
+  RegisterReportQuery,
   ActivateCertificateInput,
   AddDocumentFileInput,
   CertificateDto,
@@ -1261,4 +1263,42 @@ export function useAddDispositionItems() {
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: archiveKey }),
   });
+}
+
+// ---- Register reports (plan этап 9) ----------------------------------------
+
+function registerReportParams(query: RegisterReportQuery): string {
+  return new URLSearchParams({ kind: query.kind, from: query.from, to: query.to }).toString();
+}
+
+export function useRegisterReport(
+  query: RegisterReportQuery,
+  enabled: boolean,
+): UseQueryResult<RegisterReportDto> {
+  return useQuery({
+    queryKey: [...documentsKey, 'register-report', query.kind, query.from, query.to],
+    queryFn: () =>
+      api.get<RegisterReportDto>(`/v1/docflow/reports/register?${registerReportParams(query)}`),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Download a register report as XLSX (a binary GET — bypasses the JSON api client). */
+export async function exportRegisterReportXlsx(query: RegisterReportQuery): Promise<void> {
+  const res = await fetch(
+    `/api/v1/docflow/reports/register/export?${registerReportParams(query)}`,
+    { credentials: 'include' },
+  );
+  if (!res.ok) throw new Error(`export failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download =
+    filenameFromDisposition(res.headers.get('content-disposition')) ?? `${query.kind}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

@@ -176,3 +176,66 @@ test('reports: the discipline report requires docflow.reports.view', async () =>
   expect(res.status(), 'a plain employee is forbidden').toBe(403);
   await user.dispose();
 });
+
+/**
+ * The five register reports (plan этап 9). One generic row shape on purpose: five reports
+ * with five row types would be five screens, five exporters and five sets of tests for what
+ * is one table with a different question above it.
+ */
+test('reports: every register report answers, and the totals match its own rows', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const period = 'from=2020-01-01&to=2030-12-31';
+
+  for (const kind of ['movement', 'registration', 'deadlines', 'dispatch', 'archive'] as const) {
+    const res = await admin.get(`/api/v1/docflow/reports/register?kind=${kind}&${period}`);
+    expect(res.ok(), `${kind} ${res.status()} ${await res.text()}`).toBeTruthy();
+    const report = (await res.json()) as {
+      kind: string;
+      columns: string[];
+      rows: { label: string; values: number[] }[];
+      totals: number[];
+    };
+    expect(report.kind).toBe(kind);
+    expect(report.columns.length, `${kind} declares columns`).toBeGreaterThan(0);
+    expect(report.totals).toHaveLength(report.columns.length);
+
+    // Every row carries exactly as many numbers as there are columns, and the totals are the
+    // sum of the column — a report whose footer disagrees with its own body is worse than no
+    // footer at all.
+    for (const row of report.rows) {
+      expect(row.values, `${kind} row «${row.label}»`).toHaveLength(report.columns.length);
+    }
+    report.columns.forEach((col, i) => {
+      const sum = report.rows.reduce((acc, r) => acc + (r.values[i] ?? 0), 0);
+      expect(report.totals[i], `${kind}.${col}`).toBe(sum);
+    });
+  }
+
+  // A kind nobody defined is a 400 from the DTO, not an empty report.
+  const bad = await admin.get(`/api/v1/docflow/reports/register?kind=everything&${period}`);
+  expect(bad.status()).toBe(400);
+
+  await admin.dispose();
+});
+
+test('reports: a register report exports as a workbook and needs the reports right', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const res = await admin.get(
+    '/api/v1/docflow/reports/register/export?kind=movement&from=2020-01-01&to=2030-12-31',
+  );
+  expect(res.ok(), `export ${res.status()}`).toBeTruthy();
+  expect(res.headers()['content-type']).toContain('spreadsheetml');
+  const body = await res.body();
+  expect(body[0]).toBe(0x50);
+  expect(body[1]).toBe(0x4b);
+
+  // An employee without `docflow.reports.view` is refused — the report is an aggregate over
+  // the whole register, which is exactly what the right is there to gate.
+  const other = await apiLogin(E2E_USER.username, E2E_USER.password);
+  const denied = await other.get(
+    '/api/v1/docflow/reports/register?kind=movement&from=2020-01-01&to=2030-12-31',
+  );
+  expect(denied.status()).toBe(403);
+
+  await Promise.all([admin.dispose(), other.dispose()]);
+});

@@ -26,6 +26,7 @@ import { ArchiveController } from './archive.controller';
 import { DocumentSearchController } from './document-search.controller';
 import { DocumentSearchService } from './document-search.service';
 import { AttentionService } from './attention.service';
+import { RegisterReportsService } from './register-reports.service';
 import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
@@ -86,6 +87,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ArchiveService,
     DocumentSearchService,
     AttentionService,
+    RegisterReportsService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,
