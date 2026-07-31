@@ -314,3 +314,31 @@ test('archive: the inventory lists what is filed, and filters candidates and hol
 
   await admin.dispose();
 });
+
+test('archive UI: the page shows the inventory, warns about candidates and exports the опись', async ({
+  page,
+}) => {
+  await page.goto('/app/docs/archive');
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Архив' })).toBeVisible();
+
+  // The candidates tab says plainly what it is: the only screen where the system proposes
+  // losing something.
+  await page.getByRole('tab', { name: 'Кандидаты к выбытию' }).click();
+  await expect(page.getByText(/ни один документ не удаляется автоматически/i)).toBeVisible();
+
+  // Acts of disposal live on their own tab and explain the two-person rule.
+  await page.getByRole('tab', { name: 'Акты о выделении' }).click();
+  await expect(page.getByText(/утверждает другой/)).toBeVisible();
+
+  // The inventory exports as a real workbook.
+  await page.getByRole('tab', { name: 'Опись' }).click();
+  const download = page.waitForResponse(
+    (r) => r.url().includes('/docflow/archive/export') && r.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Выгрузить опись' }).click();
+  const res = await download;
+  expect(res.headers()['content-type']).toContain('spreadsheetml');
+  const body = await res.body();
+  expect(body[0]).toBe(0x50);
+  expect(body[1]).toBe(0x4b);
+});

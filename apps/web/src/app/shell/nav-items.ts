@@ -1,5 +1,6 @@
 import {
   Activity,
+  Archive,
   AlarmClock,
   KeyRound,
   BarChart3,
@@ -67,6 +68,12 @@ export const ADMIN_NAV: NavItem[] = [
     path: '/app/docs/control',
     icon: AlarmClock,
     permission: 'docflow.control',
+  },
+  {
+    key: 'docflowArchive',
+    path: '/app/docs/archive',
+    icon: Archive,
+    permission: 'docflow.register',
   },
   {
     key: 'docflowJournals',

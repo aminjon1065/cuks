@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
@@ -50,6 +51,19 @@ export class ArchiveController {
     @CurrentUser() user: AuthUser,
   ): Promise<PaginatedResult<ArchiveEntryDto>> {
     return this.archive.list(query, user);
+  }
+
+  @Get('archive/export')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'The inventory as an XLSX «опись», over the visible rows only' })
+  async exportInventory(
+    @Query(new ZodValidationPipe(archiveQuerySchema)) query: ArchiveQuery,
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    reply.header('content-disposition', 'attachment; filename="archive.xlsx"');
+    reply.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return this.archive.inventoryXlsx(query, user);
   }
 
   @Post('documents/:id/actions/archive')

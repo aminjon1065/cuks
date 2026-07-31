@@ -1505,26 +1505,26 @@ Commit: `feat(docflow): add internal document distribution`.
 
 Схема:
 
-- [ ] archive/retention/hold/disposition fields;
-- [ ] расширение nomenclature;
-- [ ] disposition batch tables при подтверждении процесса;
-- [ ] индексы кандидатов.
+- [x] archive/retention/hold/disposition fields;
+- [x] расширение nomenclature;
+- [x] disposition batch tables при подтверждении процесса;
+- [x] индексы кандидатов.
 
 Backend:
 
-- [ ] Archive policy рассчитывает immutable retention snapshot.
-- [ ] Restore с permission и обязательной причиной.
-- [ ] Legal hold set/remove с reason.
-- [ ] Worker только маркирует кандидатов.
-- [ ] Review/approve/reject disposition.
-- [ ] На первом релизе logical disposition; physical purge feature выключен.
+- [x] Archive policy рассчитывает immutable retention snapshot.
+- [x] Restore с permission и обязательной причиной.
+- [x] Legal hold set/remove с reason.
+- [x] Worker только маркирует кандидатов.
+- [x] Review/approve/reject disposition.
+- [x] На первом релизе logical disposition; physical purge feature выключен.
 - [ ] Export archive inventory.
 
 Frontend:
 
 - [ ] ArchivePage;
-- [ ] номенклатурное дело/срок;
-- [ ] hold badges и reason;
+- [x] номенклатурное дело/срок;
+- [x] hold badges и reason;
 - [ ] candidates review;
 - [ ] disposition batch;
 - [ ] предупреждение о необратимости.

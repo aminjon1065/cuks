@@ -10,6 +10,7 @@ import {
 } from '@cuks/db';
 import type {
   ArchiveDocumentInput,
+  DispositionStatus,
   ArchiveEntryDto,
   ArchiveQuery,
   CreateDispositionBatchInput,
@@ -21,6 +22,7 @@ import type {
   PaginatedResult,
   RestoreDocumentInput,
 } from '@cuks/shared';
+import { buildXlsx, type XlsxRow } from '@cuks/shared/office/xlsx';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -47,6 +49,18 @@ import { hasConfidentialAccess, hasRegistryAccess } from './document-visibility'
  * closed, not that bytes were deleted. Nothing here removes an object from storage; that
  * waits for an approved retention policy (docs/09 §6).
  */
+const ARCHIVE_ORG_NAME = 'Комитет по чрезвычайным ситуациям и гражданской обороне';
+const ARCHIVE_TITLE = 'Опись архивных документов';
+/** Russian labels for the опись; `executed` must read as the disposal it records. */
+const ARCHIVE_DISPOSITION_LABELS: Record<DispositionStatus, string> = {
+  none: '',
+  candidate: 'Кандидат',
+  pending: 'В акте',
+  approved: 'Акт утверждён',
+  rejected: 'Возвращён',
+  executed: 'Выбыл',
+};
+
 @Injectable()
 export class ArchiveService {
   constructor(
@@ -313,6 +327,43 @@ export class ArchiveService {
     };
   }
 
+  /**
+   * The inventory as an XLSX «опись» — over exactly the rows the caller may see, because it
+   * reuses `list()` rather than querying again. An export that widened the visibility of the
+   * screen it came from would be the easiest ДСП leak in the product.
+   */
+  async inventoryXlsx(query: ArchiveQuery, actor: AuthUser): Promise<Buffer> {
+    const page = await this.list({ ...query, page: 1, limit: 200 }, actor);
+    const header: XlsxRow = [
+      'Номер',
+      'Документ',
+      'Дело',
+      'Сдан в дело',
+      'Срок хранения',
+      'Запрет',
+      'Выбытие',
+    ];
+    const rows: XlsxRow[] = [[ARCHIVE_ORG_NAME], [ARCHIVE_TITLE], [], header];
+    for (const e of page.items) {
+      rows.push([
+        e.regNumber ?? '—',
+        e.subject,
+        e.caseIndex ? `${e.caseIndex} ${e.caseTitle ?? ''}`.trim() : '—',
+        e.archivedAt ? e.archivedAt.slice(0, 10) : '—',
+        e.isPermanent ? 'Постоянно' : (e.retentionUntil?.slice(0, 10) ?? 'не установлен'),
+        e.legalHold ? (e.legalHoldReason ?? 'да') : '',
+        ARCHIVE_DISPOSITION_LABELS[e.dispositionStatus],
+      ]);
+    }
+    rows.push([]);
+    rows.push([`Всего в описи: ${page.total}`]);
+    if (page.total > page.items.length) {
+      // Said plainly rather than silently truncated: an опись that looks complete and is not
+      // is worse than one that admits its own limit.
+      rows.push([`Выгружено первых ${page.items.length} записей — уточните фильтр`]);
+    }
+    return Buffer.from(buildXlsx(rows, 'Опись'));
+  }
   // --- Acts of disposal -------------------------------------------------------------
 
   async listBatches(actor: AuthUser): Promise<DispositionBatchDto[]> {
