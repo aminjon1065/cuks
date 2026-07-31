@@ -329,6 +329,7 @@ export class RoutesService {
         .update(routeSteps)
         .set({ status: 'active' })
         .where(inArray(routeSteps.id, plan.activateStepIds));
+      await this.handOverToRegistry(tx, route.documentId, plan.activateStepIds);
     }
     if (plan.routeComplete) {
       await tx
@@ -344,6 +345,34 @@ export class RoutesService {
         .set({ status: 'pending_registration' })
         .where(and(eq(documents.id, route.documentId), isNull(documents.regNumber)));
     }
+  }
+
+  /**
+   * A `register` step that has just gone active means the route is now waiting on the
+   * chancellery, so the document must move to `pending_registration` — the only status
+   * besides `draft` from which `register()` will mint a number. Without this the step is
+   * unreachable: it sits active on an `on_route` document that registration refuses, and
+   * the route strands exactly the way plan этап 1D exists to prevent.
+   *
+   * Skipped once a number exists (a re-run, or a route with a second register step):
+   * a registered document must not be pushed back to «awaiting registration».
+   */
+  private async handOverToRegistry(
+    tx: Database,
+    documentId: string,
+    activatedStepIds: string[],
+  ): Promise<void> {
+    if (activatedStepIds.length === 0) return;
+    const [registerStep] = await tx
+      .select({ id: routeSteps.id })
+      .from(routeSteps)
+      .where(and(inArray(routeSteps.id, activatedStepIds), eq(routeSteps.kind, 'register')))
+      .limit(1);
+    if (!registerStep) return;
+    await tx
+      .update(documents)
+      .set({ status: 'pending_registration' })
+      .where(and(eq(documents.id, documentId), isNull(documents.regNumber)));
   }
 
   /**
@@ -600,6 +629,16 @@ export class RoutesService {
         })),
       );
       await tx.update(documents).set({ status: 'on_route' }).where(eq(documents.id, documentId));
+      // A route that opens ON the chancellery hands the document over immediately.
+      const activated = await tx
+        .select({ id: routeSteps.id })
+        .from(routeSteps)
+        .where(and(eq(routeSteps.routeId, route.id), eq(routeSteps.status, 'active')));
+      await this.handOverToRegistry(
+        tx,
+        documentId,
+        activated.map((s) => s.id),
+      );
     });
     await this.audit.logAndWait({
       action: 'docflow.document.route_started',
