@@ -1150,37 +1150,52 @@ Event payload содержит id и безопасный минимум. Пол
 - `fix(docflow): enforce document file access`;
 - `fix(docflow): enforce route action invariants`.
 
-### Этап 2. Полная карточка, редактирование и collaborators
+### Этап 2. Полная карточка, редактирование и collaborators — **готово (2026-07-31), кроме прогона e2e и вкладки комментариев**
 
-Схема:
+Схема (миграция `0048_illegal_redwing`, полностью additive):
 
-- [ ] Добавить полные реквизиты sender/recipient/response due.
-- [ ] Добавить optimistic `version` или использовать существующий concurrency token.
-- [ ] Создать `document_collaborators`.
-- [ ] Добавить индексы и backfill nullable полей.
+- [x] Добавить полные реквизиты sender/recipient/response due. — `sender_name`,
+  `sender_contact`, `recipient_name`, `recipient_contact`, `response_due_at`.
+- [x] Добавить optimistic `version` или использовать существующий concurrency token. —
+  `documents.version integer not null default 1`; проверка встроена в предикат `UPDATE`.
+- [x] Создать `document_collaborators`. — роли `preparer|editor|viewer`, мягкое удаление.
+- [x] Добавить индексы и backfill nullable полей. — частичный unique
+  `(document_id, user_id, role) where deleted_at is null` + индексы по документу и по
+  пользователю. **Backfill не требуется**: все новые колонки nullable, а `version`
+  получает `default 1` на существующих строках самим `ALTER TABLE`.
 
 API:
 
-- [ ] Расширить create/update/detail DTO.
-- [ ] Возвращать `availableActions`, вычисленные серверной policy.
-- [ ] CRUD collaborators.
-- [ ] Единая timeline поверх audit/domain records.
+- [x] Расширить create/update/detail DTO. — новые реквизиты, `expectedVersion` обязателен
+  в `updateDocumentSchema`.
+- [x] Возвращать `availableActions`, вычисленные серверной policy. — прежние
+  `canEdit`/`canRegister`/`canChangeStatus` **удалены**, чтобы не было двух выводов прав.
+- [x] CRUD collaborators. — `GET/POST/DELETE /docflow/documents/:id/collaborators[/:id]`.
+- [x] Единая timeline поверх audit/domain records. —
+  `GET /docflow/documents/:id/timeline` с allow-list ключей метаданных.
 
 UI:
 
-- [ ] Полная форма черновика по class.
-- [ ] Edit mode карточки.
-- [ ] Предупреждение о конфликте optimistic update.
-- [ ] Управление preparer/editor.
-- [ ] Tabs files/comments/timeline.
-- [ ] Loading/empty/error и keyboard accessibility.
+- [x] Полная форма черновика по class. — `EditDocumentDialog` показывает блок
+  корреспондента только для входящих/обращений (отправитель) и исходящих (адресат).
+- [x] Edit mode карточки. — кнопка «Редактировать» по `availableActions`.
+- [x] Предупреждение о конфликте optimistic update. — `role="alert"` с указанием
+  перезагрузить карточку; кнопка сохранения блокируется.
+- [x] Управление preparer/editor. — `CollaboratorsSection` с серверным поиском.
+- [~] Tabs files/comments/timeline. — файлы и timeline (вкладка «История» переведена на
+  единую ленту) готовы; **комментарии не сделаны** — переиспользование `app.comments`
+  для `entity_type='document'` вынесено отдельным срезом (план §6.10, P1-8).
+- [x] Loading/empty/error и keyboard accessibility. — skeleton/empty/error в секциях,
+  все поля формы с `<label htmlFor>`, submit по Enter.
 
 Тесты:
 
-- unit policy author/editor/preparer;
-- API e2e edit draft, deny registered, DSP collaborator deny;
-- Playwright create/edit/reload;
-- audit changed-field allow-list.
+- [x] unit policy author/editor/preparer — `document-actions.spec.ts`, 15 кейсов;
+- [~] API e2e edit draft, deny registered, DSP collaborator deny — спека
+  `apps/web/e2e/docflow-editing.spec.ts` написана, **не прогнана** (нет Docker);
+- [~] Playwright create/edit/reload — там же, не прогнана;
+- [x] audit changed-field allow-list — проверяется и в unit (allow-list метаданных), и в
+  e2e (значения полей не попадают в timeline).
 
 Приёмка:
 

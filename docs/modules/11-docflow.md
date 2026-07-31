@@ -80,6 +80,7 @@
 POST /docflow/documents  GET /docflow/documents?queue=to_approve|to_sign|to_ack|my_tasks|mine
 POST /docflow/documents/register-incoming (атомарно, idempotencyKey — см. §12.2)
 GET /docflow/documents/:id/files/:fileId/{download|preview} (visibility+ДСП+AV — см. §12.2)
+GET /docflow/documents/:id/timeline  GET/POST/DELETE /docflow/documents/:id/collaborators[/:id]
 GET/PATCH /docflow/documents/:id  POST /docflow/documents/:id/files (+версии)
 POST /docflow/documents/:id/route (из шаблона/ручной)  POST /docflow/route-steps/:id/actions/{approve|complete|reject}
 POST /docflow/documents/:id/actions/register {journal}  POST /docflow/documents/:id/actions/sign {signature}
@@ -136,9 +137,23 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 Те же файлы, маршруты, подпись, ознакомление, резолюции и архив; без внешнего корреспондента и без dispatch. Распространение — на пользователей, должности и подразделения через batch ознакомления; шаблон маршрута выбирается по виду документа (приказ, протокол, служебная записка).
 
-### 12.5. Расширения модели
+### 12.4a. Расширения модели
 
 `documents` (+ реквизиты отправителя/адресата, `response_due_at`, `content_json`/`content_text`, архивные поля `archived_at`, `retention_until`, `legal_hold`, `disposition_status`, `search_vector`); новые `document_collaborators`, `document_templates`/`document_template_versions`, `resolution_types`, `resolution_proposals`, `acquaintance_batches`, `document_dispatches`; расширения `acquaintances` (batch, status, `notified_at`), `resolutions` (`available_at`, приёмка/возврат), `route_steps` (`activated_at`/`due_at`/`completed_at`, actor по должности/подразделению), `nomenclature` (сроки хранения). Комментарии переиспользуют общую `app.comments` с `entity_type='document'`. Полный перечень полей, ограничений и индексов — план §6.
+
+### 12.5. Карточка, редактирование и соисполнители
+
+**Реквизиты корреспондента — snapshot.** `sender_name`/`sender_contact` (входящий) и `recipient_name`/`recipient_contact` (исходящий) хранятся **рядом** со ссылкой `correspondent_id`, а не вместо неё: справочник можно переименовать или слить, но то, что написано на этом письме, меняться от этого не должно. `response_due_at` — срок ответа корреспонденту, отличный от `due_date` (внутренний срок исполнения).
+
+**Редактирование.** Редактируемы только статусы `draft` и `rejected` (отклонение как раз и просит доработку). После регистрации карточка становится записью: правка возвращает `docflow.document.not_editable` (409), исправление реквизитов — отдельное аудируемое действие. Редактировать может автор и соисполнитель с ролью `preparer`/`editor`; канцелярия — **нет**: registry-доступ нужен для поиска и регистрации, а не для правки чужого черновика.
+
+**Оптимистическая блокировка.** `documents.version` инкрементируется на каждой принятой правке; `PATCH` обязан прислать `expectedVersion`. Проверка встроена в предикат `UPDATE` (`where id = ? and version = ?`), поэтому окна между чтением и записью не существует: опоздавшая правка не совпадает ни с одной строкой и возвращает `docflow.document.version_conflict` (409) с `expectedVersion`/`actualVersion`, а работа первого редактора остаётся нетронутой.
+
+**Соисполнители** (`document_collaborators`, роли `preparer|editor|viewer`). Автор остаётся владельцем: соисполнитель **не получает** управление доступом, регистрацию, смену статуса и запуск маршрута и никогда не обходит ДСП allow-list. Управляет составом только автор (или суперадмин). Грант мягко удаляется, поэтому снятая роль остаётся видимой в истории.
+
+**`availableActions`.** Карточка получает от сервера готовый список того, что доступно **этому** вызывающему (`edit`, `startRoute`, `register`, `changeStatus`, `manageAccess`, `manageCollaborators`), и рисует панель действий по нему, а не выводит права заново из статуса и авторства. Расхождение двух выводов — ровно тот механизм, которым появляется кнопка, отклоняемая сервером.
+
+**Timeline.** `GET /docflow/documents/:id/timeline` — единая лента аудируемых бизнес-событий по карточке, новые сверху, с разрешённым именем актора. Метаданные проходят **allow-list** ключей: аудит пишут многие места, и новое из них не должно иметь возможности вывести на экран содержимое документа, ключ файла или чужой контакт просто фактом своего появления. Правка реквизитов пишет в аудит **имена** изменённых полей (`changedFields`), никогда значения.
 
 ### 12.6. Инварианты маршрутов и статусов
 
