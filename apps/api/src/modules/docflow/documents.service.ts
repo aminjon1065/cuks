@@ -590,7 +590,11 @@ export class DocumentsService {
       const participant =
         (await this.routes.isRouteParticipantActing(id, user.id)) ||
         (await this.resolutions.isResolutionParticipant(id, user.id)) ||
-        (await this.acknowledgements.isAcquaintance(id, user.id));
+        (await this.acknowledgements.isAcquaintance(id, user.id)) ||
+        // An assigned collaborator is a participant: without this the role is inert —
+        // a preparer could be given a document they cannot open (plan этап 2). Reached
+        // only for NON-ДСП documents; the ДСП branch above already returned.
+        (await collaboratorRolesOf(this.db, id, user.id)).length > 0;
       if (!participant) {
         throw AppException.notFound('docflow.document.not_found', 'Document not found');
       }
@@ -1020,14 +1024,10 @@ export class DocumentsService {
     id: string,
     actor: AuthUser,
   ): Promise<typeof documents.$inferSelect> {
-    const [row] = await this.db
-      .select()
-      .from(documents)
-      .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
-      .limit(1);
-    if (!row || !canViewDocumentBase(row, actor)) {
-      throw AppException.notFound('docflow.document.not_found', 'Document not found');
-    }
+    // The same visibility gate as the card, so a collaborator — who is visible only via
+    // the async participant check — is not turned away with a 404 before their role is
+    // even looked at.
+    const row = await this.assertVisible(id, actor);
     const roles = await collaboratorRolesOf(this.db, id, actor.id);
     const isOwner = row.authorId === actor.id || actor.isSuperadmin;
     if (!isOwner && !roles.some((r) => DOCUMENT_EDITING_ROLES.includes(r))) {
@@ -1172,7 +1172,16 @@ export class DocumentsService {
     }
 
     const onAccessList = sql`${user.id}::uuid = any(${documents.accessList})`;
-    const mine = or(eq(documents.authorId, user.id), onAccessList);
+    // A live collaborator grant is involvement too — otherwise an assigned preparer could
+    // not even find the document they were asked to prepare (plan этап 2). ДСП is not
+    // widened by it: the guard below still admits only the author and the allow-list.
+    const isCollaborator = sql`exists (
+      select 1 from ${documentCollaborators} dc
+      where dc.document_id = ${documents.id}
+        and dc.user_id = ${user.id}::uuid
+        and dc.deleted_at is null
+    )`;
+    const mine = or(eq(documents.authorId, user.id), onAccessList, isCollaborator);
 
     // ДСП guard (docs/09-security.md §3): a ДСП document surfaces in ANY list/search only to its
     // author, or — when the caller holds docflow.confidential.view — to access-list members. This
