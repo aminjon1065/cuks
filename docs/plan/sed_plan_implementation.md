@@ -1269,29 +1269,46 @@ Commit: `feat(docflow): add versioned document templates`.
 
 Backend:
 
-- [ ] Расширить route step actor model и timestamps.
-- [ ] Resolver user/position/org unit с org scope.
-- [ ] Вычисление `activated_at`/`due_at`.
-- [ ] Parallel group barrier.
-- [ ] Dry-run validation.
-- [ ] Template cloning/versioning.
-- [ ] Идемпотентные actions и защита от double click.
-- [ ] Уведомления activation/due/overdue/return.
-- [ ] Typed Socket.IO invalidation event.
+- [x] Расширить route step actor model и timestamps. — `activated_at`/`due_at`/
+  `completed_at` (миграция `0050_wakeful_franklin_storm`, применена). Модель исполнителя
+  **оставлена как есть** (`assignee_type`/`assignee_id` уже покрывает user|position|
+  org_unit); переименование в `assignee_kind`/`assignee_position_id`/`assignee_org_unit_id`
+  из §6.7 не делалось — см. решение в STATUS.
+- [x] Resolver user/position/org unit с org scope. — был с фазы 3; в 1D сужен до
+  действующих пользователей, здесь переиспользован в dry-run и в развёртке worker'а.
+- [x] Вычисление `activated_at`/`due_at`. — материализуется при активации, единым путём
+  и для первой группы, и для последующих.
+- [x] Parallel group barrier. — был реализован (`planApproval`), закрыт e2e ещё в 1D.
+- [x] Dry-run validation. — `POST /docflow/documents/:id/route/validate`.
+- [ ] Template cloning/versioning. — **не сделано**; шаблоны маршрутов пока правятся на
+  месте (в отличие от шаблонов документов, где версионирование уже есть — этап 3).
+- [~] Идемпотентные actions и защита от double click. — действие по неактивному шагу
+  отклоняется (1D), повторный клик не завершает шаг дважды; отдельного
+  idempotency-ключа на действие шага нет.
+- [x] Уведомления activation/due/overdue/return. — `due_soon`/`overdue` реализованы;
+  activation/return уже покрывались существующими уведомлениями маршрута.
+- [ ] Typed Socket.IO invalidation event. — **не сделано**.
 
 Frontend:
 
-- [ ] Route builder из §8.4.
-- [ ] Template list/create/edit/deactivate в settings.
-- [ ] Timeline шага и substitution.
-- [ ] Доступные действия строго по kind.
+- [x] Route builder из §8.4. — `RouteBuilderDialog`: группы (внутри группы — параллельно),
+  вид шага, SLA в часах, перемещение между группами, сводка проверки; запуск включается
+  только после успешного dry-run.
+- [ ] Template list/create/edit/deactivate в settings. — **не сделано** для шаблонов
+  **маршрутов** (API есть с фазы 3); шаблоны **документов** в настройках сделаны в этапе 3.
+- [~] Timeline шага и substitution. — карточка показывает исполнителя, решение, «за кого»
+  и время; `activated_at`/`due_at` отдаются в DTO, но отдельной колонки срока в степпере
+  пока нет.
+- [x] Доступные действия строго по kind. — закрыто в 1D.
 
 Worker:
 
-- [ ] due-soon и overdue jobs;
-- [ ] dedupe и retry;
-- [ ] batch size и `SKIP LOCKED`;
-- [ ] метрики длительности/ошибок.
+- [x] due-soon и overdue jobs — в существующей ежедневной развёртке `deadlines`;
+- [x] dedupe и retry — dedupe-ключ (час для `due_soon`, душанбинский день для `overdue`)
+  + экспоненциальный retry общего outbox;
+- [x] batch size и `SKIP LOCKED` — переиспользован диспетчер outbox;
+- [ ] метрики длительности/ошибок. — **не сделано**: развёртка логирует счётчики
+  (`routeEmitted`), отдельных метрик нет.
 
 Тесты:
 
