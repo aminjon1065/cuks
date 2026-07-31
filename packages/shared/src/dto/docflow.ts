@@ -418,6 +418,61 @@ export const listDocumentsQuerySchema = z.object({
 });
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 
+// --- Full-text search (docs/modules/11 §12.13, plan §6.11/§7.8) ---
+
+/** Where a hit came from. Reported so a result can say WHY it matched — a row whose subject
+ *  contains none of the words reads as a mistake unless the list says «нашлось во вложении». */
+export const SEARCH_MATCH_SOURCES = ['document', 'file', 'correspondent', 'number'] as const;
+export type SearchMatchSource = (typeof SEARCH_MATCH_SOURCES)[number];
+
+export const documentSearchQuerySchema = z.object({
+  /** The query itself. Trimmed, and empty is refused: an empty search is just the register. */
+  q: z.string().trim().min(1).max(200),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  docClass: z.enum(DOC_CLASSES).optional(),
+  status: z.enum(DOCUMENT_STATUSES).optional(),
+  journalId: z.string().uuid().optional(),
+  correspondentId: z.string().uuid().optional(),
+  /** Registration date range, inclusive — the boundaries are Asia/Dushanbe days. */
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+  sort: documentSortSchema.optional(),
+});
+export type DocumentSearchQuery = z.infer<typeof documentSearchQuerySchema>;
+
+export interface DocumentSearchHitDto {
+  id: string;
+  regNumber: string | null;
+  subject: string;
+  docClass: DocClass;
+  typeCode: string;
+  status: DocumentStatus;
+  confidentiality: DocumentConfidentiality;
+  correspondentName: string | null;
+  authorName: string | null;
+  regDate: string | null;
+  createdAt: string;
+  /**
+   * A highlighted fragment of the document own text, with the matched words wrapped in
+   * `<mark>`. Never built from an attachment: a file body has its own access gate, and a
+   * snippet is a copy of that text (plan §6.11 — a snippet must not disclose text the
+   * reader has no access to).
+   */
+  snippet: string | null;
+  /** Which of the searched surfaces matched. `file` means the hit is inside an attachment. */
+  matchedIn: SearchMatchSource[];
+}
+
+/** Cmd+K: the same server policy, five rows, no snippets (plan §8.8). */
+export interface QuickSearchHitDto {
+  id: string;
+  regNumber: string | null;
+  subject: string;
+  docClass: DocClass;
+  status: DocumentStatus;
+}
+
 /** Register an unregistered document: assign a journal and mint its number. */
 export const registerDocumentSchema = z.object({
   journalId: z.string().uuid(),

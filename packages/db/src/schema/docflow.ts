@@ -273,9 +273,22 @@ export const documents = appSchema.table(
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
-    // FTS over subject + summary + reg_number (docs/07 §Поиск, config `russian`).
+    /**
+     * FTS over the document's OWN fields (docs/07 §Поиск, plan §6.11, config `russian`).
+     *
+     * Weighted, because «найти по теме» and «найти по слову в теле» are not the same
+     * request: a hit in the subject or the registration number outranks one three pages into
+     * the body, and without weights a long document wins every search simply by being long.
+     * A — subject and number, B — summary and the correspondent snapshots, C — the body.
+     *
+     * Only own columns: a generated column cannot read another table, so the correspondent's
+     * full name and the text of the attachments are matched by their own indexes and unioned
+     * in by the search query (plan §6.11 «EXISTS по уже существующему индексу»).
+     */
     searchTsv: tsvector('search_tsv').generatedAlwaysAs(
-      sql`to_tsvector('russian', "subject" || ' ' || coalesce("summary", '') || ' ' || coalesce("reg_number", ''))`,
+      sql`setweight(to_tsvector('russian', coalesce("subject", '') || ' ' || coalesce("reg_number", '')), 'A')
+       || setweight(to_tsvector('russian', coalesce("summary", '') || ' ' || coalesce("sender_name", '') || ' ' || coalesce("recipient_name", '')), 'B')
+       || setweight(to_tsvector('russian', coalesce("content_text", '')), 'C')`,
     ),
   },
   (t) => [
@@ -302,6 +315,26 @@ export const documents = appSchema.table(
     index('documents_retention_idx')
       .on(t.retentionUntil, t.dispositionStatus)
       .where(sql`${t.archivedAt} is not null and ${t.isPermanent} = false`),
+    // --- Stage 9: the register, the search and the reports -------------------------
+    // The register is «класс, новейшие сверху» — the ordering the journals view opens on,
+    // and the range the year filter became once `extract(year from …)` was dropped for
+    // being unable to use an index at all.
+    index('documents_class_reg_date_idx').on(t.docClass, t.regDate.desc()),
+    // «Все письма от этого корреспондента, новейшие сверху» — the second most common
+    // question asked of a register after the number itself.
+    index('documents_correspondent_reg_date_idx')
+      .on(t.correspondentId, t.regDate.desc())
+      .where(sql`${t.correspondentId} is not null`),
+    // Anchored prefix on the registration number: `text_pattern_ops` is what lets
+    // `reg_number like 'П-2026/%'` use an index at all. A number is the one thing people
+    // paste in whole, so it must not fall back to a scan of the register.
+    index('documents_reg_number_prefix_idx')
+      .on(t.regNumber.op('text_pattern_ops'))
+      .where(sql`${t.regNumber} is not null`),
+    // The deadline widgets and the «сроки» report read exactly this shape.
+    index('documents_due_date_idx')
+      .on(t.dueDate)
+      .where(sql`${t.dueDate} is not null and ${t.deletedAt} is null`),
   ],
 );
 
