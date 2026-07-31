@@ -47,7 +47,8 @@ export function RouteSection({ doc }: { doc: DocumentDetailDto }): React.JSX.Ele
   const act = useActRouteStep(doc.id);
   const [startOpen, setStartOpen] = useState(false);
   const [rejecting, setRejecting] = useState<RouteStepDto | null>(null);
-  const canSendToRoute = doc.canEdit && doc.status === 'draft';
+  // The server decides — the card no longer re-derives it from status + authorship.
+  const canSendToRoute = doc.availableActions.includes('startRoute');
   const routes = routesQuery.data ?? [];
 
   // Only the action the step's kind actually accepts is ever sent (ROUTE_STEP_KIND_ACTIONS):

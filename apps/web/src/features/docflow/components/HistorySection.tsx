@@ -3,12 +3,16 @@ import { History } from 'lucide-react';
 import { EmptyState, Skeleton } from '@cuks/ui';
 import type { DocumentDetailDto } from '@cuks/shared';
 import { formatDateTime } from '@/lib/format';
-import { useDocumentHistory } from '../api/queries';
+import { useDocumentTimeline } from '../api/queries';
 
-/** The «История» tab (docs/modules/11 §7): the document's audit events, newest first. */
+/**
+ * The «История» tab (docs/modules/11 §7/§12.5): the document's unified timeline — every
+ * audited business event, newest first, with the whitelisted metadata the server chose to
+ * expose (a registration number, a status pair, which fields an edit touched).
+ */
 export function HistorySection({ doc }: { doc: DocumentDetailDto }): React.JSX.Element {
   const { t } = useTranslation('docflow');
-  const query = useDocumentHistory(doc.id);
+  const query = useDocumentTimeline(doc.id);
   const entries = query.data ?? [];
 
   if (query.isPending) return <Skeleton className="h-40 w-full rounded-md" />;
@@ -33,8 +37,9 @@ export function HistorySection({ doc }: { doc: DocumentDetailDto }): React.JSX.E
           <div className="min-w-0">
             <p className="text-[13px] text-text">{actionLabel(t, e.action)}</p>
             <p className="text-xs text-text-muted">
-              {e.actorName ?? t('history.system')} · {formatDateTime(e.createdAt)}
+              {e.actorName ?? t('history.system')} · {formatDateTime(e.at)}
             </p>
+            {e.meta ? <p className="truncate text-xs text-text-muted">{metaLine(e.meta)}</p> : null}
           </div>
         </li>
       ))}
@@ -63,9 +68,20 @@ const ACTION_SUFFIX: Record<string, string> = {
   'docflow.document.linked': 'linked',
   'docflow.document.unlinked': 'unlinked',
   'docflow.document.exported': 'exported',
+  'docflow.document.updated': 'updated',
+  'docflow.document.collaborator_added': 'collaborator_added',
+  'docflow.document.collaborator_removed': 'collaborator_removed',
+  'docflow.document.file_downloaded': 'file_downloaded',
 };
 
 function actionLabel(t: (key: string) => string, action: string): string {
   const suffix = ACTION_SUFFIX[action];
   return suffix ? t(`history.actions.${suffix}`) : action;
+}
+
+/** The server already whitelisted these keys; render them as a compact `key: value` line. */
+function metaLine(meta: Record<string, string | number | boolean>): string {
+  return Object.entries(meta)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(' · ');
 }

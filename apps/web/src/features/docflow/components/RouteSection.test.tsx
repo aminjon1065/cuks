@@ -48,7 +48,7 @@ const routes = routeWith([step()]);
 const doc = {
   id: 'd1',
   status: 'on_route',
-  canEdit: false,
+  availableActions: [],
 } as unknown as DocumentDetailDto;
 
 function renderSection(): void {

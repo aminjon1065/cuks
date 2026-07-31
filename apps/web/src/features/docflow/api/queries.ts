@@ -18,7 +18,10 @@ import type {
   SubstitutionDto,
   RemoveResolutionControlInput,
   DirectoryUserDto,
+  AddDocumentCollaboratorInput,
+  DocumentCollaboratorDto,
   DocumentHistoryEntryDto,
+  DocumentTimelineEntryDto,
   DocumentLinkDto,
   DocumentQueueCountsDto,
   ExtendResolutionInput,
@@ -341,6 +344,37 @@ export function useRegisterIncoming() {
     mutationFn: (input: RegisterIncomingInput) =>
       api.post<DocumentDetailDto>('/v1/docflow/documents/register-incoming', input),
     onSuccess: (doc) => invalidateDocuments(qc, doc.id),
+  });
+}
+
+export function useDocumentTimeline(id: string | null): UseQueryResult<DocumentTimelineEntryDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, id, 'timeline'],
+    queryFn: () => api.get<DocumentTimelineEntryDto[]>(`/v1/docflow/documents/${id}/timeline`),
+    enabled: !!id,
+  });
+}
+
+export function useAddCollaborator(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddDocumentCollaboratorInput) =>
+      api.post<DocumentCollaboratorDto[]>(
+        `/v1/docflow/documents/${documentId}/collaborators`,
+        input,
+      ),
+    onSuccess: () => invalidateDocuments(qc, documentId),
+  });
+}
+
+export function useRemoveCollaborator(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (collaboratorId: string) =>
+      api.delete<DocumentCollaboratorDto[]>(
+        `/v1/docflow/documents/${documentId}/collaborators/${collaboratorId}`,
+      ),
+    onSuccess: () => invalidateDocuments(qc, documentId),
   });
 }
 

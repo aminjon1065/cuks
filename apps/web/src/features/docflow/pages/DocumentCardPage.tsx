@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, FileCheck2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, FileCheck2, Pencil } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -37,7 +37,9 @@ import { ResolutionSection } from '../components/ResolutionSection';
 import { SignatureSection } from '../components/SignatureSection';
 import { AcknowledgementSection } from '../components/AcknowledgementSection';
 import { AccessSection } from '../components/AccessSection';
+import { CollaboratorsSection } from '../components/CollaboratorsSection';
 import { DocumentFilesSection } from '../components/DocumentFilesSection';
+import { EditDocumentDialog } from '../components/EditDocumentDialog';
 import { LinksSection } from '../components/LinksSection';
 import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 import { HistorySection } from '../components/HistorySection';
@@ -58,6 +60,7 @@ export function DocumentCardPage(): React.JSX.Element {
   const doc = useDocument(id ?? null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [tab, setTab] = useState<CardTab>('overview');
   useDocumentTitle(
     doc.data
@@ -119,12 +122,17 @@ export function DocumentCardPage(): React.JSX.Element {
         }
         actions={
           <div className="flex gap-2">
-            {data.canRegister ? (
+            {data.availableActions.includes('edit') ? (
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="size-4" aria-hidden /> {t('documents.edit.action')}
+              </Button>
+            ) : null}
+            {data.availableActions.includes('register') ? (
               <Button size="sm" onClick={() => setRegisterOpen(true)}>
                 <FileCheck2 className="size-4" /> {t('documents.register.action')}
               </Button>
             ) : null}
-            {data.canChangeStatus ? (
+            {data.availableActions.includes('changeStatus') ? (
               <Button variant="outline" size="sm" onClick={() => setStatusOpen(true)}>
                 {t('documents.status.action')}
               </Button>
@@ -158,6 +166,7 @@ export function DocumentCardPage(): React.JSX.Element {
             <>
               <Requisites data={data} />
               <DocumentFilesSection documentId={data.id} files={data.files} />
+              <CollaboratorsSection doc={data} />
               <SignatureSection doc={data} />
               <AcknowledgementSection doc={data} />
               <AccessSection doc={data} />
@@ -193,6 +202,7 @@ export function DocumentCardPage(): React.JSX.Element {
 
       {registerOpen ? <RegisterDialog id={data.id} onClose={() => setRegisterOpen(false)} /> : null}
       {statusOpen ? <StatusDialog data={data} onClose={() => setStatusOpen(false)} /> : null}
+      {editOpen ? <EditDocumentDialog doc={data} onClose={() => setEditOpen(false)} /> : null}
     </div>
   );
 
