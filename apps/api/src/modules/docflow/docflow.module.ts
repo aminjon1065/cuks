@@ -12,6 +12,7 @@ import { ReportsController } from './reports.controller';
 import { SubstitutionsController } from './substitutions.controller';
 import { CorrespondentsService } from './correspondents.service';
 import { DocflowDictionariesService } from './docflow-dictionaries.service';
+import { DocflowFilesService } from './docflow-files.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
@@ -55,6 +56,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocflowDictionariesService,
     DocflowNumberingService,
     DocumentsService,
+    DocflowFilesService,
     RoutesService,
     ResolutionsService,
     CaService,

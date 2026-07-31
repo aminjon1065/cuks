@@ -110,6 +110,16 @@ export const PDF_MIME_TYPE = 'application/pdf';
 export const DOCX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+/**
+ * Root of the system-space tree that owns document files (docs/modules/11 §12.2).
+ * Attaching a file to a document moves the node out of the uploader's personal space
+ * into `system/<this>/<documentId>/`, so the uploader can no longer delete, move or
+ * re-share the body of a registered document, and access runs through the document
+ * policy instead of the file ACL. Deliberately technical, not a UI string — the system
+ * space is not browsable (files.tree.system_not_browsable).
+ */
+export const DOCFLOW_FILES_ROOT_NAME = 'docflow';
+
 /** A `file_versions` row stuck at `avStatus='pending'` this long (enqueue
  *  failure, exhausted BullMQ retries, an unreachable ClamAV) gets picked up by
  *  the retention sweep and re-enqueued — see retention.processor.ts. Well above

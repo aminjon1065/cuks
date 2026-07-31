@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   addDocumentFileSchema,
+  previewQuerySchema,
+  type PreviewQuery,
+  type PreviewSize,
   changeDocumentStatusSchema,
   createDocumentSchema,
   listDocumentsQuerySchema,
@@ -30,6 +33,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
+import { DocflowFilesService } from './docflow-files.service';
 import { DocumentsService } from './documents.service';
 
 const uuidSchema = z.string().uuid();
@@ -42,7 +46,10 @@ const uuidSchema = z.string().uuid();
 @ApiTags('docflow')
 @Controller('docflow/documents')
 export class DocumentsController {
-  constructor(private readonly documents: DocumentsService) {}
+  constructor(
+    private readonly documents: DocumentsService,
+    private readonly files: DocflowFilesService,
+  ) {}
 
   @Get()
   @RequirePermission('docflow.use')
@@ -158,6 +165,35 @@ export class DocumentsController {
     @Body(new ZodValidationPipe(addDocumentFileSchema)) body: AddDocumentFileInput,
   ): Promise<DocumentDetailDto> {
     return this.documents.addFile(id, body, user);
+  }
+
+  @Get(':id/files/:fileId/download')
+  @RequirePermission('docflow.use')
+  @Redirect()
+  @ApiOperation({
+    summary: "Download a document's file (document visibility + ДСП + antivirus gate)",
+  })
+  async downloadFile(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('fileId', new ZodValidationPipe(uuidSchema)) fileId: string,
+  ): Promise<{ url: string; statusCode: number }> {
+    // A short-lived presigned URL, never a permanent object link (docs/modules/11 §12.2).
+    return { url: await this.files.downloadUrl(id, fileId, user), statusCode: 302 };
+  }
+
+  @Get(':id/files/:fileId/preview')
+  @RequirePermission('docflow.use')
+  @Redirect()
+  @ApiOperation({ summary: "A preview tile for a document's file (same access gate)" })
+  async previewFile(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('fileId', new ZodValidationPipe(uuidSchema)) fileId: string,
+    @Query(new ZodValidationPipe(previewQuerySchema)) query: PreviewQuery,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.files.previewUrl(id, fileId, query.size as PreviewSize, user);
+    return { url, statusCode: 302 };
   }
 
   @Post(':id/actions/register')

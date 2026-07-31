@@ -9,6 +9,7 @@ import {
   JOURNAL_SEQ_RESETS,
   ROUTE_ASSIGNEE_TYPES,
   ROUTE_STEP_KINDS,
+  type AvStatus,
   type ControlSeverity,
   type DocumentLinkKind,
   type DocClass,
@@ -369,6 +370,13 @@ export interface DocumentFileDto {
   title: string | null;
   isCurrent: boolean;
   createdAt: string;
+  /** The underlying fs node, so the card renders a real file row instead of a uuid. */
+  name: string;
+  mime: string | null;
+  size: number;
+  /** Antivirus verdict of the current version. `pending` and `infected` are both
+   *  undownloadable through the document endpoints (docs/modules/11 §12.2). */
+  avStatus: AvStatus | null;
 }
 
 export interface DocumentListItemDto {

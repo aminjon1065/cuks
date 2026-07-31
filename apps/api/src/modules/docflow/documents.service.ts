@@ -5,6 +5,7 @@ import {
   correspondents,
   documentFiles,
   documents,
+  fileVersions,
   fsNodes,
   journals,
   orgUnits,
@@ -38,6 +39,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
+import { adoptDocumentFile } from './docflow-files.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
 import {
   canManageDocumentAccess,
@@ -227,6 +229,9 @@ export class DocumentsService {
           .returning({ id: documents.id });
         if (!created) throw new Error('Document insert did not return an id');
         if (input.files.length > 0) {
+          // Adopt before linking: the bodies of a registered document belong to the
+          // institution, not to the clerk's personal space (docs/modules/11 §12.2).
+          for (const f of input.files) await adoptDocumentFile(tx, f.fileId, created.id);
           await tx.insert(documentFiles).values(
             input.files.map((f) => ({
               documentId: created.id,
@@ -735,6 +740,9 @@ export class DocumentsService {
             );
         }
       }
+      // Same adoption as the atomic registration: the node leaves the uploader's
+      // personal space so only the document policy can reach it (docs/modules/11 §12.2).
+      await adoptDocumentFile(tx, input.fileId, id);
       await tx.insert(documentFiles).values({
         documentId: id,
         fileId: input.fileId,
@@ -755,10 +763,26 @@ export class DocumentsService {
     return this.detail(id, actor);
   }
 
+  /** The card's file rows, joined to the fs node so the UI shows a real name, size and
+   *  antivirus state instead of a bare uuid (plan этап 1C). */
   private async listFiles(documentId: string): Promise<DocumentFileDto[]> {
     const rows = await this.db
-      .select()
+      .select({
+        id: documentFiles.id,
+        fileId: documentFiles.fileId,
+        kind: documentFiles.kind,
+        version: documentFiles.version,
+        title: documentFiles.title,
+        isCurrent: documentFiles.isCurrent,
+        createdAt: documentFiles.createdAt,
+        name: fsNodes.name,
+        mime: fsNodes.mime,
+        size: fsNodes.sizeCached,
+        avStatus: fileVersions.avStatus,
+      })
       .from(documentFiles)
+      .leftJoin(fsNodes, eq(fsNodes.id, documentFiles.fileId))
+      .leftJoin(fileVersions, eq(fileVersions.id, fsNodes.currentVersionId))
       .where(eq(documentFiles.documentId, documentId))
       .orderBy(documentFiles.kind, desc(documentFiles.version));
     return rows.map((r) => ({
@@ -769,6 +793,10 @@ export class DocumentsService {
       title: r.title,
       isCurrent: r.isCurrent,
       createdAt: r.createdAt.toISOString(),
+      name: r.name ?? r.fileId,
+      mime: r.mime,
+      size: r.size ?? 0,
+      avStatus: r.avStatus,
     }));
   }
 
