@@ -221,6 +221,34 @@ export function documentTransitionAllowed(from: DocumentStatus, to: DocumentStat
   return DOCUMENT_STATUS_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * What a non-author may do with a document (docs/modules/11 §12.5, plan §6.2). The author
+ * stays the owner: a collaborator never gains access management, registration or the
+ * ability to bypass a ДСП allow-list. `preparer` and `editor` differ only in intent —
+ * both edit an editable draft — while `viewer` is read-only participation.
+ */
+export const DOCUMENT_COLLABORATOR_ROLES = ['preparer', 'editor', 'viewer'] as const;
+export type DocumentCollaboratorRole = (typeof DOCUMENT_COLLABORATOR_ROLES)[number];
+
+/** Collaborator roles that may edit an editable draft. */
+export const DOCUMENT_EDITING_ROLES: readonly DocumentCollaboratorRole[] = ['preparer', 'editor'];
+
+/**
+ * What a caller may do with a document, decided by the server policy and returned on the
+ * card (docs/modules/11 §12.5). The UI renders its action bar from this list instead of
+ * re-deriving permissions from the status and the author id — the drift between those two
+ * derivations is exactly how a button appears that the server then refuses.
+ */
+export const DOCUMENT_ACTIONS = [
+  'edit',
+  'startRoute',
+  'register',
+  'changeStatus',
+  'manageAccess',
+  'manageCollaborators',
+] as const;
+export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
+
 /** Confidentiality grade (docs/modules/11 §3). `dsp` = restricted (allow-list only). */
 export const DOCUMENT_CONFIDENTIALITY = ['normal', 'dsp'] as const;
 export type DocumentConfidentiality = (typeof DOCUMENT_CONFIDENTIALITY)[number];

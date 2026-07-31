@@ -8,9 +8,12 @@ import {
   DOCUMENT_STATUSES,
   JOURNAL_SEQ_RESETS,
   ROUTE_ASSIGNEE_TYPES,
+  DOCUMENT_COLLABORATOR_ROLES,
   ROUTE_STEP_KINDS,
   type AvStatus,
   type ControlSeverity,
+  type DocumentAction,
+  type DocumentCollaboratorRole,
   type DocumentLinkKind,
   type DocClass,
   type DocumentConfidentiality,
@@ -253,6 +256,15 @@ export interface RouteTemplateDto {
 
 // --- Documents (docs/modules/11 §3/§4) ---
 
+/** Counterparty requisites as written on the paper — a snapshot beside `correspondentId`,
+ *  never instead of it (docs/modules/11 §12.5). */
+const partyFields = {
+  senderName: z.string().max(300).nullish(),
+  senderContact: z.string().max(300).nullish(),
+  recipientName: z.string().max(300).nullish(),
+  recipientContact: z.string().max(300).nullish(),
+};
+
 export const createDocumentSchema = z.object({
   docClass: z.enum(DOC_CLASSES),
   typeCode: z.string().min(1).max(64),
@@ -262,16 +274,28 @@ export const createDocumentSchema = z.object({
   confidentiality: z.enum(DOCUMENT_CONFIDENTIALITY).default('normal'),
   accessList: z.array(z.string().uuid()).max(500).optional(),
   dueDate: z.string().datetime().nullish(),
+  /** When an answer is owed to the correspondent — distinct from `dueDate`, the internal
+   *  execution deadline. */
+  responseDueAt: z.string().datetime().nullish(),
   caseIndex: z.string().max(32).nullish(),
   correspondentId: z.string().uuid().nullish(),
   outgoingNumber: z.string().max(64).nullish(),
   outgoingDate: z.string().datetime().nullish(),
   delivery: z.enum(DOCUMENT_DELIVERY).nullish(),
+  ...partyFields,
 });
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 
-/** All fields optional; only a draft may be edited (enforced server-side). */
-export const updateDocumentSchema = createDocumentSchema.partial().omit({ docClass: true });
+/**
+ * All fields optional; only an editable draft may be edited (enforced server-side).
+ * `expectedVersion` is the `version` the editor loaded: an edit carrying a stale value is
+ * refused with `docflow.document.version_conflict` rather than silently overwriting
+ * whatever the other editor saved in the meantime (docs/modules/11 §12.5).
+ */
+export const updateDocumentSchema = createDocumentSchema
+  .partial()
+  .omit({ docClass: true })
+  .extend({ expectedVersion: z.number().int().min(1) });
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 
 export const DOCUMENT_QUEUES = [
@@ -421,10 +445,51 @@ export interface DocumentDetailDto extends DocumentListItemDto {
   outgoingNumber: string | null;
   outgoingDate: string | null;
   delivery: DocumentDelivery | null;
+  senderName: string | null;
+  senderContact: string | null;
+  recipientName: string | null;
+  recipientContact: string | null;
+  responseDueAt: string | null;
+  /** Optimistic-concurrency token to echo back in `expectedVersion` when saving. */
+  version: number;
   files: DocumentFileDto[];
-  canEdit: boolean;
-  canRegister: boolean;
-  canChangeStatus: boolean;
+  collaborators: DocumentCollaboratorDto[];
+  /**
+   * What THIS caller may do, decided by the server policy (docs/modules/11 §12.5). The
+   * card drives its action bar off this list — it never re-derives permissions from the
+   * status or the author id, which is how a hidden-but-permitted (or shown-but-refused)
+   * action creeps in.
+   */
+  availableActions: DocumentAction[];
+}
+
+// --- Collaborators (docs/modules/11 §12.5, plan §6.2) ---
+
+export const addDocumentCollaboratorSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(DOCUMENT_COLLABORATOR_ROLES),
+});
+export type AddDocumentCollaboratorInput = z.infer<typeof addDocumentCollaboratorSchema>;
+
+export interface DocumentCollaboratorDto {
+  id: string;
+  userId: string;
+  userName: string | null;
+  role: DocumentCollaboratorRole;
+  assignedByName: string | null;
+  createdAt: string;
+}
+
+// --- Timeline (docs/modules/11 §12.5) ---
+
+/** One entry of the document's unified timeline: an audited business event, resolved to
+ *  a display name. `meta` is the whitelisted subset the server chose to expose. */
+export interface DocumentTimelineEntryDto {
+  id: string;
+  action: string;
+  actorName: string | null;
+  at: string;
+  meta: Record<string, string | number | boolean> | null;
 }
 
 // --- Resolutions (docs/modules/11 §3/§5, task 3.4) ---

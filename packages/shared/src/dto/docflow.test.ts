@@ -9,6 +9,7 @@ import {
   createNomenclatureSchema,
   registerDocumentSchema,
   registerIncomingSchema,
+  updateDocumentSchema,
 } from './docflow';
 
 describe('createJournalSchema', () => {
@@ -94,6 +95,37 @@ describe('registerDocumentSchema', () => {
       registerDocumentSchema.safeParse({ journalId: '0190a000-0000-7000-8000-000000000001' })
         .success,
     ).toBe(true);
+  });
+});
+
+describe('updateDocumentSchema', () => {
+  it('requires the version the editor loaded — without it a save cannot be arbitrated', () => {
+    expect(updateDocumentSchema.safeParse({ subject: 'Новая тема' }).success).toBe(false);
+    expect(
+      updateDocumentSchema.safeParse({ expectedVersion: 1, subject: 'Новая тема' }).success,
+    ).toBe(true);
+  });
+
+  it('accepts the counterparty snapshot fields and clearing them', () => {
+    const parsed = updateDocumentSchema.parse({
+      expectedVersion: 3,
+      senderName: 'МЧС РТ',
+      senderContact: '+992 …',
+      recipientName: null,
+      responseDueAt: '2026-08-15T00:00:00.000Z',
+    });
+    expect(parsed.senderName).toBe('МЧС РТ');
+    expect(parsed.recipientName).toBeNull();
+  });
+
+  it('rejects a version that is not a positive integer', () => {
+    expect(updateDocumentSchema.safeParse({ expectedVersion: 0 }).success).toBe(false);
+    expect(updateDocumentSchema.safeParse({ expectedVersion: 1.5 }).success).toBe(false);
+  });
+
+  it('cannot change the document class after creation', () => {
+    const parsed = updateDocumentSchema.parse({ expectedVersion: 1 });
+    expect('docClass' in parsed).toBe(false);
   });
 });
 

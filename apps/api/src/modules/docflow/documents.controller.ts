@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
+  addDocumentCollaboratorSchema,
   addDocumentFileSchema,
   previewQuerySchema,
   type PreviewQuery,
@@ -13,12 +14,15 @@ import {
   registerIncomingSchema,
   setDocumentAccessSchema,
   updateDocumentSchema,
+  type AddDocumentCollaboratorInput,
   type AddDocumentFileInput,
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
   type DocumentAccessDto,
+  type DocumentCollaboratorDto,
   type DocumentDetailDto,
   type DocumentHistoryEntryDto,
+  type DocumentTimelineEntryDto,
   type DocumentListItemDto,
   type DocumentQueueCountsDto,
   type ListDocumentsQuery,
@@ -34,6 +38,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DocflowFilesService } from './docflow-files.service';
+import { DocumentCollaboratorsService } from './document-collaborators.service';
 import { DocumentsService } from './documents.service';
 
 const uuidSchema = z.string().uuid();
@@ -49,6 +54,7 @@ export class DocumentsController {
   constructor(
     private readonly documents: DocumentsService,
     private readonly files: DocflowFilesService,
+    private readonly collaborators: DocumentCollaboratorsService,
   ) {}
 
   @Get()
@@ -110,6 +116,49 @@ export class DocumentsController {
     @CurrentUser() user: AuthUser,
   ): Promise<DocumentHistoryEntryDto[]> {
     return this.documents.history(id, user);
+  }
+
+  @Get(':id/timeline')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: "The document's unified timeline (audited business events)" })
+  timeline(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentTimelineEntryDto[]> {
+    return this.documents.timeline(id, user);
+  }
+
+  @Get(':id/collaborators')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Who besides the author works on the document' })
+  listCollaborators(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentCollaboratorDto[]> {
+    return this.collaborators.list(id, user);
+  }
+
+  @Post(':id/collaborators')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Assign a preparer / editor / viewer (author only)' })
+  addCollaborator(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(addDocumentCollaboratorSchema))
+    body: AddDocumentCollaboratorInput,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentCollaboratorDto[]> {
+    return this.collaborators.add(id, body, user);
+  }
+
+  @Delete(':id/collaborators/:collaboratorId')
+  @RequirePermission('docflow.use')
+  @ApiOperation({ summary: 'Revoke a collaborator (author only)' })
+  removeCollaborator(
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Param('collaboratorId', new ZodValidationPipe(uuidSchema)) collaboratorId: string,
+    @CurrentUser() user: AuthUser,
+  ): Promise<DocumentCollaboratorDto[]> {
+    return this.collaborators.remove(id, collaboratorId, user);
   }
 
   @Get(':id/access')

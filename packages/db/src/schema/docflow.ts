@@ -14,6 +14,7 @@ import {
 import {
   CERTIFICATE_KINDS,
   DOC_CLASSES,
+  DOCUMENT_COLLABORATOR_ROLES,
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
   DOCUMENT_FILE_KINDS,
@@ -193,6 +194,19 @@ export const documents = appSchema.table(
     outgoingNumber: text('outgoing_number'),
     outgoingDate: timestamp('outgoing_date', { withTimezone: true }),
     delivery: text('delivery', { enum: DOCUMENT_DELIVERY }),
+    /** Snapshot of the counterparty as written on the paper (docs/modules/11 §12.5). Kept
+     *  alongside `correspondent_id`, never instead of it: the directory entry can be
+     *  renamed or merged later, but what this letter said must not change with it. */
+    senderName: text('sender_name'),
+    senderContact: text('sender_contact'),
+    recipientName: text('recipient_name'),
+    recipientContact: text('recipient_contact'),
+    /** When an answer is due to the correspondent — distinct from `due_date`, which is the
+     *  internal execution deadline. */
+    responseDueAt: timestamp('response_due_at', { withTimezone: true }),
+    /** Optimistic-concurrency token: every accepted edit bumps it, and an edit carrying a
+     *  stale value is refused instead of silently overwriting the other editor. */
+    version: integer('version').notNull().default(1),
     /** Idempotency key of the atomic incoming-registration command that created this
      *  document (docs/modules/11 §12.2). A retried command carrying the same key returns
      *  the original document instead of minting a second number; null for documents
@@ -222,6 +236,39 @@ export const documents = appSchema.table(
     index('documents_org_unit_idx').on(t.orgUnitId),
     index('documents_journal_idx').on(t.journalId),
     index('documents_search_idx').using('gin', t.searchTsv),
+  ],
+);
+
+/**
+ * app.document_collaborators — who besides the author may work on a document
+ * (docs/modules/11 §12.5, plan §6.2). The author remains the owner; a collaborator only
+ * gains what its role grants and never bypasses the ДСП allow-list, access management or
+ * registration. Soft-deleted so a revoked grant stays visible in the history.
+ */
+export const documentCollaborators = appSchema.table(
+  'document_collaborators',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    role: text('role', { enum: DOCUMENT_COLLABORATOR_ROLES }).notNull(),
+    assignedBy: uuid('assigned_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    // One live grant per (document, user, role) — re-granting an existing role is a no-op
+    // rather than a duplicate row.
+    uniqueIndex('document_collaborators_active_uq')
+      .on(t.documentId, t.userId, t.role)
+      .where(sql`${t.deletedAt} is null`),
+    index('document_collaborators_document_idx').on(t.documentId),
+    // «Documents I was invited to» — the reverse lookup the registry queue needs.
+    index('document_collaborators_user_idx').on(t.userId),
   ],
 );
 

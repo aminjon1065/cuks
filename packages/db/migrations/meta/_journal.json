@@ -337,6 +337,13 @@
       "when": 1785481729822,
       "tag": "0047_small_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785487520526,
+      "tag": "0048_illegal_redwing",
+      "breakpoints": true
     }
   ]
 }

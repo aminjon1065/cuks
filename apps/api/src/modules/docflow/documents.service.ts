@@ -1,9 +1,23 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import {
+  aliasedTable,
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import {
   acquaintances,
   auditLog,
   correspondents,
+  documentCollaborators,
   documentFiles,
   documents,
   fileVersions,
@@ -18,18 +32,21 @@ import {
   type Database,
 } from '@cuks/db';
 import {
+  DOCUMENT_EDITING_ROLES,
   DOCUMENT_STATUS_TRANSITIONS,
   documentTransitionAllowed,
   type AddDocumentFileInput,
   type ChangeDocumentStatusInput,
   type CreateDocumentInput,
   type DocumentAccessDto,
+  type DocumentCollaboratorDto,
   type DocumentDetailDto,
   type DocumentFileDto,
   type DocumentHistoryEntryDto,
   type DocumentListItemDto,
   type DocumentQueueCountsDto,
   type DocumentStatus,
+  type DocumentTimelineEntryDto,
   type ListDocumentsQuery,
   type PaginatedResult,
   type DocClass,
@@ -45,6 +62,11 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { adoptDocumentFile } from './docflow-files.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
+import {
+  collaboratorRolesOf,
+  documentAvailableActions,
+  isEditableStatus,
+} from './document-actions';
 import {
   canManageDocumentAccess,
   canViewDocumentBase,
@@ -132,6 +154,43 @@ export function assertNoOpenObligations(target: DocumentStatus, open: DocumentOb
       { toStatus: target, pendingAcquaintances: open.pendingAcquaintances },
     );
   }
+}
+
+/**
+ * Metadata keys the timeline may show. An allow-list rather than a redaction list: audit
+ * meta is written by many call sites, and a new one must not be able to surface a document
+ * body, a file key or somebody's contact on a screen by simply existing (docs/09 §5).
+ */
+const TIMELINE_META_KEYS = [
+  'regNumber',
+  'journalId',
+  'fromStatus',
+  'toStatus',
+  'reason',
+  'kind',
+  'role',
+  'steps',
+  'stepId',
+  'fileCount',
+  'changedFields',
+  'confidentiality',
+  'mode',
+] as const;
+
+function pickTimelineMeta(meta: unknown): Record<string, string | number | boolean> | null {
+  if (!meta || typeof meta !== 'object') return null;
+  const source = meta as Record<string, unknown>;
+  const out: Record<string, string | number | boolean> = {};
+  for (const key of TIMELINE_META_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      out[key] = value;
+    } else if (Array.isArray(value)) {
+      // `changedFields` is a list of field NAMES — safe, and the only array we surface.
+      out[key] = value.filter((v): v is string => typeof v === 'string').join(', ');
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** True for a Postgres unique-violation error (SQLSTATE 23505). */
@@ -574,6 +633,10 @@ export class DocumentsService {
         : Promise.resolve([]),
       this.listFiles(id),
     ]);
+    const [collaborators, roles] = await Promise.all([
+      this.listCollaborators(id),
+      collaboratorRolesOf(this.db, id, user.id),
+    ]);
     return {
       id: row.id,
       regNumber: row.regNumber,
@@ -602,55 +665,116 @@ export class DocumentsService {
       outgoingNumber: row.outgoingNumber,
       outgoingDate: row.outgoingDate?.toISOString() ?? null,
       delivery: row.delivery,
+      senderName: row.senderName,
+      senderContact: row.senderContact,
+      recipientName: row.recipientName,
+      recipientContact: row.recipientContact,
+      responseDueAt: row.responseDueAt?.toISOString() ?? null,
+      version: row.version,
       files,
-      canEdit: row.authorId === user.id && (row.status === 'draft' || row.status === 'rejected'),
-      canRegister:
-        hasRegistryAccess(user) &&
-        (row.status === 'draft' || row.status === 'pending_registration'),
-      // The author or the chancellery/control may drive the lifecycle, and only when
-      // a manual transition exists (mirrors changeStatus's authority + the policy graph).
-      canChangeStatus:
-        (row.authorId === user.id || hasRegistryAccess(user)) &&
-        DOCUMENT_STATUS_TRANSITIONS[row.status].length > 0,
+      collaborators,
+      // One server-side answer for the whole action bar (docs/modules/11 §12.5); a manual
+      // status change additionally needs the graph to offer one.
+      availableActions: documentAvailableActions(row, user, roles).filter(
+        (a) => a !== 'changeStatus' || DOCUMENT_STATUS_TRANSITIONS[row.status].length > 0,
+      ),
     };
   }
 
+  /** The document's unified timeline (docs/modules/11 §12.5): every audited business event
+   *  on the card, newest first, with the actor resolved and only whitelisted metadata. */
+  async timeline(id: string, user: AuthUser): Promise<DocumentTimelineEntryDto[]> {
+    await this.assertVisible(id, user); // gate only — reading the timeline is not an «open»
+    const rows = await this.db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        actorName: users.shortName,
+        createdAt: auditLog.createdAt,
+        meta: auditLog.meta,
+      })
+      .from(auditLog)
+      .leftJoin(users, eq(users.id, auditLog.actorId))
+      .where(and(eq(auditLog.entityType, 'document'), eq(auditLog.entityId, id)))
+      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+      .limit(200);
+    return rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      actorName: r.actorName ?? null,
+      at: r.createdAt.toISOString(),
+      meta: pickTimelineMeta(r.meta),
+    }));
+  }
+
+  /**
+   * Edit an editable draft (docs/modules/11 §12.5). The author or a `preparer`/`editor`
+   * collaborator may; the write is guarded by `expectedVersion`, so two editors on the same
+   * card cannot silently overwrite each other — the second one is told to reload.
+   *
+   * Access management stays out of this path even though the fields exist on the create
+   * schema: a collaborator must never widen a ДСП allow-list, and the author has a
+   * dedicated audited endpoint for the grif (`PATCH :id/access`).
+   */
   async update(
     id: string,
     input: UpdateDocumentInput,
     actor: AuthUser,
   ): Promise<DocumentDetailDto> {
-    const row = await this.requireOwnedDraft(id, actor);
-    await this.db
+    const row = await this.requireEditable(id, actor);
+    const patch = {
+      ...(input.typeCode !== undefined ? { typeCode: input.typeCode } : {}),
+      ...(input.subject !== undefined ? { subject: input.subject } : {}),
+      ...(input.summary !== undefined ? { summary: input.summary ?? null } : {}),
+      ...(input.orgUnitId !== undefined ? { orgUnitId: input.orgUnitId ?? null } : {}),
+      ...(input.dueDate !== undefined
+        ? { dueDate: input.dueDate ? new Date(input.dueDate) : null }
+        : {}),
+      ...(input.responseDueAt !== undefined
+        ? { responseDueAt: input.responseDueAt ? new Date(input.responseDueAt) : null }
+        : {}),
+      ...(input.caseIndex !== undefined ? { caseIndex: input.caseIndex ?? null } : {}),
+      ...(input.correspondentId !== undefined
+        ? { correspondentId: input.correspondentId ?? null }
+        : {}),
+      ...(input.outgoingNumber !== undefined
+        ? { outgoingNumber: input.outgoingNumber ?? null }
+        : {}),
+      ...(input.outgoingDate !== undefined
+        ? { outgoingDate: input.outgoingDate ? new Date(input.outgoingDate) : null }
+        : {}),
+      ...(input.delivery !== undefined ? { delivery: input.delivery ?? null } : {}),
+      ...(input.senderName !== undefined ? { senderName: input.senderName ?? null } : {}),
+      ...(input.senderContact !== undefined ? { senderContact: input.senderContact ?? null } : {}),
+      ...(input.recipientName !== undefined ? { recipientName: input.recipientName ?? null } : {}),
+      ...(input.recipientContact !== undefined
+        ? { recipientContact: input.recipientContact ?? null }
+        : {}),
+    };
+    const changedFields = Object.keys(patch);
+    if (changedFields.length === 0) return this.detail(id, actor);
+
+    const [updated] = await this.db
       .update(documents)
-      .set({
-        ...(input.typeCode !== undefined ? { typeCode: input.typeCode } : {}),
-        ...(input.subject !== undefined ? { subject: input.subject } : {}),
-        ...(input.summary !== undefined ? { summary: input.summary ?? null } : {}),
-        ...(input.orgUnitId !== undefined ? { orgUnitId: input.orgUnitId ?? null } : {}),
-        ...(input.confidentiality !== undefined ? { confidentiality: input.confidentiality } : {}),
-        ...(input.accessList !== undefined ? { accessList: input.accessList } : {}),
-        ...(input.dueDate !== undefined
-          ? { dueDate: input.dueDate ? new Date(input.dueDate) : null }
-          : {}),
-        ...(input.caseIndex !== undefined ? { caseIndex: input.caseIndex ?? null } : {}),
-        ...(input.correspondentId !== undefined
-          ? { correspondentId: input.correspondentId ?? null }
-          : {}),
-        ...(input.outgoingNumber !== undefined
-          ? { outgoingNumber: input.outgoingNumber ?? null }
-          : {}),
-        ...(input.outgoingDate !== undefined
-          ? { outgoingDate: input.outgoingDate ? new Date(input.outgoingDate) : null }
-          : {}),
-        ...(input.delivery !== undefined ? { delivery: input.delivery ?? null } : {}),
-      })
-      .where(eq(documents.id, row.id));
-    this.audit.log({
+      .set({ ...patch, version: sql`${documents.version} + 1` })
+      // The version predicate IS the concurrency check: no row matches once someone else
+      // has saved, and no read-then-write window exists to lose an edit in.
+      .where(and(eq(documents.id, row.id), eq(documents.version, input.expectedVersion)))
+      .returning({ version: documents.version });
+    if (!updated) {
+      throw AppException.conflict(
+        'docflow.document.version_conflict',
+        'The document changed since it was loaded — reload before saving',
+        { expectedVersion: input.expectedVersion, actualVersion: row.version },
+      );
+    }
+    await this.audit.logAndWait({
       action: 'docflow.document.updated',
       actorId: actor.id,
       entityType: 'document',
       entityId: id,
+      // Field NAMES only — never the values, which can be the document's own content.
+      meta: { changedFields, version: updated.version },
     });
     return this.detail(id, actor);
   }
@@ -763,7 +887,8 @@ export class DocumentsService {
     input: AddDocumentFileInput,
     actor: AuthUser,
   ): Promise<DocumentDetailDto> {
-    await this.requireOwnedDraft(id, actor);
+    // A preparer attaches the body they were asked to prepare — same gate as editing.
+    await this.requireEditable(id, actor);
     const [node] = await this.db
       .select({ id: fsNodes.id })
       .from(fsNodes)
@@ -885,7 +1010,13 @@ export class DocumentsService {
     }));
   }
 
-  private async requireOwnedDraft(
+  /**
+   * Load a document this caller may edit, or throw (docs/modules/11 §12.5). The author and
+   * a `preparer`/`editor` collaborator both qualify — that is what the role is for — but
+   * only while the status still allows edits. The status check comes AFTER the permission
+   * check so a stranger learns nothing about the document's state.
+   */
+  private async requireEditable(
     id: string,
     actor: AuthUser,
   ): Promise<typeof documents.$inferSelect> {
@@ -897,19 +1028,55 @@ export class DocumentsService {
     if (!row || !canViewDocumentBase(row, actor)) {
       throw AppException.notFound('docflow.document.not_found', 'Document not found');
     }
-    if (row.authorId !== actor.id) {
+    const roles = await collaboratorRolesOf(this.db, id, actor.id);
+    const isOwner = row.authorId === actor.id || actor.isSuperadmin;
+    if (!isOwner && !roles.some((r) => DOCUMENT_EDITING_ROLES.includes(r))) {
       throw AppException.forbidden(
         'docflow.document.not_author',
-        'Only the author may edit this document',
+        'Only the author or an assigned editor may edit this document',
       );
     }
-    if (row.status !== 'draft' && row.status !== 'rejected') {
+    if (!isEditableStatus(row.status)) {
       throw AppException.conflict(
         'docflow.document.not_editable',
-        'Only a draft document can be edited',
+        'Only an editable draft can be changed',
+        { status: row.status },
       );
     }
     return row;
+  }
+
+  /** The card's collaborator list — kept here so `detail()` renders it in one round-trip. */
+  private async listCollaborators(documentId: string): Promise<DocumentCollaboratorDto[]> {
+    const assigner = aliasedTable(users, 'doc_collaborator_assigner');
+    const holder = aliasedTable(users, 'doc_collaborator_user');
+    const rows = await this.db
+      .select({
+        id: documentCollaborators.id,
+        userId: documentCollaborators.userId,
+        userName: holder.shortName,
+        role: documentCollaborators.role,
+        assignedByName: assigner.shortName,
+        createdAt: documentCollaborators.createdAt,
+      })
+      .from(documentCollaborators)
+      .leftJoin(holder, eq(holder.id, documentCollaborators.userId))
+      .leftJoin(assigner, eq(assigner.id, documentCollaborators.assignedBy))
+      .where(
+        and(
+          eq(documentCollaborators.documentId, documentId),
+          isNull(documentCollaborators.deletedAt),
+        ),
+      )
+      .orderBy(asc(documentCollaborators.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: r.userName ?? null,
+      role: r.role,
+      assignedByName: r.assignedByName ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   /** Load a document the caller may MANAGE, or 404 (no existence leak). */

@@ -14,6 +14,7 @@ import { CorrespondentsService } from './correspondents.service';
 import { DocflowDictionariesService } from './docflow-dictionaries.service';
 import { DocflowFilesService } from './docflow-files.service';
 import { DocflowNumberingService } from './docflow-numbering.service';
+import { DocumentCollaboratorsService } from './document-collaborators.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
@@ -57,6 +58,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocflowNumberingService,
     DocumentsService,
     DocflowFilesService,
+    DocumentCollaboratorsService,
     RoutesService,
     ResolutionsService,
     CaService,
