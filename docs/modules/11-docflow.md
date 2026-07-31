@@ -78,6 +78,7 @@
 
 ```
 POST /docflow/documents  GET /docflow/documents?queue=to_approve|to_sign|to_ack|my_tasks|mine
+POST /docflow/documents/register-incoming (атомарно, idempotencyKey — см. §12.2)
 GET/PATCH /docflow/documents/:id  POST /docflow/documents/:id/files (+версии)
 POST /docflow/documents/:id/route (из шаблона/ручной)  POST /docflow/route-steps/:id/actions/{approve|reject|acknowledge}
 POST /docflow/documents/:id/actions/register {journal}  POST /docflow/documents/:id/actions/sign {signature}
@@ -114,7 +115,11 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 ### 12.2. Входящий процесс
 
-Канцелярия вводит реквизиты и файл → **атомарная регистрация** одной командой (`register-incoming` с idempotency key: документ, номер, файлы и audit — в одной транзакции) → **проект резолюции** (`resolution_proposals`) → подписант утверждает или возвращает → при наличии предварительного ознакомления резолюция открывается исполнителям **только после снятия gate**: все ознакомились (`all_acknowledged`) либо истёк таймаут (`timeout`, системная настройка, default `PT4H`). Истечение таймаута не считается ознакомлением: оставшиеся получают `expired`, исполнители — доступ. Ответственный исполнитель один, соисполнителей несколько; все решения видны в единой timeline.
+Канцелярия вводит реквизиты и файл → **атомарная регистрация** одной командой → **проект резолюции** (`resolution_proposals`) → подписант утверждает или возвращает → при наличии предварительного ознакомления резолюция открывается исполнителям **только после снятия gate**: все ознакомились (`all_acknowledged`) либо истёк таймаут (`timeout`, системная настройка, default `PT4H`). Истечение таймаута не считается ознакомлением: оставшиеся получают `expired`, исполнители — доступ. Ответственный исполнитель один, соисполнителей несколько; все решения видны в единой timeline.
+
+**`POST /docflow/documents/register-incoming`** (право `docflow.register`) — реализовано. Одна транзакция создаёт карточку, инкрементирует счётчик журнала, проставляет `reg_number`/`reg_date`/`status='registered'`, связывает файлы и пишет audit-запись: сбой на любом шаге не оставляет черновик и **не расходует номер** (инкремент счётчика откатывается вместе с остальным). Журнал обязан существовать, быть активным и иметь `doc_class='incoming'` (`docflow.journal.not_found` / `docflow.journal.inactive` / `docflow.journal.class_mismatch`); у документа не более одного файла `main`.
+
+Команда **идемпотентна** по `idempotencyKey` (uuid, генерируется клиентом один раз на попытку регистрации и переиспользуется при повторе): повтор возвращает исходный документ и тот же номер. Ключ хранится в `documents.registration_key` под частичным уникальным индексом — он же разрешает гонку двух одновременных повторов: проигравший читает результат победителя, а не выпускает второй номер. Чужой ключ никогда не переиспользуется (`docflow.document.idempotency_conflict`). Audit пишется **внутри той же транзакции** (`AuditService.logWithin`) — одной записью `docflow.document.registered` с `meta.atomic=true`, чтобы вкладка «История» не получала две записи с одинаковой отметкой времени.
 
 ### 12.3. Исходящий процесс
 

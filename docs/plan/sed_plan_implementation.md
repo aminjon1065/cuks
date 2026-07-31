@@ -1049,14 +1049,28 @@ Event payload содержит id и безопасный минимум. Пол
 - [x] Не менять уже выданные номера. — правка влияет только на будущие аллокации;
   миграция и backfill не требуются.
 
-#### 1B. Атомарная входящая регистрация
+#### 1B. Атомарная входящая регистрация — **готово (2026-07-31), кроме прогона e2e**
 
-- [ ] Новый Zod DTO и idempotency key.
-- [ ] Одна DB transaction: document + counter + registration + file links + audit.
-- [ ] Повтор команды возвращает исходный результат.
-- [ ] Ошибка любого шага не расходует номер и не оставляет документ.
-- [ ] Перевести `RegisterWizard` на новую команду.
-- [ ] E2E на сетевой retry после успешного commit.
+- [x] Новый Zod DTO и idempotency key. — `registerIncomingSchema` в
+  `packages/shared/src/dto/docflow.ts`; ключ хранится в `documents.registration_key`
+  (миграция `0047_small_silvermane`, nullable + частичный unique index).
+- [x] Одна DB transaction: document + counter + registration + file links + audit. —
+  `DocumentsService.registerIncoming()`; audit пишется внутри транзакции новым
+  `AuditService.logWithin(tx, event)`.
+- [x] Повтор команды возвращает исходный результат. — предварительный поиск по ключу
+  плюс перехват 23505 на гонке двух одновременных повторов; чужой ключ даёт
+  `docflow.document.idempotency_conflict`.
+- [x] Ошибка любого шага не расходует номер и не оставляет документ. — инкремент
+  счётчика откатывается вместе с транзакцией; несуществующий файл отсекается до её
+  открытия (400).
+- [x] Перевести `RegisterWizard` на новую команду. — вместо create → attach → register
+  один `POST /docflow/documents/register-incoming`; ключ создаётся один раз на монтирование
+  и **не пересоздаётся** после ошибки, поэтому повторное нажатие безопасно.
+- [~] E2E на сетевой retry после успешного commit. — спека написана
+  (`apps/web/e2e/docflow-register-incoming.spec.ts`: атомарность, повтор ключа, сбой без
+  расхода номера, чужой класс журнала, отказ без права), **но не прогнана**: на машине не
+  запущен Docker, инфраструктура и браузеры Playwright недоступны. Прогнать вместе с
+  `pnpm db:migrate` при поднятой инфраструктуре.
 
 #### 1C. Защищённые файлы СЭД
 
