@@ -253,16 +253,18 @@ export interface SignatureRequirement {
 
 /**
  * Registration is the moment a document becomes ours officially, so a type that must be
- * signed must already be signed (docs/modules/11 §12.1, plan этап 6).
+ * signed must already be signed (docs/modules/11 §12.1/§12.4, plan этапы 6–7).
  *
- * Only for OUTGOING documents: an incoming letter carries the counterparty's signature on
- * paper, and demanding ours would block the chancellery from registering the post; internal
- * documents get their own rule with этап 7, where their lifecycle is built. The signature must cover the CURRENT body — a signature over a
+ * Applies to the documents CUKS ISSUES — outgoing and internal (a приказ is signed before it
+ * is numbered). Never to an incoming letter or a citizen's appeal: those carry the sender's
+ * signature on paper, and demanding ours would block the chancellery from registering the
+ * post. Which types demand it is configuration, not code: the `requiresSignature` flag on the
+ * `doc_type` dictionary entry. The signature must cover the CURRENT body — one over a
  * superseded version proves nothing about what is being registered.
  */
 export function assertSignatureBeforeRegistration(check: SignatureRequirement): void {
   if (!check.typeRequiresSignature) return;
-  if (check.docClass !== 'outgoing') return;
+  if (check.docClass !== 'outgoing' && check.docClass !== 'internal') return;
   if (check.hasCurrentSignature) return;
   throw AppException.unprocessable(
     'docflow.document.signature_required',

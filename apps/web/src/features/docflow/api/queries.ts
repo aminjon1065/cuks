@@ -73,6 +73,10 @@ import type {
   CreateResponseInput,
   DocumentDispatchDto,
   FailDispatchInput,
+  AcknowledgementReportDto,
+  AcknowledgementReportQuery,
+  CreateDistributionInput,
+  DistributionDto,
 } from '@cuks/shared';
 import { CSRF_COOKIE, CSRF_HEADER } from '@cuks/shared';
 import { api } from '@/lib/api-client';
@@ -1025,4 +1029,69 @@ export function useDispatchAction(documentId: string) {
       ),
     onSuccess: () => invalidateDispatches(qc, documentId),
   });
+}
+
+// ---- Internal distribution (docs/modules/11 §12.4) -------------------------
+
+export function useDocumentDistributions(
+  documentId: string | null,
+): UseQueryResult<DistributionDto[]> {
+  return useQuery({
+    queryKey: [...documentsKey, documentId, 'distributions'],
+    queryFn: () => api.get<DistributionDto[]>(`/v1/docflow/documents/${documentId}/distributions`),
+    enabled: !!documentId,
+  });
+}
+
+export function useCreateDistribution(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDistributionInput) =>
+      api.post<DistributionDto>(`/v1/docflow/documents/${documentId}/distributions`, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...documentsKey, documentId] });
+      void qc.invalidateQueries({ queryKey: [...documentsKey, 'list'] });
+    },
+  });
+}
+
+// ---- Acknowledgement report (plan этап 7) ---------------------------------
+
+function acknowledgementParams(query: AcknowledgementReportQuery): string {
+  const params = new URLSearchParams({ from: query.from, to: query.to });
+  if (query.orgUnitId) params.set('orgUnitId', query.orgUnitId);
+  return params.toString();
+}
+
+export function useAcknowledgementReport(
+  query: AcknowledgementReportQuery,
+  enabled: boolean,
+): UseQueryResult<AcknowledgementReportDto> {
+  return useQuery({
+    queryKey: [...reportsKey, 'acknowledgement', query],
+    queryFn: () =>
+      api.get<AcknowledgementReportDto>(
+        `/v1/docflow/reports/acknowledgement?${acknowledgementParams(query)}`,
+      ),
+    enabled,
+  });
+}
+
+/** A binary GET — bypasses the JSON api client, like the discipline export beside it. */
+export async function exportAcknowledgementXlsx(query: AcknowledgementReportQuery): Promise<void> {
+  const res = await fetch(
+    `/api/v1/docflow/reports/acknowledgement/export?${acknowledgementParams(query)}`,
+    { credentials: 'include' },
+  );
+  if (!res.ok) throw new Error(`export failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download =
+    filenameFromDisposition(res.headers.get('content-disposition')) ?? 'acknowledgement.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

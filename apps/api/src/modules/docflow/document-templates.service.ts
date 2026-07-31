@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
   documentTemplateVersions,
@@ -25,6 +25,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
+import { RoutesService } from './routes.service';
 
 /**
  * Versioned document templates (docs/modules/11 §12.7, plan §6.3).
@@ -40,9 +41,12 @@ import { AppException } from '../../common/exceptions/app.exception';
  */
 @Injectable()
 export class DocumentTemplatesService {
+  private readonly logger = new Logger(DocumentTemplatesService.name);
+
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly routes: RoutesService,
   ) {}
 
   async list(actor: AuthUser): Promise<DocumentTemplateDto[]> {
@@ -301,6 +305,24 @@ export class DocumentTemplatesService {
       entityId: created.id,
       meta: { templateId, version: chosen.version },
     });
+
+    // The route a template names for its document type — «приказ идёт юрист → зам →
+    // председатель» — was stored from the start and never read (plan этап 7 «templates +
+    // routes по типу»). Started only when asked for: a draft the author still wants to
+    // write in peace must not leave for approval the moment it is created.
+    if (input.startRoute && template.routeTemplateId) {
+      // Outside no transaction of ours: startRoute opens its own and locks the document.
+      // A failure leaves a usable draft the author can route by hand, which is better than
+      // a 500 that hides the document they just created.
+      try {
+        await this.routes.startRoute(created.id, { templateId: template.routeTemplateId }, actor);
+      } catch (error) {
+        this.logger.error(
+          { error, documentId: created.id },
+          'document instantiated but its template route did not start',
+        );
+      }
+    }
     return { documentId: created.id };
   }
 

@@ -43,6 +43,7 @@ export function TemplatePickerDialog({
   const instantiate = useInstantiateTemplate();
   const [templateId, setTemplateId] = useState('');
   const [subject, setSubject] = useState('');
+  const [startRoute, setStartRoute] = useState(false);
 
   const usable = useMemo(
     () => (templates.data ?? []).filter((tpl) => tpl.isActive && tpl.publishedVersion !== null),
@@ -55,7 +56,7 @@ export function TemplatePickerDialog({
     e.preventDefault();
     if (!chosen || !subject.trim() || instantiate.isPending) return;
     instantiate.mutate(
-      { templateId: chosen.id, input: { subject: subject.trim() } },
+      { templateId: chosen.id, input: { subject: subject.trim(), startRoute } },
       {
         onSuccess: ({ documentId }) => {
           toast({ title: t('templates.created'), tone: 'success' });
@@ -109,6 +110,19 @@ export function TemplatePickerDialog({
                 required
               />
             </div>
+
+            {chosen?.routeTemplateId ? (
+              // Offered only when the template actually names a route: a checkbox that does
+              // nothing is worse than no checkbox.
+              <label className="flex items-center gap-2 text-[13px] text-text">
+                <input
+                  type="checkbox"
+                  checked={startRoute}
+                  onChange={(e) => setStartRoute(e.target.checked)}
+                />
+                {t('templates.pick.startRoute')}
+              </label>
+            ) : null}
 
             {preview?.content ? (
               <div className="flex flex-col gap-1">

@@ -49,6 +49,7 @@ import { useDocumentTitle } from '@/lib/use-document-title';
 import { useDocumentRealtime } from '../hooks/useDocumentRealtime';
 import { CreateResponseDialog } from '../components/CreateResponseDialog';
 import { DispatchSection } from '../components/DispatchSection';
+import { DistributionSection } from '../components/DistributionSection';
 import { RelationBanner } from '../components/RelationBanner';
 
 const CARD_TABS = [
@@ -56,6 +57,7 @@ const CARD_TABS = [
   'route',
   'resolutions',
   'dispatch',
+  'distribution',
   'links',
   'tasks',
   'history',
@@ -65,7 +67,12 @@ type CardTab = (typeof CARD_TABS)[number];
 /** Only an outgoing document is ever dispatched, so the tab is not offered elsewhere —
  *  an empty «Отправка» on an incoming letter reads as a feature that is merely unused. */
 function tabsFor(doc: DocumentDetailDto): readonly CardTab[] {
-  return doc.docClass === 'outgoing' ? CARD_TABS : CARD_TABS.filter((k) => k !== 'dispatch');
+  // Sending applies to an outgoing document, distribution to an internal one; an empty tab
+  // on the wrong class reads as an unused feature rather than an inapplicable one.
+  const drop = new Set<CardTab>();
+  if (doc.docClass !== 'outgoing') drop.add('dispatch');
+  if (doc.docClass !== 'internal') drop.add('distribution');
+  return CARD_TABS.filter((k) => !drop.has(k));
 }
 
 const selectClass = cn(
@@ -210,6 +217,7 @@ export function DocumentCardPage(): React.JSX.Element {
             </div>
           ) : null}
           {tab === 'dispatch' ? <DispatchSection doc={data} /> : null}
+          {tab === 'distribution' ? <DistributionSection doc={data} /> : null}
           {tab === 'links' ? (
             <section className="rounded-md border border-border bg-surface p-4">
               <LinksSection doc={data} />

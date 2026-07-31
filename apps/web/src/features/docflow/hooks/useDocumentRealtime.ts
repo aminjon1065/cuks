@@ -37,4 +37,5 @@ export function useDocumentRealtime(documentId: string | null): void {
   // «Мои задачи» list must refresh even though no document card is open (docs/modules/11 §12.11).
   useSocketEvent('docflow.resolution.updated', invalidate);
   useSocketEvent('docflow.dispatch.updated', invalidate);
+  useSocketEvent('docflow.distribution.updated', invalidate);
 }

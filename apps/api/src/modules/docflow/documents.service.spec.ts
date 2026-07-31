@@ -226,8 +226,8 @@ describe('assertSignatureBeforeRegistration (plan этап 6)', () => {
     ).not.toThrow();
   });
 
-  it('never blocks an incoming document — the counterparty signed it on paper', () => {
-    for (const docClass of ['incoming', 'citizens', 'internal'] as const) {
+  it('never blocks an inbound document — the sender signed it on paper', () => {
+    for (const docClass of ['incoming', 'citizens'] as const) {
       expect(() =>
         assertSignatureBeforeRegistration({
           typeRequiresSignature: true,
@@ -236,6 +236,27 @@ describe('assertSignatureBeforeRegistration (plan этап 6)', () => {
         }),
       ).not.toThrow();
     }
+  });
+
+  it('holds an internal order to the same rule — a приказ is signed before it is numbered', () => {
+    // Which types demand it is configuration (`requiresSignature` on the doc_type entry),
+    // so the class check must not be what excuses an internal document (plan этап 7).
+    expectRejected(
+      () =>
+        assertSignatureBeforeRegistration({
+          typeRequiresSignature: true,
+          docClass: 'internal',
+          hasCurrentSignature: false,
+        }),
+      'docflow.document.signature_required',
+    );
+    expect(() =>
+      assertSignatureBeforeRegistration({
+        typeRequiresSignature: true,
+        docClass: 'internal',
+        hasCurrentSignature: true,
+      }),
+    ).not.toThrow();
   });
 
   it('leaves an unflagged type alone', () => {

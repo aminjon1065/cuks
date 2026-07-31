@@ -571,6 +571,8 @@ export const instantiateDocumentTemplateSchema = z.object({
   subject: z.string().min(1).max(500),
   orgUnitId: z.string().uuid().nullish(),
   correspondentId: z.string().uuid().nullish(),
+  /** Start the route the template names for this document type, if it names one. */
+  startRoute: z.boolean().default(false),
 });
 export type InstantiateDocumentTemplateInput = z.infer<typeof instantiateDocumentTemplateSchema>;
 
