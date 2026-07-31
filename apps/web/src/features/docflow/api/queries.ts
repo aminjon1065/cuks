@@ -43,6 +43,7 @@ import type {
   NomenclatureDto,
   PaginatedResult,
   RegisterDocumentInput,
+  RegisterIncomingInput,
   UpdateCorrespondentInput,
   UpdateDocumentInput,
   UpdateJournalInput,
@@ -325,6 +326,21 @@ export function useRegisterDocument() {
     mutationFn: ({ id, input }: { id: string; input: RegisterDocumentInput }) =>
       api.post<DocumentDetailDto>(`/v1/docflow/documents/${id}/actions/register`, input),
     onSuccess: (_data, { id }) => invalidateDocuments(qc, id),
+  });
+}
+
+/**
+ * Atomic incoming registration (docs/modules/11 §12.2): one request creates the card,
+ * mints the number and links the files. `idempotencyKey` is minted once per wizard
+ * attempt, so retrying after a dropped response returns the same document and number
+ * instead of a second registration.
+ */
+export function useRegisterIncoming() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterIncomingInput) =>
+      api.post<DocumentDetailDto>('/v1/docflow/documents/register-incoming', input),
+    onSuccess: (doc) => invalidateDocuments(qc, doc.id),
   });
 }
 

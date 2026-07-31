@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -15,8 +15,7 @@ import {
 } from '@cuks/ui';
 import type { FsNodeDto } from '@cuks/shared';
 import { AttachmentField } from '@/features/uploads';
-import { api } from '@/lib/api-client';
-import { useCreateDocument, useJournals, useRegisterDocument } from '../api/queries';
+import { useJournals, useRegisterIncoming } from '../api/queries';
 import { CorrespondentCombobox } from './CorrespondentCombobox';
 
 const inputClass = cn(
@@ -26,16 +25,19 @@ const inputClass = cn(
 
 /**
  * Incoming-document registration wizard (docs/modules/11 §4/§7 — «60 секунд»): scan/file
- * → correspondent (search or create inline) → their number/date → subject → journal. On
- * submit it creates the draft, attaches the file, and registers it in one flow, then opens
- * the freshly-numbered card ready for a resolution.
+ * → correspondent (search or create inline) → their number/date → subject → journal.
+ * Submitting sends ONE atomic command (docs/modules/11 §12.2): the card, its number and
+ * its file links commit together, so closing the tab or losing the connection mid-flight
+ * can no longer leave a half-registered draft behind. The idempotency key is minted once
+ * per wizard, so a retry after a dropped response reopens the same numbered card.
  */
 export function RegisterWizard({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { t } = useTranslation('docflow');
   const navigate = useNavigate();
   const journals = useJournals();
-  const create = useCreateDocument();
-  const register = useRegisterDocument();
+  const register = useRegisterIncoming();
+  // Minted once per mount (the same generator the chat/map already rely on).
+  const idempotencyKey = useRef(crypto.randomUUID());
 
   const [fileNodeId, setFileNodeId] = useState<string | null>(null);
   const [correspondentId, setCorrespondentId] = useState<string | null>(null);
@@ -59,26 +61,24 @@ export function RegisterWizard({ onClose }: { onClose: () => void }): React.JSX.
     if (!subject.trim() || !chosenJournal || busy) return;
     setBusy(true);
     try {
-      const doc = await create.mutateAsync({
-        docClass: 'incoming',
+      const doc = await register.mutateAsync({
+        idempotencyKey: idempotencyKey.current,
+        journalId: chosenJournal,
         typeCode: 'letter',
         subject: subject.trim(),
         confidentiality: 'normal',
+        files: fileNodeId ? [{ fileId: fileNodeId, kind: 'main' }] : [],
         ...(correspondentId ? { correspondentId } : {}),
         ...(outgoingNumber.trim() ? { outgoingNumber: outgoingNumber.trim() } : {}),
         ...(outgoingDate ? { outgoingDate: new Date(outgoingDate).toISOString() } : {}),
       });
-      if (fileNodeId) {
-        await api.post(`/v1/docflow/documents/${doc.id}/files`, {
-          fileId: fileNodeId,
-          kind: 'main',
-        });
-      }
-      await register.mutateAsync({ id: doc.id, input: { journalId: chosenJournal } });
       toast({ title: t('register.wizard.done'), tone: 'success' });
       onClose();
       navigate(`/app/docs/${doc.id}`);
     } catch {
+      // The key is deliberately NOT regenerated: if the request actually committed and
+      // only the response was lost, pressing «Зарегистрировать» again returns that same
+      // document instead of minting a second number.
       toast({ title: t('register.wizard.failed'), tone: 'danger' });
       setBusy(false);
     }
