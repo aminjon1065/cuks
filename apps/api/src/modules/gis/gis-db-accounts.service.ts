@@ -1,3 +1,4 @@
+import { isUniqueViolation } from '../../common/db/unique-violation';
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { desc, eq } from 'drizzle-orm';
@@ -227,8 +228,4 @@ function quoteIdent(name: string): string {
 /** A single-quoted SQL string literal, with any quote doubled. */
 function quoteLiteral(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 }

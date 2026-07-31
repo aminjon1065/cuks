@@ -1518,16 +1518,23 @@ Backend:
 - [x] Worker только маркирует кандидатов.
 - [x] Review/approve/reject disposition.
 - [x] На первом релизе logical disposition; physical purge feature выключен.
-- [ ] Export archive inventory.
+- [x] Export archive inventory.
 
 Frontend:
 
-- [ ] ArchivePage;
+- [x] ArchivePage;
 - [x] номенклатурное дело/срок;
 - [x] hold badges и reason;
-- [ ] candidates review;
-- [ ] disposition batch;
-- [ ] предупреждение о необратимости.
+- [x] candidates review;
+- [x] disposition batch;
+- [x] предупреждение о необратимости.
+
+Одна оговорка: **физическое удаление объектов из хранилища не реализовано и не включается**
+— пункт «на первом релизе logical disposition» выполнен буквально. `executed` означает, что
+запись закрыта и остаётся читаемой; ни один путь в коде не удаляет файл. Причина не только в
+плане: подпись привязана к конкретной версии файла и её проверка на `/verify/:id` сверяет
+хэш, поэтому физическое удаление сломало бы уже выданные подписи. Включать только после
+утверждённой заказчиком retention-политики.
 
 Тесты:
 

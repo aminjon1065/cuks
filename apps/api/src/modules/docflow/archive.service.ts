@@ -30,14 +30,18 @@ import { DB } from '../../common/db/db.module';
 import {
   assertArchivable,
   assertDisposable,
-  assertNotLegalHeld,
   assertRestorable,
   assertSeparateReviewer,
   planBatchTransition,
   planRetention,
 } from './archive-policy';
 import { assertNoOpenObligations, DocumentsService } from './documents.service';
-import { hasConfidentialAccess, hasRegistryAccess } from './document-visibility';
+import {
+  canViewDocumentBase,
+  hasConfidentialAccess,
+  hasRegistryAccess,
+} from './document-visibility';
+import { isUniqueViolation } from '../../common/db/unique-violation';
 
 /**
  * The archive: filing documents away, holding them, and disposing of them under an act
@@ -376,19 +380,40 @@ export class ArchiveService {
     return Promise.all(rows.map((b) => this.batchDto(b, actor)));
   }
 
+  /**
+   * Draft an act. The row and its first documents go in together: a half-created act would
+   * hold its number — the number index is unique — while being impossible to finish or delete,
+   * so the clerk could not even re-use the number they had just chosen.
+   */
   async createBatch(
     input: CreateDispositionBatchInput,
     actor: AuthUser,
   ): Promise<DispositionBatchDto> {
     this.assertDisposeRights(actor);
-    const [created] = await this.db
-      .insert(archiveDispositionBatches)
-      .values({ number: input.number, reason: input.reason, createdBy: actor.id })
-      .returning();
-    if (!created) throw new Error('Disposition batch insert did not return a row');
-    if (input.documentIds.length > 0) {
-      await this.addItems(created.id, { documentIds: input.documentIds }, actor);
-    }
+    if (input.documentIds.length > 0) await this.assertItemsVisible(input.documentIds, actor);
+    const now = new Date();
+    const created = await this.db
+      .transaction(async (tx) => {
+        const [row] = await tx
+          .insert(archiveDispositionBatches)
+          .values({ number: input.number, reason: input.reason, createdBy: actor.id })
+          .returning();
+        if (!row) throw new Error('Disposition batch insert did not return a row');
+        if (input.documentIds.length > 0) {
+          await this.claimItems(tx, row.id, input.documentIds, now);
+        }
+        return row;
+      })
+      .catch((err: unknown) => {
+        if (isUniqueViolation(err)) {
+          throw AppException.conflict(
+            'docflow.disposition.duplicate_number',
+            'An act with that number already exists',
+            { number: input.number },
+          );
+        }
+        throw err;
+      });
     await this.audit.logAndWait({
       action: 'docflow.disposition.created',
       actorId: actor.id,
@@ -410,9 +435,11 @@ export class ArchiveService {
     actor: AuthUser,
   ): Promise<DispositionBatchDto> {
     this.assertDisposeRights(actor);
+    await this.assertItemsVisible(input.documentIds, actor);
     const now = new Date();
     await this.db.transaction(async (tx) => {
       const batch = await this.lockBatch(tx, batchId);
+      this.assertBatchAuthor(batch, actor);
       if (batch.status !== 'draft') {
         throw AppException.conflict(
           'docflow.disposition.not_draft',
@@ -420,23 +447,7 @@ export class ArchiveService {
           { status: batch.status },
         );
       }
-      const rows = await tx
-        .select()
-        .from(documents)
-        .where(and(inArray(documents.id, input.documentIds), isNull(documents.deletedAt)));
-      if (rows.length !== input.documentIds.length) {
-        throw AppException.notFound('docflow.document.not_found', 'Document not found');
-      }
-      for (const doc of rows) assertDisposable(doc, now);
-
-      await tx
-        .insert(archiveDispositionItems)
-        .values(rows.map((d) => ({ batchId, documentId: d.id })))
-        .onConflictDoNothing();
-      await tx
-        .update(documents)
-        .set({ dispositionStatus: 'pending' })
-        .where(inArray(documents.id, input.documentIds));
+      await this.claimItems(tx, batchId, input.documentIds, now);
     });
     return this.requireBatchDto(batchId, actor);
   }
@@ -446,6 +457,7 @@ export class ArchiveService {
     this.assertDisposeRights(actor);
     await this.db.transaction(async (tx) => {
       const batch = await this.lockBatch(tx, batchId);
+      this.assertBatchAuthor(batch, actor);
       const status = planBatchTransition(batch.status, 'submit');
       const [items] = await tx
         .select({ n: sql<number>`count(*)::int` })
@@ -479,6 +491,16 @@ export class ArchiveService {
     actor: AuthUser,
   ): Promise<DispositionBatchDto> {
     this.assertDisposeRights(actor);
+    // Enforced here, not only hinted at by `canDecide`: a reviewer who cannot read every
+    // document on the list cannot review the list. Refusing before the decision also stops the
+    // 403 from doubling as an oracle — it names no document.
+    const preview = await this.requireBatchDto(batchId, actor);
+    if (preview.restrictedCount > 0) {
+      throw AppException.forbidden(
+        'docflow.disposition.restricted_items',
+        'The act contains documents you may not see; it must be reviewed by somebody who may',
+      );
+    }
     await this.db.transaction(async (tx) => {
       const batch = await this.lockBatch(tx, batchId);
       assertSeparateReviewer(batch.createdBy, actor.id);
@@ -532,8 +554,13 @@ export class ArchiveService {
             eq(archiveDispositionItems.batchId, batchId),
             ne(archiveDispositionItems.decision, 'keep'),
           ),
-        );
-      for (const r of rows) assertNotLegalHeld(r.doc, 'execute');
+        )
+        .for('update', { of: documents });
+      // The WHOLE policy again, not just the hold. Approval and execution are separated on
+      // purpose, and days can pass between them: in that time a document can be taken back
+      // out of the archive, held, or disposed of under another act. Re-reading only the hold
+      // would carry the act out against a state nobody approved.
+      for (const r of rows) assertDisposable(r.doc, now);
 
       const ids = rows.map((r) => r.doc.id);
       if (ids.length > 0) {
@@ -612,6 +639,13 @@ export class ArchiveService {
     return row;
   }
 
+  /**
+   * Move the documents of an act to the state its decision implies — and NEVER touch one that
+   * is already disposed of. A document can appear in a rejected act after having been executed
+   * under an earlier one; resetting it to «нет» there would resurrect a closed record, put it
+   * back in front of the retention sweep and let it be restored. `executed` is terminal for
+   * the document, whatever any later act says about it.
+   */
   private async setItemDocuments(
     tx: Database,
     batchId: string,
@@ -626,11 +660,101 @@ export class ArchiveService {
       .update(documents)
       .set({ dispositionStatus: status })
       .where(
-        inArray(
-          documents.id,
-          items.map((i) => i.documentId),
+        and(
+          inArray(
+            documents.id,
+            items.map((i) => i.documentId),
+          ),
+          ne(documents.dispositionStatus, 'executed'),
         ),
       );
+  }
+
+  /**
+   * Put documents into a draft act, under the full disposal policy and the one-act rule.
+   *
+   * A document lives in at most ONE live act. Two acts over the same document is how a state
+   * machine loses its meaning: one is approved, the other rejected, and whichever decides last
+   * overwrites the document with an answer nobody gave about it.
+   */
+  private async claimItems(
+    tx: Database,
+    batchId: string,
+    documentIds: readonly string[],
+    now: Date,
+  ): Promise<void> {
+    const ids = [...new Set(documentIds)];
+    const rows = await tx
+      .select()
+      .from(documents)
+      .where(and(inArray(documents.id, ids), isNull(documents.deletedAt)))
+      .for('update');
+    if (rows.length !== ids.length) {
+      throw AppException.notFound('docflow.document.not_found', 'Document not found');
+    }
+    for (const doc of rows) assertDisposable(doc, now);
+
+    const claimed = await tx
+      .select({
+        documentId: archiveDispositionItems.documentId,
+        number: archiveDispositionBatches.number,
+      })
+      .from(archiveDispositionItems)
+      .innerJoin(
+        archiveDispositionBatches,
+        eq(archiveDispositionBatches.id, archiveDispositionItems.batchId),
+      )
+      .where(
+        and(
+          inArray(archiveDispositionItems.documentId, ids),
+          ne(archiveDispositionItems.batchId, batchId),
+          isNull(archiveDispositionBatches.deletedAt),
+          inArray(archiveDispositionBatches.status, ['draft', 'pending', 'approved', 'executed']),
+        ),
+      )
+      .limit(1);
+    const conflictRow = claimed[0];
+    if (conflictRow) {
+      throw AppException.conflict(
+        'docflow.disposition.already_in_act',
+        'The document is already listed in another act of disposal',
+        { documentId: conflictRow.documentId, number: conflictRow.number },
+      );
+    }
+
+    await tx
+      .insert(archiveDispositionItems)
+      .values(ids.map((documentId) => ({ batchId, documentId })))
+      .onConflictDoNothing();
+    await tx
+      .update(documents)
+      .set({ dispositionStatus: 'pending' })
+      .where(inArray(documents.id, ids));
+  }
+
+  /**
+   * The archive-dispose right is a records right, not a ДСП clearance. Assembling an act is a
+   * read of every document put into it — the reply carries their requisites back — so it goes
+   * through the same visibility gate as opening the card.
+   */
+  private async assertItemsVisible(documentIds: readonly string[], actor: AuthUser): Promise<void> {
+    for (const id of new Set(documentIds)) await this.documents.assertVisible(id, actor);
+  }
+
+  /**
+   * Only the author of an act fills it and hands it over. Otherwise the four-eyes rule is
+   * decorative: a second person could add the documents to somebody else's draft, submit it,
+   * and then approve it themselves — `created_by` would still name the first person.
+   */
+  private assertBatchAuthor(
+    batch: typeof archiveDispositionBatches.$inferSelect,
+    actor: AuthUser,
+  ): void {
+    if (actor.isSuperadmin || batch.createdBy === actor.id) return;
+    throw AppException.forbidden(
+      'docflow.disposition.not_author',
+      'An act of disposal is assembled and submitted by its author',
+    );
   }
 
   /** The case rule for an index, or null when the case is unknown or states no term. */
@@ -683,11 +807,20 @@ export class ArchiveService {
         legalHold: documents.legalHold,
         decision: archiveDispositionItems.decision,
         comment: archiveDispositionItems.comment,
+        authorId: documents.authorId,
+        accessList: documents.accessList,
+        confidentiality: documents.confidentiality,
       })
       .from(archiveDispositionItems)
       .innerJoin(documents, eq(documents.id, archiveDispositionItems.documentId))
       .where(eq(archiveDispositionItems.batchId, batch.id))
       .orderBy(asc(archiveDispositionItems.createdAt));
+
+    // Row-by-row, the same ДСП rule as the опись. The row is kept but emptied rather than
+    // dropped: how many documents an act covers is a fact of the act, and hiding rows would
+    // let a reviewer approve «10 документов» while reading seven.
+    const visible = items.map((i) => ({ item: i, ok: canViewDocumentBase(i, actor) }));
+    const restrictedCount = visible.filter((v) => !v.ok).length;
 
     return {
       id: batch.id,
@@ -701,18 +834,22 @@ export class ArchiveService {
       decidedAt: batch.decidedAt?.toISOString() ?? null,
       executedAt: batch.executedAt?.toISOString() ?? null,
       createdAt: batch.createdAt.toISOString(),
-      items: items.map((i) => ({
+      items: visible.map(({ item: i, ok }) => ({
         documentId: i.documentId,
-        regNumber: i.regNumber,
-        subject: i.subject,
-        caseIndex: i.caseIndex,
-        retentionUntil: i.retentionUntil?.toISOString() ?? null,
-        legalHold: i.legalHold,
+        regNumber: ok ? i.regNumber : null,
+        subject: ok ? i.subject : '',
+        caseIndex: ok ? i.caseIndex : null,
+        retentionUntil: ok ? (i.retentionUntil?.toISOString() ?? null) : null,
+        legalHold: ok ? i.legalHold : false,
         decision: i.decision,
-        comment: i.comment,
+        comment: ok ? i.comment : null,
+        restricted: !ok,
       })),
-      // The author of an act never reviews it, so the card never offers them the button.
-      canDecide: batch.status === 'pending' && batch.createdBy !== actor.id,
+      // The author of an act never reviews it, so the card never offers them the button — and
+      // neither does somebody who cannot read everything on the list.
+      canDecide:
+        batch.status === 'pending' && batch.createdBy !== actor.id && restrictedCount === 0,
+      restrictedCount,
     };
   }
 }

@@ -342,3 +342,72 @@ test('archive UI: the page shows the inventory, warns about candidates and expor
   expect(body[0]).toBe(0x50);
   expect(body[1]).toBe(0x4b);
 });
+
+test('archive: the status command cannot archive — filing into a case is the only way in', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const stamp = Date.now();
+  const index = `e2e-door-${stamp}`;
+  await makeCase(admin, headers, index);
+  const doc = await registeredDoc(admin, headers, `Приказ мимо описи ${stamp}`, index);
+
+  const done = await admin.post(`/api/v1/docflow/documents/${doc.id}/actions/status`, {
+    headers,
+    data: { status: 'completed' },
+  });
+  expect(done.ok(), `complete ${done.status()} ${await done.text()}`).toBeTruthy();
+
+  // The old back door. It wrote the word «в архиве» and none of the facts behind it — no
+  // filing date, no frozen term — and since nothing leaves `archived` the record was stranded
+  // outside the опись with no endpoint able to file it.
+  const viaStatus = await admin.post(`/api/v1/docflow/documents/${doc.id}/actions/status`, {
+    headers,
+    data: { status: 'archived' },
+  });
+  expect(viaStatus.status()).toBe(422);
+  expect((await json<ErrorBody>(viaStatus)).error?.code).toBe(
+    'docflow.document.use_archive_command',
+  );
+
+  const after = await json<DocumentDto>(await admin.get(`/api/v1/docflow/documents/${doc.id}`));
+  expect(after.status).toBe('completed');
+  expect(after.availableActions, 'the button that led there is gone').not.toContain('changeStatus');
+  expect(after.availableActions, 'the governed way in is offered instead').toContain('archive');
+
+  await admin.dispose();
+});
+
+test('acts of disposal: the number stays usable, and an empty act decides nothing', async () => {
+  const admin = await request.newContext({ storageState: STORAGE_STATE, baseURL: API });
+  const headers = await jsonHeaders(admin);
+  const number = `АКТ-${Date.now()}`;
+
+  const created = await admin.post('/api/v1/docflow/archive/disposition-batches', {
+    headers,
+    data: { number, reason: 'Проверка правил акта' },
+  });
+  expect(created.ok(), `create ${created.status()} ${await created.text()}`).toBeTruthy();
+  const batch = await json<{ id: string; items: unknown[]; restrictedCount: number }>(created);
+  expect(batch.items).toEqual([]);
+  expect(batch.restrictedCount, 'nothing is withheld from a caller who may see everything').toBe(0);
+
+  // A clash on the act number is a plain conflict, not a 500 — and the act it clashes with is
+  // a real one, not an orphan left behind by a half-created draft.
+  const dup = await admin.post('/api/v1/docflow/archive/disposition-batches', {
+    headers,
+    data: { number, reason: 'Тот же номер' },
+  });
+  expect(dup.status()).toBe(409);
+  expect((await json<ErrorBody>(dup)).error?.code).toBe('docflow.disposition.duplicate_number');
+
+  // Bodyless: csrf headers only. Declaring `application/json` with no body makes Fastify
+  // refuse the request at the parser, before any of this reaches the service.
+  const submit = await admin.post(
+    `/api/v1/docflow/archive/disposition-batches/${batch.id}/actions/submit`,
+    { headers: await csrfHeaders(admin) },
+  );
+  expect(submit.status()).toBe(422);
+  expect((await json<ErrorBody>(submit)).error?.code).toBe('docflow.disposition.empty');
+
+  await admin.dispose();
+});

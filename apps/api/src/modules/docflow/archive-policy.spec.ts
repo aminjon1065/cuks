@@ -274,3 +274,52 @@ describe('assertSeparateReviewer', () => {
     expect(() => assertSeparateReviewer(null, 'u2')).not.toThrow();
   });
 });
+
+/**
+ * The gap between approval and execution — deliberately hours or days wide — is where a
+ * disposal can go wrong quietly. `executeBatch` re-runs the whole policy over the rows it is
+ * about to close, and these are the cases that re-check catches.
+ */
+describe('re-checking an approved act at the moment it is carried out', () => {
+  const NOW = new Date('2031-02-01T00:00:00Z');
+
+  it('refuses a document taken back out of the archive after the act was approved', () => {
+    expectCode(
+      () =>
+        assertDisposable(
+          doc({ archivedAt: null, dispositionStatus: 'approved', retentionUntil: null }),
+          NOW,
+        ),
+      'docflow.archive.not_archived',
+    );
+  });
+
+  it('refuses one whose term was re-frozen by a later filing', () => {
+    expectCode(
+      () =>
+        assertDisposable(
+          doc({ dispositionStatus: 'approved', retentionUntil: new Date('2036-01-01T00:00:00Z') }),
+          NOW,
+        ),
+      'docflow.archive.retention_active',
+    );
+  });
+
+  it('refuses one held between approval and execution', () => {
+    expectCode(
+      () => assertDisposable(doc({ dispositionStatus: 'approved', legalHold: true }), NOW),
+      'docflow.archive.legal_hold',
+    );
+  });
+
+  it('refuses one already disposed of under another act', () => {
+    expectCode(
+      () => assertDisposable(doc({ dispositionStatus: 'executed' }), NOW),
+      'docflow.archive.disposed',
+    );
+  });
+
+  it('still carries out an approved document nothing happened to', () => {
+    expect(() => assertDisposable(doc({ dispositionStatus: 'approved' }), NOW)).not.toThrow();
+  });
+});

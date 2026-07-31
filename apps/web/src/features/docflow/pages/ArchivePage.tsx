@@ -391,19 +391,34 @@ function BatchCard({ batch }: { batch: DispositionBatchDto }): React.JSX.Element
 
       {batch.items.length > 0 ? (
         <ul className="mt-2 flex flex-col gap-1">
-          {batch.items.map((i) => (
-            <li key={i.documentId} className="flex items-center gap-2 text-xs">
-              <Link
-                to={`/app/docs/${i.documentId}`}
-                className="font-mono text-primary hover:underline"
-              >
-                {i.regNumber ?? '—'}
-              </Link>
-              <span className="text-text">{i.subject}</span>
-              {i.legalHold ? <span className="text-danger">{t('archivePage.held')}</span> : null}
-            </li>
-          ))}
+          {batch.items.map((i) =>
+            // A row this reader may not see keeps its place and loses its requisites: the size
+            // of an act is a fact, its ДСП contents are not this reader's.
+            i.restricted ? (
+              <li key={i.documentId} className="flex items-center gap-2 text-xs text-text-muted">
+                <Lock className="size-3.5 shrink-0" aria-hidden />
+                <span className="italic">{t('archivePage.restrictedItem')}</span>
+              </li>
+            ) : (
+              <li key={i.documentId} className="flex items-center gap-2 text-xs">
+                <Link
+                  to={`/app/docs/${i.documentId}`}
+                  className="font-mono text-primary hover:underline"
+                >
+                  {i.regNumber ?? '—'}
+                </Link>
+                <span className="text-text">{i.subject}</span>
+                {i.legalHold ? <span className="text-danger">{t('archivePage.held')}</span> : null}
+              </li>
+            ),
+          )}
         </ul>
+      ) : null}
+
+      {batch.restrictedCount > 0 ? (
+        <p className="mt-1.5 rounded-sm bg-warning/10 px-2 py-1.5 text-xs text-warning">
+          {t('archivePage.restrictedNotice', { count: batch.restrictedCount })}
+        </p>
       ) : null}
 
       <div className="mt-2 flex flex-wrap gap-1.5">

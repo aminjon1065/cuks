@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { documentCollaborators, type Database } from '@cuks/db';
 import {
   DOCUMENT_EDITING_ROLES,
+  DOCUMENT_STATUS_TRANSITIONS,
   type DocumentAction,
   type DocClass,
   type DispositionStatus,
@@ -116,7 +117,11 @@ export function documentAvailableActions(
     actions.push('register');
   }
   // The lifecycle is driven by the author or the chancellery/control (mirrors changeStatus).
-  if (isOwner || hasRegistryAccess(actor)) actions.push('changeStatus');
+  // Offered only while the status can actually move: a `completed` document is finished, and
+  // its only next step is being filed into a case, which is the archive command's own button.
+  if ((isOwner || hasRegistryAccess(actor)) && DOCUMENT_STATUS_TRANSITIONS[doc.status].length > 0) {
+    actions.push('changeStatus');
+  }
   if (canManageDocumentAccess(doc, actor)) actions.push('manageAccess');
   if (isOwner) actions.push('manageCollaborators');
   // Answering is offered on a registered incoming letter: an answer cites the number of the

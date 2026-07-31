@@ -87,13 +87,25 @@ describe('canEditDocument', () => {
 
 describe('documentAvailableActions', () => {
   it('gives the author the full owner set on a draft', () => {
+    // No `changeStatus`: a draft moves by being sent down a route, and the status graph gives
+    // it no manual target — the button would have opened a dialog with nothing in it.
     expect(documentAvailableActions(doc(), user(AUTHOR), noRoles)).toEqual([
       'edit',
       'startRoute',
-      'changeStatus',
       'manageAccess',
       'manageCollaborators',
     ]);
+  });
+
+  it('offers the status command only while the status can still move', () => {
+    expect(
+      documentAvailableActions(doc({ status: 'registered' }), user(AUTHOR), noRoles),
+    ).toContain('changeStatus');
+    // `completed` is the end of the manual graph: what follows is filing into a case, which
+    // is the archive command's own action, not a status change.
+    expect(
+      documentAvailableActions(doc({ status: 'completed' }), user(AUTHOR), noRoles),
+    ).not.toContain('changeStatus');
   });
 
   it('gives a preparer edit and nothing else', () => {

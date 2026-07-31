@@ -15,6 +15,7 @@ interface DocumentDto {
   id: string;
   status: string;
   regNumber: string | null;
+  archive: { archivedAt: string | null };
 }
 interface ResolutionDto {
   id: string;
@@ -165,17 +166,25 @@ test('acceptance: the full incoming cycle runs register → resolution → execu
   );
   expect(done[0]!.status).toBe('done');
 
-  // The chancellery completes the document and files it «в дело» (archived).
+  // The chancellery completes the document and files it «в дело».
   const status = async (target: string) =>
     admin.post(`/api/v1/docflow/documents/${docId}/actions/status`, {
       headers,
       data: { status: target },
     });
   expect((await status('completed')).ok(), 'registered→...→completed').toBeTruthy();
-  expect((await status('archived')).ok(), 'completed→archived').toBeTruthy();
-  expect(
-    (await json<DocumentDto>(await admin.get(`/api/v1/docflow/documents/${docId}`))).status,
-  ).toBe('archived');
+
+  // «В дело» is the archive command, not a status change: filing freezes the retention term
+  // the case states and records who filed it and when. A bare status change would have set
+  // the word and none of the facts (docs/modules/11 §12.12).
+  const filed = await admin.post(`/api/v1/docflow/documents/${docId}/actions/archive`, {
+    headers,
+    data: {},
+  });
+  expect(filed.ok(), `archive ${filed.status()} ${await filed.text()}`).toBeTruthy();
+  const after = await json<DocumentDto>(await admin.get(`/api/v1/docflow/documents/${docId}`));
+  expect(after.status).toBe('archived');
+  expect(after.archive.archivedAt, 'and the filing is dated').toBeTruthy();
 
   await Promise.all([admin.dispose(), executor.dispose()]);
 });

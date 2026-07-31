@@ -269,3 +269,28 @@ describe('assertSignatureBeforeRegistration (plan этап 6)', () => {
     ).not.toThrow();
   });
 });
+
+/**
+ * The archive is entered by the archive command, which freezes the case's retention term and
+ * records who filed the document and when. A status change would write the word and none of
+ * the facts — and since nothing leaves `archived`, the record would be stranded there.
+ */
+describe('the status command never archives', () => {
+  it('sends the caller to the archive command instead of archiving', () => {
+    expectRejected(
+      () => planDocumentStatusChange('completed', { status: 'archived' }),
+      'docflow.document.use_archive_command',
+    );
+    expectRejected(
+      () => planDocumentStatusChange('registered', { status: 'archived' }),
+      'docflow.document.use_archive_command',
+    );
+  });
+
+  it('leaves the rest of the graph alone', () => {
+    expect(planDocumentStatusChange('registered', { status: 'completed' })).toEqual({
+      status: 'completed',
+      reason: null,
+    });
+  });
+});

@@ -26,6 +26,7 @@ import type { AuthUser } from '../../common/auth/auth-user';
 import { DB } from '../../common/db/db.module';
 import { AppException } from '../../common/exceptions/app.exception';
 import { RoutesService } from './routes.service';
+import { isUniqueViolation } from '../../common/db/unique-violation';
 
 /**
  * Versioned document templates (docs/modules/11 §12.7, plan §6.3).
@@ -399,9 +400,4 @@ export class DocumentTemplatesService {
       versions,
     };
   }
-}
-
-/** True for a Postgres unique-violation error (SQLSTATE 23505). */
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && err.code === '23505';
 }

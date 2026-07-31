@@ -81,6 +81,7 @@ import { ReadLogService } from './read-log.service';
 import { RoutesService } from './routes.service';
 import { ResolutionsService } from './resolutions.service';
 import { AcknowledgementsService } from './acknowledgements.service';
+import { isUniqueViolation } from '../../common/db/unique-violation';
 
 export interface DocumentStatusChangePlan {
   status: DocumentStatus;
@@ -96,6 +97,15 @@ export function planDocumentStatusChange(
     throw AppException.conflict(
       'docflow.document.status_unchanged',
       'Document already has this status',
+    );
+  }
+  // Named separately from the generic refusal because it is not a dead end but a wrong door:
+  // the archive is entered by the filing command, which freezes the case's retention term.
+  if (input.status === 'archived') {
+    throw AppException.unprocessable(
+      'docflow.document.use_archive_command',
+      'A document is filed into a case by the archive command, not by a status change',
+      { fromStatus: current },
     );
   }
   if (!documentTransitionAllowed(current, input.status)) {
@@ -195,11 +205,6 @@ function pickTimelineMeta(meta: unknown): Record<string, string | number | boole
     }
   }
   return Object.keys(out).length ? out : null;
-}
-
-/** True for a Postgres unique-violation error (SQLSTATE 23505). */
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && err.code === '23505';
 }
 
 /** The journal fields the incoming-registration policy needs. */

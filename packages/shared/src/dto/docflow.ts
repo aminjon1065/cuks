@@ -1433,6 +1433,13 @@ export interface DispositionItemDto {
   legalHold: boolean;
   decision: DispositionItemDecision;
   comment: string | null;
+  /**
+   * True when THIS caller may not see the document itself. The row still counts — the size of
+   * an act is a fact of the act — but its requisites are withheld, because the archive-dispose
+   * right is not a ДСП clearance (docs/09 §3). A caller with a restricted row also cannot
+   * approve the act: reviewing a list you are not allowed to read is not review.
+   */
+  restricted: boolean;
 }
 
 export interface DispositionBatchDto {
@@ -1448,6 +1455,11 @@ export interface DispositionBatchDto {
   executedAt: string | null;
   createdAt: string;
   items: DispositionItemDto[];
-  /** Whether THIS caller may still decide it — a reviewer who is not its author. */
+  /**
+   * Whether THIS caller may still decide it — a reviewer who is not its author, and who can
+   * read every document on the list.
+   */
   canDecide: boolean;
+  /** How many rows are withheld from this caller; 0 for somebody who may see the whole act. */
+  restrictedCount: number;
 }

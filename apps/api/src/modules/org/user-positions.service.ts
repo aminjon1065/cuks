@@ -6,16 +6,7 @@ import { AuditService } from '../../common/audit/audit.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { DB } from '../../common/db/db.module';
 import { OrgChannelsService } from '../chat/org-channels.service';
-
-/** True for a Postgres unique-violation error (SQLSTATE 23505). */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code?: string }).code === '23505'
-  );
-}
+import { isUniqueViolation } from '../../common/db/unique-violation';
 
 /** Assigning users to positions; exactly one primary per user (docs/05 §2). */
 @Injectable()

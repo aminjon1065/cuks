@@ -1,3 +1,4 @@
+import { isUniqueViolation } from '../../common/db/unique-violation';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm';
 import { gisLayers, resourceAcl, type Database } from '@cuks/db';
@@ -23,11 +24,6 @@ type GisLayer = typeof gisLayers.$inferSelect;
 const SLUG_ATTEMPTS = 3;
 /** Upper bound of the `slug-2`, `slug-3`… suffix search. */
 const SLUG_MAX = 50;
-
-/** Postgres unique-violation (a concurrent create took the slug first). */
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
-}
 
 /** Re-exported: the geo-import worker (2.8) derives an imported layer's slug — and
  *  its physical table name — with the same function (`@cuks/shared`). */

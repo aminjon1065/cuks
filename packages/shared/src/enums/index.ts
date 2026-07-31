@@ -211,9 +211,15 @@ export const DOCUMENT_STATUS_TRANSITIONS: Record<DocumentStatus, readonly Docume
   // `completed` is reachable directly: an outgoing letter that has been registered and sent
   // is finished, and routing it through `in_progress` — which means «исполняется поручение»
   // — would invent a stage of work that never happened (docs/modules/11 §12.1).
-  registered: ['in_progress', 'completed', 'archived'],
+  //
+  // `archived` is deliberately NOT reachable here. Filing a document into a case freezes the
+  // retention term the case states and stamps who filed it and when (docs/modules/11 §12.12);
+  // a bare status change would set the word «в архиве» and none of the facts behind it, and
+  // since nothing leaves `archived` the record would be stranded outside the archive forever.
+  // The only way in is the archive command.
+  registered: ['in_progress', 'completed'],
   in_progress: ['completed'],
-  completed: ['archived'],
+  completed: [],
   rejected: ['draft', 'recalled'],
   recalled: ['draft'],
   archived: [],
