@@ -22,6 +22,9 @@ import { AcquaintanceGateService } from './acquaintance-gate.service';
 import { ResolutionProposalsController } from './resolution-proposals.controller';
 import { ResolutionProposalsService } from './resolution-proposals.service';
 import { ResolutionTypesService } from './resolution-types.service';
+import { DispatchesController } from './dispatches.controller';
+import { DispatchesService } from './dispatches.service';
+import { DocumentResponsesService } from './document-responses.service';
 import { DocumentsService } from './documents.service';
 import { JournalsService } from './journals.service';
 import { NomenclatureService } from './nomenclature.service';
@@ -52,6 +55,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     RoutesController,
     ResolutionsController,
     ResolutionProposalsController,
+    DispatchesController,
     SignaturesController,
     AcknowledgementsController,
     DocumentLinksController,
@@ -66,6 +70,8 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocflowDictionariesService,
     DocflowNumberingService,
     DocumentsService,
+    DocumentResponsesService,
+    DispatchesService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

@@ -77,6 +77,18 @@ export interface WsEventPayloads {
     action: 'proposed' | 'approved' | 'rejected' | 'acknowledged' | 'released';
     actorId: string | null;
   };
+  /**
+   * A send attempt was opened or decided (docs/modules/11 §12.1). Delivered to the
+   * document's room so an open «Отправка» tab shows the attempt the chancellery just
+   * recorded. Ids and an action only, like the route and resolution events — the addressee
+   * and the reference belong to the card, which the client refetches through the API gate.
+   */
+  'docflow.dispatch.updated': {
+    documentId: string;
+    dispatchId: string;
+    action: 'created' | 'sent' | 'failed' | 'cancelled';
+    actorId: string | null;
+  };
   /** Incoming 1:1 call (docs/modules/14 §2): the DM caller is ringing this user — show the accept/
    *  decline prompt + ringtone. Delivered to the recipient's `user:{id}` room only. */
   'meet.ring': {

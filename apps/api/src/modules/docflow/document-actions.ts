@@ -3,6 +3,7 @@ import { documentCollaborators, type Database } from '@cuks/db';
 import {
   DOCUMENT_EDITING_ROLES,
   type DocumentAction,
+  type DocClass,
   type DocumentCollaboratorRole,
   type DocumentStatus,
 } from '@cuks/shared';
@@ -36,6 +37,7 @@ export async function collaboratorRolesOf(
 /** The document fields the action policy reasons over. */
 export interface ActionableDocument {
   authorId: string;
+  docClass: DocClass;
   status: DocumentStatus;
   confidentiality: 'normal' | 'dsp';
   accessList: string[];
@@ -104,5 +106,18 @@ export function documentAvailableActions(
   if (isOwner || hasRegistryAccess(actor)) actions.push('changeStatus');
   if (canManageDocumentAccess(doc, actor)) actions.push('manageAccess');
   if (isOwner) actions.push('manageCollaborators');
+  // Answering is offered on a registered incoming letter: an answer cites the number of the
+  // letter it answers, so before registration there is nothing to cite (docs/modules/11 §12.3).
+  if (
+    (doc.docClass === 'incoming' || doc.docClass === 'citizens') &&
+    !!doc.regNumber &&
+    actor.permissions.includes('docflow.create')
+  ) {
+    actions.push('createResponse');
+  }
+  // Recording a send is the chancellery's act, and only once the letter has a number.
+  if (doc.docClass === 'outgoing' && !!doc.regNumber && hasRegistryAccess(actor)) {
+    actions.push('dispatch');
+  }
   return actions;
 }

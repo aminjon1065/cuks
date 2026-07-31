@@ -10,6 +10,7 @@ import {
   changeDocumentStatusSchema,
   createDocumentSchema,
   listDocumentsQuerySchema,
+  createResponseSchema,
   registerDocumentSchema,
   registerIncomingSchema,
   setDocumentAccessSchema,
@@ -28,6 +29,7 @@ import {
   type ListDocumentsQuery,
   type PaginatedResult,
   type ReadLogEntryDto,
+  type CreateResponseInput,
   type RegisterDocumentInput,
   type RegisterIncomingInput,
   type SetDocumentAccessInput,
@@ -39,6 +41,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { DocflowFilesService } from './docflow-files.service';
 import { DocumentCollaboratorsService } from './document-collaborators.service';
+import { DocumentResponsesService } from './document-responses.service';
 import { DocumentsService } from './documents.service';
 
 const uuidSchema = z.string().uuid();
@@ -55,6 +58,7 @@ export class DocumentsController {
     private readonly documents: DocumentsService,
     private readonly files: DocflowFilesService,
     private readonly collaborators: DocumentCollaboratorsService,
+    private readonly responses: DocumentResponsesService,
   ) {}
 
   @Get()
@@ -254,6 +258,17 @@ export class DocumentsController {
     @Body(new ZodValidationPipe(registerDocumentSchema)) body: RegisterDocumentInput,
   ): Promise<DocumentDetailDto> {
     return this.documents.register(id, body, user);
+  }
+
+  @Post(':id/actions/create-response')
+  @RequirePermission('docflow.create')
+  @ApiOperation({ summary: 'Draft the outgoing answer to this incoming document' })
+  createResponse(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(createResponseSchema)) body: CreateResponseInput,
+  ): Promise<DocumentDetailDto> {
+    return this.responses.createResponse(id, body, user);
   }
 
   @Post(':id/actions/status')

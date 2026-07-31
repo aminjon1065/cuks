@@ -208,7 +208,10 @@ export const DOCUMENT_STATUS_TRANSITIONS: Record<DocumentStatus, readonly Docume
   draft: [],
   on_route: [],
   pending_registration: ['rejected'],
-  registered: ['in_progress', 'archived'],
+  // `completed` is reachable directly: an outgoing letter that has been registered and sent
+  // is finished, and routing it through `in_progress` — which means «исполняется поручение»
+  // — would invent a stage of work that never happened (docs/modules/11 §12.1).
+  registered: ['in_progress', 'completed', 'archived'],
   in_progress: ['completed'],
   completed: ['archived'],
   rejected: ['draft', 'recalled'],
@@ -246,8 +249,46 @@ export const DOCUMENT_ACTIONS = [
   'changeStatus',
   'manageAccess',
   'manageCollaborators',
+  /** Draft the outgoing answer to this incoming document (docs/modules/11 §12.3). */
+  'createResponse',
+  /** Record how the registered outgoing document was actually sent. */
+  'dispatch',
 ] as const;
 export type DocumentAction = (typeof DOCUMENT_ACTIONS)[number];
+
+// --- Outgoing dispatch (docs/modules/11 §12.1/§12.3, plan §6.8) ---
+
+/**
+ * How a registered outgoing document leaves the building. `email` and `integration` are
+ * machine channels: they exist in the model from the start, but a send only happens through
+ * a locally configured adapter — there is no external SaaS anywhere in CUKS (docs/02 §1).
+ */
+export const DISPATCH_CHANNELS = [
+  'courier',
+  'postal',
+  'email',
+  'integration',
+  'hand_delivery',
+  'other',
+] as const;
+export type DispatchChannel = (typeof DISPATCH_CHANNELS)[number];
+
+/** Channels a human performs and then records — always available, no adapter involved. */
+export const MANUAL_DISPATCH_CHANNELS: readonly DispatchChannel[] = [
+  'courier',
+  'postal',
+  'hand_delivery',
+  'other',
+];
+
+/**
+ * One send attempt's state (plan §6.8). Sending is NOT a document status: a document can be
+ * sent twice, fail once and succeed later, and `documents.status` has no room for that
+ * history. `failed` is terminal for the row — a retry is a NEW attempt, so a success never
+ * overwrites the record of the failure that preceded it.
+ */
+export const DISPATCH_STATUSES = ['pending', 'sent', 'failed', 'cancelled'] as const;
+export type DispatchStatus = (typeof DISPATCH_STATUSES)[number];
 
 // --- Incoming process: resolution proposals + acquaintance gate (docs/modules/11 §12.11) ---
 

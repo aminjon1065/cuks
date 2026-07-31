@@ -14,6 +14,7 @@ const OTHER = 'u-other';
 function doc(over: Partial<ActionableDocument> = {}): ActionableDocument {
   return {
     authorId: AUTHOR,
+    docClass: 'internal',
     status: 'draft',
     confidentiality: 'normal',
     accessList: [],
@@ -133,5 +134,50 @@ describe('documentAvailableActions', () => {
     const actions = documentAvailableActions(doc(), user(OTHER, { isSuperadmin: true }), noRoles);
     expect(actions).toContain('edit');
     expect(actions).toContain('manageCollaborators');
+  });
+});
+
+describe('documentAvailableActions — the outgoing half (plan этап 6)', () => {
+  const clerk = {
+    id: OTHER,
+    permissions: ['docflow.use', 'docflow.create', 'docflow.register'],
+    isSuperadmin: false,
+  };
+
+  it('offers «создать ответ» only on a REGISTERED incoming letter', () => {
+    const registered = doc({ docClass: 'incoming', status: 'registered', regNumber: 'ВХ-1' });
+    expect(documentAvailableActions(registered, clerk, [])).toContain('createResponse');
+
+    // An unnumbered letter has nothing for the answer to cite.
+    const draft = doc({ docClass: 'incoming', status: 'draft', regNumber: null });
+    expect(documentAvailableActions(draft, clerk, [])).not.toContain('createResponse');
+
+    // And an outgoing document is not something one answers.
+    const outgoing = doc({ docClass: 'outgoing', status: 'registered', regNumber: 'ИСХ-1' });
+    expect(documentAvailableActions(outgoing, clerk, [])).not.toContain('createResponse');
+  });
+
+  it('needs `docflow.create` to answer', () => {
+    const reader = { id: OTHER, permissions: ['docflow.use'], isSuperadmin: false };
+    const registered = doc({ docClass: 'incoming', status: 'registered', regNumber: 'ВХ-1' });
+    expect(documentAvailableActions(registered, reader, [])).not.toContain('createResponse');
+  });
+
+  it('offers the send only on a numbered outgoing document, and only to the chancellery', () => {
+    const outgoing = doc({ docClass: 'outgoing', status: 'registered', regNumber: 'ИСХ-1' });
+    expect(documentAvailableActions(outgoing, clerk, [])).toContain('dispatch');
+
+    const author = {
+      id: AUTHOR,
+      permissions: ['docflow.use', 'docflow.create'],
+      isSuperadmin: false,
+    };
+    expect(documentAvailableActions(outgoing, author, [])).not.toContain('dispatch');
+
+    const unnumbered = doc({ docClass: 'outgoing', status: 'draft', regNumber: null });
+    expect(documentAvailableActions(unnumbered, clerk, [])).not.toContain('dispatch');
+
+    const internal = doc({ docClass: 'internal', status: 'registered', regNumber: 'П-1' });
+    expect(documentAvailableActions(internal, clerk, [])).not.toContain('dispatch');
   });
 });

@@ -16,6 +16,8 @@ import {
   ACQUAINTANCE_RELEASE_REASONS,
   ACQUAINTANCE_STATUSES,
   CERTIFICATE_KINDS,
+  DISPATCH_CHANNELS,
+  DISPATCH_STATUSES,
   DOC_CLASSES,
   DOCUMENT_COLLABORATOR_ROLES,
   DOCUMENT_CONFIDENTIALITY,
@@ -829,5 +831,49 @@ export const documentLinks = appSchema.table(
     uniqueIndex('document_links_pair_uq').on(t.srcDocumentId, t.dstDocumentId),
     index('document_links_src_idx').on(t.srcDocumentId),
     index('document_links_dst_idx').on(t.dstDocumentId),
+  ],
+);
+
+/**
+ * app.document_dispatches — one attempt to send a registered outgoing document
+ * (docs/modules/11 §12.1, plan §6.8).
+ *
+ * Sending is deliberately NOT a document status: a letter can go out twice, fail once and
+ * succeed later, and `documents.status` has nowhere to keep that. Every attempt is its own
+ * row, so a success never overwrites the record of the failure before it — «отправлено
+ * 12-го» and «первая попытка вернулась 10-го» are both true and both visible.
+ */
+export const documentDispatches = appSchema.table(
+  'document_dispatches',
+  {
+    id: primaryId(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    channel: text('channel', { enum: DISPATCH_CHANNELS }).notNull(),
+    status: text('status', { enum: DISPATCH_STATUSES }).notNull().default('pending'),
+    /** Snapshot of the addressee as written on the envelope, not a directory reference. */
+    recipientName: text('recipient_name').notNull(),
+    recipientAddress: text('recipient_address'),
+    recipientContact: text('recipient_contact'),
+    /** Track number, postal receipt id, or the adapter's own message id. */
+    externalReference: text('external_reference'),
+    note: text('note'),
+    /** The scanned confirmation, adopted into the document's system space on confirm. */
+    receiptFileId: uuid('receipt_file_id').references(() => fsNodes.id, { onDelete: 'set null' }),
+    /** When the attempt was made; `sent_at` is when it was confirmed to have arrived. */
+    attemptedAt: timestamp('attempted_at', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    confirmedBy: uuid('confirmed_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    index('document_dispatches_document_idx').on(t.documentId, t.createdAt.desc()),
+    index('document_dispatches_status_idx').on(t.status, t.attemptedAt),
   ],
 );

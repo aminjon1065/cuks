@@ -3,6 +3,8 @@ import { DOCUMENT_STATUSES, type DocumentStatus } from '@cuks/shared';
 import {
   assertIncomingJournal,
   assertNoOpenObligations,
+  assertJournalForClass,
+  assertSignatureBeforeRegistration,
   planDocumentStatusChange,
   type DocumentObligations,
 } from './documents.service';
@@ -174,5 +176,75 @@ describe('assertIncomingJournal', () => {
       () => assertIncomingJournal({ docClass: 'internal', isActive: true }),
       'docflow.journal.class_mismatch',
     );
+  });
+});
+
+describe('assertJournalForClass (plan этап 6)', () => {
+  it('accepts a live journal of the matching class', () => {
+    expect(() =>
+      assertJournalForClass({ docClass: 'outgoing', isActive: true }, 'outgoing'),
+    ).not.toThrow();
+  });
+
+  it('refuses a journal of another class', () => {
+    // An outgoing answer numbered ВХ-… would be cited under that number forever.
+    expectRejected(
+      () => assertJournalForClass({ docClass: 'incoming', isActive: true }, 'outgoing'),
+      'docflow.journal.class_mismatch',
+    );
+  });
+
+  it('refuses a closed book and a missing one', () => {
+    expectRejected(
+      () => assertJournalForClass({ docClass: 'outgoing', isActive: false }, 'outgoing'),
+      'docflow.journal.inactive',
+    );
+    expectRejected(() => assertJournalForClass(undefined, 'outgoing'), 'docflow.journal.not_found');
+  });
+});
+
+describe('assertSignatureBeforeRegistration (plan этап 6)', () => {
+  it('demands a signature when the outgoing type declares one', () => {
+    expectRejected(
+      () =>
+        assertSignatureBeforeRegistration({
+          typeRequiresSignature: true,
+          docClass: 'outgoing',
+          hasCurrentSignature: false,
+        }),
+      'docflow.document.signature_required',
+    );
+  });
+
+  it('passes once the current body is signed', () => {
+    expect(() =>
+      assertSignatureBeforeRegistration({
+        typeRequiresSignature: true,
+        docClass: 'outgoing',
+        hasCurrentSignature: true,
+      }),
+    ).not.toThrow();
+  });
+
+  it('never blocks an incoming document — the counterparty signed it on paper', () => {
+    for (const docClass of ['incoming', 'citizens', 'internal'] as const) {
+      expect(() =>
+        assertSignatureBeforeRegistration({
+          typeRequiresSignature: true,
+          docClass,
+          hasCurrentSignature: false,
+        }),
+      ).not.toThrow();
+    }
+  });
+
+  it('leaves an unflagged type alone', () => {
+    expect(() =>
+      assertSignatureBeforeRegistration({
+        typeRequiresSignature: false,
+        docClass: 'outgoing',
+        hasCurrentSignature: false,
+      }),
+    ).not.toThrow();
   });
 });

@@ -17,6 +17,7 @@ import {
   acquaintances,
   auditLog,
   correspondents,
+  dictionaries,
   documentCollaborators,
   documentFiles,
   documents,
@@ -213,6 +214,18 @@ export interface IncomingJournalCheck {
  * Throws; used by the command and its tests.
  */
 export function assertIncomingJournal(journal: IncomingJournalCheck | undefined): void {
+  assertJournalForClass(journal, 'incoming');
+}
+
+/**
+ * The same three checks for any class (plan этап 6). A book is not interchangeable: an
+ * outgoing answer registered in «Входящие» would be handed a `ВХ-…` number and would then
+ * be cited under it forever, and a closed book must not keep issuing numbers.
+ */
+export function assertJournalForClass(
+  journal: IncomingJournalCheck | undefined,
+  docClass: DocClass,
+): void {
   if (!journal) throw AppException.notFound('docflow.journal.not_found', 'Journal not found');
   if (!journal.isActive) {
     throw AppException.unprocessable(
@@ -220,13 +233,42 @@ export function assertIncomingJournal(journal: IncomingJournalCheck | undefined)
       'The journal is closed for registration',
     );
   }
-  if (journal.docClass !== 'incoming') {
+  if (journal.docClass !== docClass) {
     throw AppException.unprocessable(
       'docflow.journal.class_mismatch',
-      'An incoming document must be registered in an incoming journal',
-      { journalClass: journal.docClass },
+      'The journal belongs to a different document class',
+      { journalClass: journal.docClass, docClass },
     );
   }
+}
+
+/** What the registration policy needs to know about a document's signature requirement. */
+export interface SignatureRequirement {
+  /** True when the document's type declares that CUKS signs it before it is registered. */
+  typeRequiresSignature: boolean;
+  docClass: DocClass;
+  /** Whether a `sign` signature exists over the document's CURRENT main version. */
+  hasCurrentSignature: boolean;
+}
+
+/**
+ * Registration is the moment a document becomes ours officially, so a type that must be
+ * signed must already be signed (docs/modules/11 §12.1, plan этап 6).
+ *
+ * Only for OUTGOING documents: an incoming letter carries the counterparty's signature on
+ * paper, and demanding ours would block the chancellery from registering the post; internal
+ * documents get their own rule with этап 7, where their lifecycle is built. The signature must cover the CURRENT body — a signature over a
+ * superseded version proves nothing about what is being registered.
+ */
+export function assertSignatureBeforeRegistration(check: SignatureRequirement): void {
+  if (!check.typeRequiresSignature) return;
+  if (check.docClass !== 'outgoing') return;
+  if (check.hasCurrentSignature) return;
+  throw AppException.unprocessable(
+    'docflow.document.signature_required',
+    'This document type must be signed before it is registered',
+    { docClass: check.docClass },
+  );
 }
 
 /** Documents: the card, its files, registration and lifecycle (docs/modules/11 §3/§4). */
@@ -343,6 +385,14 @@ export class DocumentsService {
             outgoingNumber: input.outgoingNumber ?? null,
             outgoingDate: input.outgoingDate ? new Date(input.outgoingDate) : null,
             delivery: input.delivery ?? null,
+            // The party snapshot as written on the paper: the answer's addressee is taken
+            // from here, so the chancellery records it at registration (plan этап 6)
+            // rather than the preparer re-typing the sender from the scan later.
+            senderName: input.senderName ?? null,
+            senderContact: input.senderContact ?? null,
+            recipientName: input.recipientName ?? null,
+            recipientContact: input.recipientContact ?? null,
+            responseDueAt: input.responseDueAt ? new Date(input.responseDueAt) : null,
             registrationKey: input.idempotencyKey,
             createdBy: actor.id,
           })
@@ -429,6 +479,60 @@ export class DocumentsService {
       )
       .limit(1);
     return !!row;
+  }
+
+  /**
+   * Whether the document type declares that CUKS signs it before registration
+   * (plan этап 6). Kept in `dictionaries.meta` of the `doc_type` entry rather than in a new
+   * typed table: `type_code` already resolves against that dictionary, and a second source
+   * of truth for the same list is how the two drift apart. An unknown or unflagged type
+   * requires nothing — the flag opts a type IN, so adding a type never silently blocks the
+   * chancellery.
+   */
+  private async typeRequiresSignature(tx: Database, typeCode: string): Promise<boolean> {
+    const [row] = await tx
+      .select({ meta: dictionaries.meta })
+      .from(dictionaries)
+      .where(and(eq(dictionaries.type, 'doc_type'), eq(dictionaries.code, typeCode)))
+      .limit(1);
+    const meta = row?.meta;
+    if (!meta || typeof meta !== 'object') return false;
+    return (meta as Record<string, unknown>).requiresSignature === true;
+  }
+
+  /**
+   * Is there a `sign` signature over the document's CURRENT main version? A signature over a
+   * superseded body proves nothing about the text being registered, and `document_files`
+   * keeps the superseded rows, so the join must go through `is_current`.
+   */
+  private async hasCurrentMainSignature(tx: Database, documentId: string): Promise<boolean> {
+    const [row] = await tx
+      .select({ id: signatures.id })
+      .from(signatures)
+      .innerJoin(
+        documentFiles,
+        and(
+          eq(documentFiles.documentId, signatures.documentId),
+          eq(documentFiles.kind, 'main'),
+          eq(documentFiles.isCurrent, true),
+        ),
+      )
+      .innerJoin(
+        fsNodes,
+        and(
+          eq(fsNodes.id, documentFiles.fileId),
+          eq(fsNodes.currentVersionId, signatures.docVersionId),
+        ),
+      )
+      .where(and(eq(signatures.documentId, documentId), eq(signatures.context, 'sign')))
+      .limit(1);
+    return !!row;
+  }
+
+  /** The obligation counts, for a sibling service acting inside its own transaction
+   *  (the dispatch completion policy, plan этап 6). */
+  openObligationsFor(tx: Database, documentId: string): Promise<DocumentObligations> {
+    return this.openObligations(tx, documentId);
   }
 
   /** Count what the document still owes: active route steps, live resolutions, unread
@@ -862,7 +966,13 @@ export class DocumentsService {
         .from(journals)
         .where(and(eq(journals.id, input.journalId), isNull(journals.deletedAt)))
         .limit(1);
+      assertJournalForClass(journal, doc.docClass);
       if (!journal) throw AppException.notFound('docflow.journal.not_found', 'Journal not found');
+      assertSignatureBeforeRegistration({
+        typeRequiresSignature: await this.typeRequiresSignature(tx, doc.typeCode),
+        docClass: doc.docClass,
+        hasCurrentSignature: await this.hasCurrentMainSignature(tx, id),
+      });
       const now = new Date();
       const { number } = await this.numbering.allocate(tx, journal, now);
       // Registration IS the completion path of a `register` route step (plan этап 1D):

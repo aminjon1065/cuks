@@ -4,6 +4,7 @@ import {
   DOC_CLASSES,
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
+  DISPATCH_CHANNELS,
   DOCUMENT_FILE_KINDS,
   DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
@@ -22,6 +23,8 @@ import {
   type DocumentConfidentiality,
   type DocumentDelivery,
   type DocumentFileKind,
+  type DispatchChannel,
+  type DispatchStatus,
   type DocumentStatus,
   type JournalSeqReset,
   RESOLUTION_ACTION_KINDS,
@@ -404,6 +407,11 @@ export const registerIncomingSchema = z.object({
   outgoingNumber: z.string().max(64).nullish(),
   outgoingDate: z.string().datetime().nullish(),
   delivery: z.enum(DOCUMENT_DELIVERY).nullish(),
+  /** When an answer is owed back to the correspondent (docs/modules/11 §12.3). */
+  responseDueAt: z.string().datetime().nullish(),
+  /** Who sent the letter, as written on the paper — the answer's addressee comes from
+   *  here, so the chancellery records it at registration rather than re-typing it later. */
+  ...partyFields,
   // A document has one main body; extra scans go in as attachments.
   files: z
     .array(registerIncomingFileSchema)
@@ -1125,3 +1133,95 @@ export type CreateResolutionTypeInput = z.infer<typeof createResolutionTypeSchem
 /** The code is immutable once issued — proposals and reports quote it. */
 export const updateResolutionTypeSchema = createResolutionTypeSchema.omit({ code: true }).partial();
 export type UpdateResolutionTypeInput = z.infer<typeof updateResolutionTypeSchema>;
+
+// --- Outgoing response + dispatch (docs/modules/11 §12.3, plan §6.8/§7.7) ---
+
+/**
+ * Draft the answer to an incoming document (plan §5.4). Deliberately NOT derived from
+ * `createDocumentSchema`: that shape carries `confidentiality` and `accessList`, and the
+ * response must inherit those from the source rather than let the caller choose — an answer
+ * that is less restricted than the letter it quotes leaks the letter.
+ */
+export const createResponseSchema = z.object({
+  typeCode: z.string().min(1).max(64).default('letter'),
+  /** Defaults server-side to «Ответ на {номер}» when omitted. */
+  subject: z.string().min(1).max(500).optional(),
+  summary: z.string().max(5000).nullish(),
+  orgUnitId: z.string().uuid().nullish(),
+  /** Internal deadline for preparing the answer, not the promise made to the correspondent. */
+  dueDate: z.string().datetime().nullish(),
+  delivery: z.enum(DOCUMENT_DELIVERY).nullish(),
+  /** Who prepares it — added as a `preparer` collaborator in the same transaction. */
+  preparerId: z.string().uuid().nullish(),
+  /** Start the preset approval route (head → optional approvals → sign → register). */
+  startRoute: z.boolean().default(false),
+  /** Extra approvers for the preset route, all in one parallel group after the head. */
+  approverIds: z.array(z.string().uuid()).max(10).default([]),
+  /** Who signs. Defaults to the head of the preparing unit. */
+  signerId: z.string().uuid().nullish(),
+});
+export type CreateResponseInput = z.infer<typeof createResponseSchema>;
+
+export const createDispatchSchema = z.object({
+  channel: z.enum(DISPATCH_CHANNELS),
+  recipientName: z.string().min(1).max(300),
+  recipientAddress: z.string().max(500).nullish(),
+  recipientContact: z.string().max(300).nullish(),
+  /** Track number, postal receipt id, or the integration's own message id. */
+  externalReference: z.string().max(200).nullish(),
+  note: z.string().max(2000).nullish(),
+});
+export type CreateDispatchInput = z.infer<typeof createDispatchSchema>;
+
+/** Confirm a send actually happened, optionally attaching the scanned receipt. */
+export const confirmDispatchSchema = z.object({
+  externalReference: z.string().max(200).nullish(),
+  /** An already-uploaded fs node; adopted into the document's system space on confirm. */
+  receiptFileId: z.string().uuid().nullish(),
+  sentAt: z.string().datetime().nullish(),
+  note: z.string().max(2000).nullish(),
+});
+export type ConfirmDispatchInput = z.infer<typeof confirmDispatchSchema>;
+
+/** A failure must say why — the next attempt is decided from this text. */
+export const failDispatchSchema = z.object({
+  failureCode: z.string().min(1).max(64).default('manual'),
+  failureMessage: z.string().min(1).max(2000),
+});
+export type FailDispatchInput = z.infer<typeof failDispatchSchema>;
+
+export const cancelDispatchSchema = z.object({
+  reason: z.string().max(2000).nullish(),
+});
+export type CancelDispatchInput = z.infer<typeof cancelDispatchSchema>;
+
+/** The scanned confirmation of a send, read through the document policy like any body. */
+export interface DispatchReceiptDto {
+  fileId: string;
+  name: string;
+  size: number;
+  mime: string | null;
+  avStatus: AvStatus | null;
+}
+
+export interface DocumentDispatchDto {
+  id: string;
+  documentId: string;
+  channel: DispatchChannel;
+  status: DispatchStatus;
+  recipientName: string;
+  recipientAddress: string | null;
+  recipientContact: string | null;
+  externalReference: string | null;
+  note: string | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  attemptedAt: string | null;
+  sentAt: string | null;
+  createdByName: string | null;
+  confirmedByName: string | null;
+  receipt: DispatchReceiptDto | null;
+  /** Whether THIS caller may still act on the attempt — the chancellery, while pending. */
+  canAct: boolean;
+  createdAt: string;
+}

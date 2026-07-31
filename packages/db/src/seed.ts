@@ -117,6 +117,9 @@ interface DictSeed {
   nameRu: string;
   sort: number;
   parentCode?: string;
+  /** Free-form flags on the entry (docs/07 §dictionaries). For `doc_type`:
+   *  `requiresSignature` — CUKS signs this kind before it may be registered. */
+  meta?: Record<string, unknown>;
 }
 
 const DICTIONARIES: readonly DictSeed[] = [
@@ -128,11 +131,23 @@ const DICTIONARIES: readonly DictSeed[] = [
   { type: 'hazard_level', code: 'national', nameRu: 'Республиканского характера', sort: 5 },
   // Типы документов
   { type: 'doc_type', code: 'incoming', nameRu: 'Входящий', sort: 1 },
-  { type: 'doc_type', code: 'outgoing', nameRu: 'Исходящий', sort: 2 },
+  {
+    type: 'doc_type',
+    code: 'outgoing',
+    nameRu: 'Исходящий',
+    sort: 2,
+    meta: { requiresSignature: true },
+  },
   { type: 'doc_type', code: 'internal', nameRu: 'Внутренний', sort: 3 },
   { type: 'doc_type', code: 'order', nameRu: 'Приказ', sort: 4 },
   { type: 'doc_type', code: 'directive', nameRu: 'Распоряжение', sort: 5 },
-  { type: 'doc_type', code: 'letter', nameRu: 'Письмо', sort: 6 },
+  {
+    type: 'doc_type',
+    code: 'letter',
+    nameRu: 'Письмо',
+    sort: 6,
+    meta: { requiresSignature: true },
+  },
   { type: 'doc_type', code: 'memo', nameRu: 'Служебная записка', sort: 7 },
   { type: 'doc_type', code: 'protocol', nameRu: 'Протокол', sort: 8 },
   { type: 'doc_type', code: 'citizen_appeal', nameRu: 'Обращение гражданина', sort: 9 },
@@ -534,8 +549,14 @@ async function seedDictionaries(db: Database): Promise<void> {
         nameRu: d.nameRu,
         nameTg: d.nameRu, // placeholder until real tg translations (CLAUDE.md §4)
         sort: d.sort,
+        ...(d.meta ? { meta: d.meta } : {}),
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [dictionaries.type, dictionaries.code],
+        // Only the behavioural flags are refreshed on re-seed; names stay as the operator
+        // may have edited them.
+        set: { meta: sql`excluded.meta` },
+      });
   }
 }
 
