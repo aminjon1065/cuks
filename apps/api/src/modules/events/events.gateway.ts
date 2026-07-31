@@ -13,6 +13,7 @@ import type { Server, Socket } from 'socket.io';
 import { SESSION_COOKIE, WS_NAMESPACE, wsRooms } from '@cuks/shared';
 import {
   chatMembers,
+  documents,
   orgUnits,
   positions,
   taskProjectMembers,
@@ -21,6 +22,7 @@ import {
   type Database,
 } from '@cuks/db';
 import { DB } from '../../common/db/db.module';
+import { canViewDocumentBase } from '../docflow/document-visibility';
 import { SessionService } from '../auth/session.service';
 import { UsersService } from '../users/users.service';
 import { RealtimeService } from './realtime.service';
@@ -114,6 +116,46 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       )
       .limit(1);
     return !!hit;
+  }
+
+  /**
+   * Join a document's room to receive its live route updates (docs/modules/11 §12.9).
+   * Gated on the SAME base visibility the REST card uses: ДСП stays allow-list ∩ право, so
+   * a socket cannot become a side channel around the document policy. Route/resolution
+   * participation is not consulted here — the room only carries ids, and a participant who
+   * misses the event simply refetches on their next interaction.
+   */
+  @SubscribeMessage('document.subscribe')
+  async subscribeDocument(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { documentId?: string },
+  ): Promise<{ ok: boolean }> {
+    const userId = (client.data as { userId?: string }).userId;
+    const documentId = body?.documentId;
+    if (!userId || !documentId) return { ok: false };
+    const [doc] = await this.db
+      .select({
+        authorId: documents.authorId,
+        accessList: documents.accessList,
+        confidentiality: documents.confidentiality,
+      })
+      .from(documents)
+      .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)))
+      .limit(1);
+    if (!doc) return { ok: false };
+    const perms = await this.users.getPermissions(userId);
+    if (!canViewDocumentBase(doc, { id: userId, ...perms })) return { ok: false };
+    await client.join(wsRooms.entity('document', documentId));
+    return { ok: true };
+  }
+
+  @SubscribeMessage('document.unsubscribe')
+  async unsubscribeDocument(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { documentId?: string },
+  ): Promise<{ ok: boolean }> {
+    if (body?.documentId) await client.leave(wsRooms.entity('document', body.documentId));
+    return { ok: true };
   }
 
   @SubscribeMessage('board.unsubscribe')

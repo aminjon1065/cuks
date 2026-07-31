@@ -130,6 +130,16 @@ export class RoutesController {
     return this.routes.updateTemplate(id, body, user);
   }
 
+  @Post('route-templates/:id/actions/clone')
+  @RequirePermission('docflow.journals.manage')
+  @ApiOperation({ summary: 'Copy a template as a new one, to edit without touching the original' })
+  cloneTemplate(
+    @CurrentUser() user: AuthUser,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+  ): Promise<RouteTemplateDto> {
+    return this.routes.cloneTemplate(id, user);
+  }
+
   @Delete('route-templates/:id')
   @RequirePermission('docflow.journals.manage')
   @HttpCode(200)

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { EventsModule } from '../events/events.module';
 import { DocflowController } from './docflow.controller';
 import { DocumentsController } from './documents.controller';
 import { RoutesController } from './routes.controller';
@@ -39,7 +40,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
  * internal ЭЦП (CA, device certificates, signing and verification).
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, EventsModule],
   controllers: [
     DocflowController,
     DocumentsController,

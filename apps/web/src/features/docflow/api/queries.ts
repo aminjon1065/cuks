@@ -32,7 +32,9 @@ import type {
   ReportResolutionInput,
   ResolutionDto,
   RouteDto,
+  RouteTemplateDto,
   RouteValidationDto,
+  UpdateRouteTemplateInput,
   SignatureDto,
   SignDocumentInput,
   SignPayloadDto,
@@ -788,4 +790,43 @@ function filenameFromDisposition(header: string | null): string | null {
   if (utf8?.[1]) return decodeURIComponent(utf8[1]);
   const plain = header.match(/filename="?([^";]+)"?/i);
   return plain?.[1] ?? null;
+}
+
+// ---- Route templates (docs/modules/11 §12.9) --------------------------------
+
+export const routeTemplatesKey = [...docflowKey, 'route-templates'] as const;
+
+export function useRouteTemplates(): UseQueryResult<RouteTemplateDto[]> {
+  return useQuery({
+    queryKey: routeTemplatesKey,
+    queryFn: () => api.get<RouteTemplateDto[]>('/v1/docflow/route-templates'),
+  });
+}
+
+export function useUpdateRouteTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateRouteTemplateInput }) =>
+      api.patch<RouteTemplateDto>(`/v1/docflow/route-templates/${id}`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: routeTemplatesKey }),
+  });
+}
+
+/** Copy a template as a retired draft — a started route keeps its own snapshot, so the
+ *  original is never disturbed by editing the copy. */
+export function useCloneRouteTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<RouteTemplateDto>(`/v1/docflow/route-templates/${id}/actions/clone`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: routeTemplatesKey }),
+  });
+}
+
+export function useDeleteRouteTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ ok: true }>(`/v1/docflow/route-templates/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: routeTemplatesKey }),
+  });
 }

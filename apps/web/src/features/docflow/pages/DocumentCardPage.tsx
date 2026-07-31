@@ -45,6 +45,7 @@ import { LinksSection } from '../components/LinksSection';
 import { LinkedTasksSection } from '@/features/tasks/components/LinkedTasksSection';
 import { HistorySection } from '../components/HistorySection';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { useDocumentRealtime } from '../hooks/useDocumentRealtime';
 
 const CARD_TABS = ['overview', 'route', 'resolutions', 'links', 'tasks', 'history'] as const;
 type CardTab = (typeof CARD_TABS)[number];
@@ -63,6 +64,7 @@ export function DocumentCardPage(): React.JSX.Element {
   const [statusOpen, setStatusOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [tab, setTab] = useState<CardTab>('overview');
+  useDocumentRealtime(id ?? null);
   useDocumentTitle(
     doc.data
       ? `${doc.data.regNumber ?? doc.data.subject} — ${t('documents.title')}`

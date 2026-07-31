@@ -15,6 +15,7 @@ import {
 import {
   ROUTE_STEP_KIND_ACTIONS,
   routeStepAllows,
+  wsRooms,
   type CreateRouteTemplateInput,
   type RouteDto,
   type RouteStepAction,
@@ -35,6 +36,7 @@ import { DB } from '../../common/db/db.module';
 import { NotificationsService } from '../notifications/notifications.service';
 import { canViewDocumentBase } from './document-visibility';
 import { planApproval, stepDueAt, type RouteStepState } from './route-engine';
+import { RealtimeService } from '../events/realtime.service';
 import { SubstitutionsService } from './substitutions.service';
 
 /**
@@ -68,7 +70,25 @@ export class RoutesService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly substitutions: SubstitutionsService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  /**
+   * Tell open cards their route moved (docs/modules/11 §12.9). Ids and an action only —
+   * never the subject, which may be ДСП (docs/09 §3); a client refetches through the
+   * normal API gate, so the event cannot become a side channel around it.
+   */
+  private emitRouteUpdated(
+    documentId: string,
+    action: 'started' | 'step_completed' | 'rejected',
+    actorId: string,
+  ): void {
+    this.realtime.emitToRoom(wsRooms.entity('document', documentId), 'docflow.route.updated', {
+      documentId,
+      action,
+      actorId,
+    });
+  }
 
   // --- Assignment resolution -------------------------------------------------
 
@@ -750,6 +770,7 @@ export class RoutesService {
       entityId: documentId,
       meta: { steps: stepDefs.length },
     });
+    this.emitRouteUpdated(documentId, 'started', actor.id);
     // If the first group is an acknowledge step, expand the sheet and notify readers.
     await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
@@ -866,6 +887,11 @@ export class RoutesService {
         meta: { stepId, principalId: onBehalfOf },
       });
     }
+    this.emitRouteUpdated(
+      documentId,
+      action === 'reject' ? 'rejected' : 'step_completed',
+      actor.id,
+    );
     // Closing a step may have activated an acknowledge group — expand its sheet and notify.
     if (action !== 'reject') await this.expandAndNotifyAcknowledge(documentId);
     return this.routesForDocument(documentId, actor);
@@ -991,6 +1017,45 @@ export class RoutesService {
       actorId: actor.id,
       entityType: 'route_template',
       entityId: created.id,
+    });
+    return this.getTemplate(created.id);
+  }
+
+  /**
+   * Copy a template as a new one (docs/modules/11 §12.9, plan §7.5 «cloning/versioning
+   * вместо изменения активной схемы на лету»).
+   *
+   * Full versioning is deliberately NOT what this is: a started route already snapshots
+   * its steps into `route_steps`, so editing a template never disturbs a route in flight —
+   * the risk versioning would guard against does not exist here. What the chancellery
+   * actually needs is a safe way to derive a variant, and that is a copy.
+   */
+  async cloneTemplate(id: string, actor: AuthUser): Promise<RouteTemplateDto> {
+    const source = await this.getTemplate(id);
+    const [created] = await this.db
+      .insert(routeTemplates)
+      .values({
+        name: `${source.name} (копия)`,
+        orgUnitId: source.orgUnitId,
+        steps: source.steps,
+        // A clone starts retired: it is a draft variant until someone reviews it, and an
+        // unreviewed copy appearing in every picker beside the original is a trap.
+        isActive: false,
+        createdBy: actor.id,
+      })
+      .returning({ id: routeTemplates.id });
+    if (!created) {
+      throw AppException.badRequest(
+        'docflow.route_template.create_failed',
+        'Could not clone template',
+      );
+    }
+    await this.audit.logAndWait({
+      action: 'docflow.route_template.cloned',
+      actorId: actor.id,
+      entityType: 'route_template',
+      entityId: created.id,
+      meta: { sourceId: id },
     });
     return this.getTemplate(created.id);
   }

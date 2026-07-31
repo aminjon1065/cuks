@@ -49,6 +49,19 @@ export interface WsEventPayloads {
   'chat.reaction.updated': { channelId: string; messageId: string; actorId: string };
   /** A channel's metadata or membership changed; subscribers refetch the channel / list. */
   'chat.channel.updated': { channelId: string; actorId: string };
+  /**
+   * A document's route changed (docs/modules/11 §12.9): started, a step closed, or the
+   * route was cancelled. Delivered to the document's `entity:document:{id}` room so an open
+   * card refetches instead of showing a step someone else already approved.
+   *
+   * The payload is ids and an action only — never the subject, which may be ДСП
+   * (docs/09 §3). Anyone who may open the card refetches it through the normal API gate.
+   */
+  'docflow.route.updated': {
+    documentId: string;
+    action: 'started' | 'step_completed' | 'rejected';
+    actorId: string;
+  };
   /** Incoming 1:1 call (docs/modules/14 §2): the DM caller is ringing this user — show the accept/
    *  decline prompt + ringtone. Delivered to the recipient's `user:{id}` room only. */
   'meet.ring': {
