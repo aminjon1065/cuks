@@ -1,5 +1,7 @@
-import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { documentsKey } from '../api/queries';
 
 /**
@@ -16,6 +18,15 @@ import { documentsKey } from '../api/queries';
  */
 const CARD_ID = '019fbb96-653c-7c17-bcf5-c4b0eacf8439';
 const OTHER_ID = '019fbb96-0000-7c17-bcf5-c4b0eacf8439';
+
+/** The socket context, driven by the test rather than by a real connection. */
+const socketState = { socket: null as unknown, connected: false, ready: false };
+const emit = vi.fn();
+vi.mock('@/lib/socket', () => ({
+  useSocket: () => socketState,
+  useSocketEvent: () => undefined,
+}));
+const { useDocumentRealtime } = await import('./useDocumentRealtime');
 
 /** The four keys the register actually uses, as `queries.ts` builds them. */
 const KEYS = {
@@ -72,6 +83,43 @@ describe('card invalidation', () => {
     const qc = seed();
     void qc.invalidateQueries({ queryKey: [...documentsKey, CARD_ID] });
     expect(staleAfter(qc)).not.toContain('otherCard');
+  });
+});
+
+describe('room subscription waits for the gateway handshake', () => {
+  beforeEach(() => {
+    emit.mockReset();
+    socketState.socket = { emit };
+    socketState.connected = true;
+    socketState.ready = false;
+  });
+
+  const mount = (): { rerender: () => void; unmount: () => void } => {
+    const qc = seed();
+    const wrapper = ({ children }: { children: React.ReactNode }): React.ReactElement =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const view = renderHook(() => useDocumentRealtime(CARD_ID), { wrapper });
+    return { rerender: () => view.rerender(), unmount: view.unmount };
+  };
+
+  it('does not subscribe on a connected-but-unauthorised socket', () => {
+    // The window between `connect` and `connection.ready`. The gateway attaches `userId`
+    // asynchronously, so a subscribe here is answered `{ok:false}` — an ack nothing reads.
+    // Emitting anyway is exactly the silent-failure this gate exists to prevent.
+    mount();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('subscribes once the handshake lands', () => {
+    socketState.ready = true;
+    mount();
+    expect(emit).toHaveBeenCalledWith('document.subscribe', { documentId: CARD_ID });
+  });
+
+  it('leaves the room when the card unmounts', () => {
+    socketState.ready = true;
+    mount().unmount();
+    expect(emit).toHaveBeenCalledWith('document.unsubscribe', { documentId: CARD_ID });
   });
 });
 

@@ -57,7 +57,7 @@ export function useDocflowQueuesRealtime(): void {
  * behind a 30-second `staleTime` with `refetchOnWindowFocus` off.
  */
 export function useDocumentRealtime(documentId: string | null): void {
-  const { socket } = useSocket();
+  const { socket, ready } = useSocket();
   const qc = useQueryClient();
 
   const invalidateCard = useCallback(() => {
@@ -66,24 +66,22 @@ export function useDocumentRealtime(documentId: string | null): void {
   }, [qc, documentId]);
 
   useEffect(() => {
-    if (!socket || !documentId) return;
+    // Waits for `ready`, not `connect`. The gateway resolves the session asynchronously, so a
+    // subscribe sent between the two is answered `{ok:false}` — and nothing reads that ack, so
+    // the room is silently never joined and the card receives nothing until a reload. `ready`
+    // also flips back on every reconnect, which is what re-joins the room afterwards.
+    if (!socket || !ready || !documentId) return;
     // subscribe/unsubscribe are client→server messages, outside the server-event map.
     const emit = (socket as unknown as { emit: (e: string, p: unknown) => void }).emit.bind(socket);
-    const subscribe = (): void => emit('document.subscribe', { documentId });
-    subscribe();
-    const onConnect = (): void => {
-      // The room membership lives on the socket, not the user, so it must be re-joined —
-      // and everything missed while it was down must be refetched.
-      subscribe();
-      invalidateCard();
-      invalidateQueues(qc);
-    };
-    socket.on('connect', onConnect);
+    emit('document.subscribe', { documentId });
+    // Catch up on whatever happened while the transport was down: re-joining a room restores
+    // future events only.
+    invalidateCard();
+    invalidateQueues(qc);
     return () => {
-      socket.off('connect', onConnect);
       emit('document.unsubscribe', { documentId });
     };
-  }, [socket, documentId, invalidateCard, qc]);
+  }, [socket, ready, documentId, invalidateCard, qc]);
 
   const onEvent = useCallback(
     (payload: { documentId: string }) => {

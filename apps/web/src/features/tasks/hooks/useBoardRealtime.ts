@@ -11,21 +11,24 @@ import { boardKey } from '../api/queries';
  * on the user id would wrongly drop updates in the same user's other tabs/devices.
  */
 export function useBoardRealtime(projectId: string | undefined): void {
-  const { socket } = useSocket();
+  const { socket, ready } = useSocket();
   const qc = useQueryClient();
 
   useEffect(() => {
-    if (!socket || !projectId) return;
+    // Waits for `ready`, not `connect`: the gateway attaches the user asynchronously, and a
+    // subscribe sent before that is answered `{ok:false}` — an ack nothing reads, so the board
+    // would silently never join its room. `ready` flips on every reconnect, which re-joins it.
+    if (!socket || !ready || !projectId) return;
     // board.subscribe/unsubscribe are client→server messages, outside the server-event map.
     const emit = (socket as unknown as { emit: (e: string, p: unknown) => void }).emit.bind(socket);
-    const subscribe = (): void => emit('board.subscribe', { projectId });
-    subscribe();
-    socket.on('connect', subscribe);
+    emit('board.subscribe', { projectId });
+    // Catch up on what moved while the transport was down — re-joining restores future
+    // events only, and the board is exactly the screen where a missed move is confusing.
+    void qc.invalidateQueries({ queryKey: boardKey(projectId) });
     return () => {
-      socket.off('connect', subscribe);
       emit('board.unsubscribe', { projectId });
     };
-  }, [socket, projectId]);
+  }, [socket, ready, projectId, qc]);
 
   const invalidate = useCallback(() => {
     if (!projectId) return;

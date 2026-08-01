@@ -22,13 +22,29 @@ declare global {
 interface SocketContextValue {
   socket: AppSocket | null;
   connected: boolean;
+  /**
+   * True only after the gateway has authorised the socket and joined its rooms — the
+   * `connection.ready` handshake.
+   *
+   * Distinct from `connected` on purpose, and the distinction is load-bearing: the gateway
+   * resolves the session asynchronously, so between `connect` and `connection.ready` the
+   * socket has no user attached and every `*.subscribe` is answered `{ok:false}`. Clients do
+   * not read that ack, so a subscribe sent in that window is lost silently and the room is
+   * never joined — the card or board then sits there receiving nothing until a reload.
+   */
+  ready: boolean;
 }
 
-const SocketContext = createContext<SocketContextValue>({ socket: null, connected: false });
+const SocketContext = createContext<SocketContextValue>({
+  socket: null,
+  connected: false,
+  ready: false,
+});
 
 export function SocketProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [socket, setSocket] = useState<AppSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const s: AppSocket = io(WS_NAMESPACE, {
@@ -43,13 +59,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }): Rea
     setSocket(s);
     const onConnect = (): void => {
       setConnected(true);
+      // Connected is not authorised yet: readiness is cleared until the gateway says so.
+      setReady(false);
       if (import.meta.env.DEV) window.__cuksSocketReady = false;
     };
     const onDisconnect = (): void => {
       setConnected(false);
+      setReady(false);
       if (import.meta.env.DEV) window.__cuksSocketReady = false;
     };
     const onReady = (): void => {
+      setReady(true);
       if (import.meta.env.DEV) window.__cuksSocketReady = true;
     };
     s.on('connect', onConnect);
@@ -84,7 +104,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }): Rea
     };
   }, []);
 
-  return createElement(SocketContext.Provider, { value: { socket, connected } }, children);
+  return createElement(SocketContext.Provider, { value: { socket, connected, ready } }, children);
 }
 
 /** The live socket and connection state (null outside the provider). */
