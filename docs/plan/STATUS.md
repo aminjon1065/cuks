@@ -41,6 +41,34 @@
 
 <!-- Новые записи СВЕРХУ. -->
 
+### 2026-08-01 — СЭД 2.0: этап 10 — интеграционный контур (без внешних сервисов)
+
+**Схема** (миграции **0058_tidy_firestar**, **0059_living_butterfly**, **0060_modern_stellaris**,
+применены): у `document_dispatches` — `adapter_id`, `attempt_no`, `retry_of`, `next_attempt_at`,
+`dead_lettered_at`, индексы под «что готово к отправке» и под dead-letter, уникальность
+`(adapter_id, external_reference)`; новые `document_exchange_inbound` и
+`document_exchange_attachments` с уникальным `(adapter_id, external_id)`;
+`file_versions.uploaded_by` стал nullable.
+
+**Код**: `DocumentExchangePort` + реестр из окружения + эталонный адаптер «локальная папка»;
+`ExchangeSenderService` (outbox поверх строки отправки, повторы, dead-letter);
+`ExchangeReceiverService` (приём, дедупликация, allow-list типов, AV-гейт, карантин);
+`DocflowFilesService.resolveOutboundAttachments`; `StorageService.putObjectBytes`; проба
+здоровья `docflow_exchange`.
+
+**Проверено на живом каталоге**: письмо из `in/` принято с вложением, второй проход отчитался
+дубликатом и ничего не создал, файлы уехали в `done/`. 40 unit-тестов (контракт адаптера,
+политика повторов, политика приёма). Полный гейт: typecheck 8/8, lint 8/8, test 8/8 (api 576).
+
+**Честная поправка к этапу 6**: чекбокс «adapter interface для email/integration» был отмечен
+выполненным, но интерфейса не существовало — приватный массив каналов и `registerAdapter`,
+которого никто не вызывал. Каналы отказывались *безусловно*, а не «до настройки». Поправка
+внесена в план рядом с чекбоксом, а не молча перепоставлена.
+
+**Открыто**: экран разбора карантина (модель и правила готовы, эндпоинта и UI нет);
+mTLS/secret storage и SMTP — ждут ответа заказчика, строить хранилище секретов под
+неназванный транспорт значит выдумать и требование, и решение.
+
 ### 2026-08-01 — СЭД 2.0: этап 9 — сохранённые представления и фильтр-панель
 
 **Без миграции**: представления реестра лежат в общей `app.saved_filters` под дискриминатором

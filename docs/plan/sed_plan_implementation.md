@@ -1625,8 +1625,8 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 - [x] AV до регистрации входящего вложения.
 - [ ] mTLS/service credentials из secret storage/environment.
 - [ ] Mapping external correspondent/type в quarantined review queue.
-- [ ] Admin health/status без показа секретов.
-- [ ] Полный audit exchange.
+- [x] Admin health/status без показа секретов.
+- [x] Полный audit exchange. — `docflow.exchange.received/rejected/sent/retry_scheduled/dead_lettered`; во всех — идентификаторы и коды, ни адреса, ни настройки транспорта.
 
 Первый reference adapter:
 
@@ -1648,6 +1648,16 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 - отказ внешней системы не ломает основной API;
 - повторная доставка не создаёт дубликат;
 - оператор видит ошибку и может безопасно повторить.
+
+Открыто на конец сессии (честно):
+
+- **Экран разбора карантина** — таблица, статусы и правила допуска готовы и покрыты тестами,
+  но эндпоинта «выбрать корреспондента и зарегистрировать» и экрана пока нет: сообщение
+  доходит до `received`/`quarantined` и там ждёт.
+- **mTLS/service credentials из secret storage** — клиентских сертификатов нет нигде, vault в
+  стеке отсутствует, а транспорта, который их потребует, заказчик не назвал. Строить хранилище
+  секретов под гипотетический транспорт — значит выдумать и требование, и решение.
+- **SMTP-адаптер** — только при названном внутреннем сервере и правилах (§15.2, не отвечен).
 
 Commit: `feat(docflow): add isolated document exchange adapters`.
 
