@@ -155,7 +155,7 @@ function ExtendDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('resolutions.extendAction')}</DialogTitle>
         </DialogHeader>
@@ -220,7 +220,7 @@ function UncontrolDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('control.uncontrol')}</DialogTitle>
         </DialogHeader>

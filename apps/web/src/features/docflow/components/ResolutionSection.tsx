@@ -244,7 +244,7 @@ function ReportDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('resolutions.reportAction')}</DialogTitle>
         </DialogHeader>
@@ -294,7 +294,7 @@ function ExtendDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('resolutions.extendAction')}</DialogTitle>
         </DialogHeader>

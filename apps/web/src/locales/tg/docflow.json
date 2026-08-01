@@ -578,7 +578,8 @@
     "activeField": "Фаъол",
     "loading": "Загрузка…",
     "prev": "Назад",
-    "next": "Вперёд"
+    "next": "Вперёд",
+    "close": "Закрыть"
   },
   "collaborators": {
     "title": "Соисполнители",

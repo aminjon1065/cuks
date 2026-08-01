@@ -397,7 +397,7 @@ function ConfirmDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('dispatch.confirmAction')}</DialogTitle>
         </DialogHeader>
@@ -453,7 +453,7 @@ function FailDialog({
   const [message, setMessage] = useState('');
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('dispatch.failAction')}</DialogTitle>
         </DialogHeader>

@@ -327,6 +327,11 @@ export function DocumentsPage(): React.JSX.Element {
       <SavedViewsBar current={viewParams} onApply={applyView} />
 
       <DataTable
+        labels={{
+          table: t('documents.title'),
+          previousPage: t('documents.prevPage'),
+          nextPage: t('documents.nextPage'),
+        }}
         columns={columns}
         data={list.data?.items ?? []}
         loading={list.isLoading}

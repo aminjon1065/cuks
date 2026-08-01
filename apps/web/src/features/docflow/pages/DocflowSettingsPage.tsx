@@ -267,7 +267,7 @@ function JournalDialog(props: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>
             {isNew ? t('journals.form.createTitle') : t('journals.form.editTitle')}
@@ -495,7 +495,7 @@ function CorrespondentDialog(props: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>
             {isNew ? t('correspondents.form.createTitle') : t('correspondents.form.editTitle')}
@@ -698,7 +698,7 @@ function NomenclatureDialog(props: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>
             {isNew ? t('nomenclature.form.createTitle') : t('nomenclature.form.editTitle')}

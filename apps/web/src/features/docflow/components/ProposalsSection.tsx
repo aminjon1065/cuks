@@ -341,7 +341,7 @@ function RejectDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('proposals.rejectAction')}</DialogTitle>
         </DialogHeader>

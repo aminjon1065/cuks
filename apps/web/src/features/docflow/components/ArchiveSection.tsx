@@ -153,7 +153,7 @@ function ArchiveDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('archive.action')}</DialogTitle>
         </DialogHeader>
@@ -215,7 +215,7 @@ function RestoreDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('archive.restoreAction')}</DialogTitle>
         </DialogHeader>
@@ -279,7 +279,7 @@ function HoldDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>
             {t(mode === 'set' ? 'archive.holdAction' : 'archive.clearHoldAction')}

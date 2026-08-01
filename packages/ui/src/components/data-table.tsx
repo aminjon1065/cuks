@@ -43,6 +43,21 @@ export interface DataTableProps<T> {
   enableSelection?: boolean;
   onSelectionChange?: (rows: T[]) => void;
   pageSize?: number;
+  /**
+   * Accessible names for the controls the table renders itself.
+   *
+   * They belong to the CONSUMER because `packages/ui` holds no i18n: a hard-coded «select all»
+   * is an English announcement in a Russian interface, and — being a string in TSX rather than
+   * in a locale file — it is invisible to the RU/TJ parity check. The English defaults are
+   * kept so no existing call site loses its label, but every screen should pass these.
+   */
+  labels?: {
+    table?: string;
+    selectAll?: string;
+    selectRow?: string;
+    previousPage?: string;
+    nextPage?: string;
+  };
 }
 
 export function DataTable<T>({
@@ -58,6 +73,7 @@ export function DataTable<T>({
   enableSelection = false,
   onSelectionChange,
   pageSize = 25,
+  labels,
 }: DataTableProps<T>): React.JSX.Element {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -76,7 +92,7 @@ export function DataTable<T>({
                 if (el) el.indeterminate = table.getIsSomePageRowsSelected();
               }}
               onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
-              aria-label="select all"
+              aria-label={labels?.selectAll ?? 'select all'}
             />
           ),
           cell: ({ row }) => (
@@ -86,7 +102,7 @@ export function DataTable<T>({
               checked={row.getIsSelected()}
               onChange={(e) => row.toggleSelected(e.target.checked)}
               onClick={(e) => e.stopPropagation()}
-              aria-label="select row"
+              aria-label={labels?.selectRow ?? 'select row'}
             />
           ),
         },
@@ -229,7 +245,7 @@ export function DataTable<T>({
             className="size-8"
             disabled={!table.getCanPreviousPage()}
             onClick={() => table.previousPage()}
-            aria-label="previous page"
+            aria-label={labels?.previousPage ?? 'previous page'}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -239,7 +255,7 @@ export function DataTable<T>({
             className="size-8"
             disabled={!table.getCanNextPage()}
             onClick={() => table.nextPage()}
-            aria-label="next page"
+            aria-label={labels?.nextPage ?? 'next page'}
           >
             <ChevronRight className="size-4" />
           </Button>

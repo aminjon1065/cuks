@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Users, X } from 'lucide-react';
-import { Button, Input, Label, cn, toast } from '@cuks/ui';
+import { Users, X } from 'lucide-react';
+import { Button, Input, Label, cn, toast, Skeleton } from '@cuks/ui';
 import {
   DOCUMENT_COLLABORATOR_ROLES,
   type DocumentCollaboratorRole,
@@ -107,8 +107,12 @@ export function CollaboratorsSection({ doc }: { doc: DocumentDetailDto }): React
             {search.trim() ? (
               <div className="mt-1 max-h-40 overflow-y-auto rounded-sm border border-border">
                 {directory.isLoading ? (
-                  <div className="flex justify-center py-3">
-                    <Loader2 className="size-4 animate-spin text-text-muted" aria-hidden />
+                  // A skeleton, not a spinner: this is a list, and the design system asks a
+                  // loading list to keep the shape of what is arriving (06 §1).
+                  <div className="flex flex-col gap-1 p-1.5" aria-busy="true">
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} className="h-7 w-full" />
+                    ))}
                   </div>
                 ) : (directory.data ?? []).length === 0 ? (
                   <div className="py-3 text-center text-xs text-text-muted">—</div>

@@ -299,7 +299,15 @@ function BatchesPanel(): React.JSX.Element {
       {batches.isPending ? (
         <Skeleton className="h-24 w-full rounded-md" />
       ) : batches.isError ? (
-        <EmptyState title={t('common.loadError')} description={t('common.loadErrorHint')} />
+        <EmptyState
+          title={t('common.loadError')}
+          description={t('common.loadErrorHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void batches.refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
+        />
       ) : batches.data.length === 0 ? (
         <EmptyState
           icon={Archive}
@@ -318,7 +326,7 @@ function BatchesPanel(): React.JSX.Element {
 
       {creating ? (
         <Dialog open onOpenChange={(o) => !o && setCreating(false)}>
-          <DialogContent>
+          <DialogContent closeLabel={t('common.close')}>
             <DialogHeader>
               <DialogTitle>{t('archivePage.newBatch')}</DialogTitle>
             </DialogHeader>
@@ -480,7 +488,7 @@ function BatchCard({ batch }: { batch: DispositionBatchDto }): React.JSX.Element
 
       {confirmingExecute ? (
         <Dialog open onOpenChange={(o) => !o && setConfirmingExecute(false)}>
-          <DialogContent>
+          <DialogContent closeLabel={t('common.close')}>
             <DialogHeader>
               <DialogTitle>{t('archivePage.executeBatch')}</DialogTitle>
             </DialogHeader>

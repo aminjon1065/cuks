@@ -320,7 +320,7 @@ function CreateTemplateDialog({ onClose }: { onClose: () => void }): React.JSX.E
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('templates.admin.createTitle')}</DialogTitle>
         </DialogHeader>

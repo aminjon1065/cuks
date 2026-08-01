@@ -65,7 +65,7 @@ export function SearchPage(): React.JSX.Element {
     setQuery((current) => (urlQuery && urlQuery !== current.trim() ? urlQuery : current));
   }, [urlQuery]);
 
-  const { data, isPending, isError, isFetching } = useDocumentSearch(debounced, {
+  const { data, isPending, isError, isFetching, refetch } = useDocumentSearch(debounced, {
     page,
     limit: PAGE_SIZE,
     ...(sort !== 'relevance' ? { sort } : {}),
@@ -141,6 +141,11 @@ export function SearchPage(): React.JSX.Element {
           icon={FileSearch}
           title={t('search.failedTitle')}
           description={t('search.failedHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
         />
       ) : total === 0 ? (
         <EmptyState

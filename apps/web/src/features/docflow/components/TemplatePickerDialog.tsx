@@ -71,7 +71,7 @@ export function TemplatePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('templates.pick.title')}</DialogTitle>
         </DialogHeader>

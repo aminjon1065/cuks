@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import {
+  Skeleton,
   Button,
   Dialog,
   DialogContent,
@@ -70,7 +71,7 @@ export function StartRouteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('route.start.title')}</DialogTitle>
         </DialogHeader>
@@ -86,8 +87,12 @@ export function StartRouteDialog({
             {search.trim() ? (
               <div className="mt-1 max-h-40 overflow-y-auto rounded-sm border border-border">
                 {directory.isLoading ? (
-                  <div className="flex justify-center py-3">
-                    <Loader2 className="size-4 animate-spin text-text-muted" />
+                  // A skeleton, not a spinner: this is a list, and the design system asks a
+                  // loading list to keep the shape of what is arriving (06 §1).
+                  <div className="flex flex-col gap-1 p-1.5" aria-busy="true">
+                    {[0, 1, 2].map((i) => (
+                      <Skeleton key={i} className="h-7 w-full" />
+                    ))}
                   </div>
                 ) : (directory.data ?? []).length === 0 ? (
                   <div className="py-3 text-center text-xs text-text-muted">—</div>

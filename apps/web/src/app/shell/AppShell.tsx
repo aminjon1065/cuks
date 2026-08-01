@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AbilityProvider } from '@/lib/ability';
+import { useDocflowQueuesRealtime } from '@/features/docflow/hooks/useDocumentRealtime';
 import { SocketProvider } from '@/lib/socket';
 import { useMe } from '@/features/auth/api/queries';
 import { IncomingCallDialog } from '@/features/meet/components/IncomingCallDialog';
@@ -9,6 +10,12 @@ import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
 
 /** Authenticated application frame (docs/06 §3): Sidebar + Topbar + routed content. */
+/** Renderless: it exists only to run the queue-invalidation hook inside the socket context. */
+function DocflowQueuesRealtime(): null {
+  useDocflowQueuesRealtime();
+  return null;
+}
+
 export function AppShell(): React.JSX.Element | null {
   const { data: me } = useMe();
   const [commandOpen, setCommandOpen] = useState(false);
@@ -37,6 +44,9 @@ export function AppShell(): React.JSX.Element | null {
   return (
     <AbilityProvider rules={me.abilityRules}>
       <SocketProvider>
+        {/* Inside the socket provider: the queues listen for docflow events app-wide, so a
+            gate opening refreshes «Мои поручения» even with no document card open. */}
+        <DocflowQueuesRealtime />
         <div data-testid="app-shell" className="flex h-screen overflow-hidden bg-background">
           <Sidebar me={me} />
           <div className="flex min-w-0 flex-1 flex-col">

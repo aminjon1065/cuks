@@ -169,7 +169,7 @@ function SaveViewDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('savedViews.saveTitle')}</DialogTitle>
         </DialogHeader>
@@ -232,7 +232,7 @@ function RenameViewDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('savedViews.renameTitle')}</DialogTitle>
         </DialogHeader>

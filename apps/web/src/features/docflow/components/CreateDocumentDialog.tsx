@@ -61,7 +61,7 @@ export function CreateDocumentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('documents.create.title')}</DialogTitle>
         </DialogHeader>

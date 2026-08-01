@@ -367,7 +367,7 @@ function RegisterDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('documents.register.title')}</DialogTitle>
         </DialogHeader>
@@ -437,7 +437,7 @@ function StatusDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('documents.status.title')}</DialogTitle>
         </DialogHeader>

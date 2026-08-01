@@ -61,7 +61,7 @@ export function ExchangeInboxPage(): React.JSX.Element {
   const [rejecting, setRejecting] = useState<InboundExchangeDto | null>(null);
 
   const query = { page, limit: PAGE_SIZE, ...(status ? { status } : {}) };
-  const { data, isPending, isError } = useInboundExchange(query);
+  const { data, isPending, isError, refetch } = useInboundExchange(query);
   const total = data?.total ?? 0;
 
   return (
@@ -104,6 +104,11 @@ export function ExchangeInboxPage(): React.JSX.Element {
           icon={Inbox}
           title={t('exchangeInbox.failedTitle')}
           description={t('exchangeInbox.failedHint')}
+          action={
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              {t('common.retry')}
+            </Button>
+          }
         />
       ) : data.items.length === 0 ? (
         <EmptyState
@@ -305,7 +310,7 @@ function RegisterDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('exchangeInbox.registerTitle')}</DialogTitle>
         </DialogHeader>
@@ -442,7 +447,7 @@ function RejectDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common.close')}>
         <DialogHeader>
           <DialogTitle>{t('exchangeInbox.rejectTitle')}</DialogTitle>
         </DialogHeader>
