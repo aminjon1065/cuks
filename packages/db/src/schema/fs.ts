@@ -95,9 +95,12 @@ export const fileVersions = appSchema.table(
     size: bigint('size', { mode: 'number' }).notNull(),
     mime: text('mime').notNull(),
     checksumSha256: text('checksum_sha256').notNull(),
-    uploadedBy: uuid('uploaded_by')
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict' }),
+    /**
+     * Null when nobody uploaded it. A version that arrived through a document-exchange
+     * transport has no person behind it, and naming one would put a lie in the audit trail
+     * (plan этап 10). Every human upload still records its uploader.
+     */
+    uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'restrict' }),
     avStatus: text('av_status', { enum: AV_STATUSES }).notNull().default('pending'),
     // Populated by the worker's text-extract job (phase 1.3) for FTS; null until then.
     extractedText: text('extracted_text'),

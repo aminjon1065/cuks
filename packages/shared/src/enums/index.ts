@@ -301,6 +301,36 @@ export const MANUAL_DISPATCH_CHANNELS: readonly DispatchChannel[] = [
  * history. `failed` is terminal for the row — a retry is a NEW attempt, so a success never
  * overwrites the record of the failure that preceded it.
  */
+/**
+ * Where an inbound exchange message stands (plan этап 10).
+ *
+ * `received` — accepted from the transport, attachments stored, waiting on the antivirus.
+ * `quarantined` — the letter is fine but its REFERENCE DATA is not recognised: an unknown
+ *   correspondent or document type. A person decides, and until they do nothing is registered.
+ * `registered` — a document exists and carries the number.
+ * `rejected` — refused for good: an oversized or forbidden payload, or an infected file.
+ *
+ * There is deliberately no «error» state. Everything that goes wrong is either something a
+ * person can resolve (`quarantined`) or something that will never become right (`rejected`);
+ * a third bucket would only be a place for messages nobody owns.
+ */
+export const INBOUND_EXCHANGE_STATUSES = [
+  'received',
+  'quarantined',
+  'registered',
+  'rejected',
+] as const;
+export type InboundExchangeStatus = (typeof INBOUND_EXCHANGE_STATUSES)[number];
+
+/** Why a message is waiting for a person. Stable codes — they drive the review screen. */
+export const INBOUND_QUARANTINE_REASONS = [
+  'correspondent_unmatched',
+  'type_unmatched',
+  'attachment_infected',
+  'payload_rejected',
+] as const;
+export type InboundQuarantineReason = (typeof INBOUND_QUARANTINE_REASONS)[number];
+
 export const DISPATCH_STATUSES = ['pending', 'sent', 'failed', 'cancelled'] as const;
 export type DispatchStatus = (typeof DISPATCH_STATUSES)[number];
 

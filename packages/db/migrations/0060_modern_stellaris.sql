@@ -1,0 +1,1 @@
+ALTER TABLE "app"."file_versions" ALTER COLUMN "uploaded_by" DROP NOT NULL;

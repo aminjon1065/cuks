@@ -414,6 +414,20 @@
       "when": 1785580396524,
       "tag": "0058_tidy_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785581867153,
+      "tag": "0059_living_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785582087890,
+      "tag": "0060_modern_stellaris",
+      "breakpoints": true
     }
   ]
 }

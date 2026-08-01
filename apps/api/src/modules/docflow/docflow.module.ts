@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { QUEUE } from '@cuks/shared';
 import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
 import { DocflowController } from './docflow.controller';
@@ -31,6 +33,7 @@ import { DocumentViewsController } from './document-views.controller';
 import { DocumentViewsService } from './document-views.service';
 import { ExchangeRegistryService } from './exchange/exchange-registry.service';
 import { ExchangeSenderService } from './exchange/exchange-sender.service';
+import { ExchangeReceiverService } from './exchange/exchange-receiver.service';
 import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
@@ -59,7 +62,9 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
  * internal ЭЦП (CA, device certificates, signing and verification).
  */
 @Module({
-  imports: [AuthModule, EventsModule],
+  // The exchange receiver puts inbound attachments through the SAME antivirus queue as an
+  // ordinary upload — a second scanner would eventually give a second verdict.
+  imports: [AuthModule, EventsModule, BullModule.registerQueue({ name: QUEUE.avScan })],
   controllers: [
     DocflowController,
     DocumentsController,
@@ -96,6 +101,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     DocumentViewsService,
     ExchangeRegistryService,
     ExchangeSenderService,
+    ExchangeReceiverService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

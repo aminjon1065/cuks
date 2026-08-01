@@ -171,6 +171,26 @@ export class StorageService {
     return Buffer.from(bytes);
   }
 
+  /**
+   * Write bytes the SERVER already holds (plan этап 10 — an inbound exchange message).
+   *
+   * The ordinary upload path is presigned and browser-driven, which is right for a person
+   * with a file on their desk and wrong here: an exchange message arrives at the api, not at
+   * a browser, and minting a presigned URL for the api to call itself would only add a round
+   * trip and a URL that could leak. Callers must bound the size — this holds the whole object
+   * in memory, exactly like `getObjectBytes`.
+   */
+  async putObjectBytes(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+  }
+
   /** Used by the preview endpoint (1.3) — the worker may not have generated a
    *  given size yet, or the file may not be an image at all. */
   async objectExists(key: string): Promise<boolean> {

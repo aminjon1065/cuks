@@ -132,7 +132,8 @@ export interface FileVersionDto {
   size: number;
   mime: string;
   checksumSha256: string;
-  uploadedBy: string;
+  /** Null for a version that arrived through a transport rather than from a person. */
+  uploadedBy: string | null;
   avStatus: AvStatus;
   createdAt: string;
 }

@@ -1619,10 +1619,10 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 
 - [x] `DocumentExchangePort` с inbound/outbound contract.
 - [x] Adapter registry через конфигурацию.
-- [ ] Idempotent inbound external id.
+- [x] Idempotent inbound external id.
 - [x] Outbox, retries, exponential backoff, dead-letter management.
-- [ ] Payload size/type validation.
-- [ ] AV до регистрации входящего вложения.
+- [x] Payload size/type validation.
+- [x] AV до регистрации входящего вложения.
 - [ ] mTLS/service credentials из secret storage/environment.
 - [ ] Mapping external correspondent/type в quarantined review queue.
 - [ ] Admin health/status без показа секретов.

@@ -22,6 +22,8 @@ import {
   DISPOSITION_ITEM_DECISIONS,
   DISPOSITION_STATUSES,
   DOC_CLASSES,
+  INBOUND_EXCHANGE_STATUSES,
+  INBOUND_QUARANTINE_REASONS,
   DOCUMENT_COLLABORATOR_ROLES,
   DOCUMENT_CONFIDENTIALITY,
   DOCUMENT_DELIVERY,
@@ -1058,4 +1060,85 @@ export const archiveDispositionItems = appSchema.table(
     uniqueIndex('archive_disposition_items_pair_uq').on(t.batchId, t.documentId),
     index('archive_disposition_items_document_idx').on(t.documentId),
   ],
+);
+
+/**
+ * app.document_exchange_inbound — letters that arrived through an exchange adapter, before
+ * they are documents (plan этап 10).
+ *
+ * A message is NOT a document. It becomes one only after three things hold: the payload was
+ * acceptable, the antivirus cleared every attachment, and the reference data — who sent it,
+ * what kind of letter it is — was recognised or resolved by a person. Registering first and
+ * checking afterwards would put a number on something that may turn out to be an infected file
+ * from an unknown sender, and a registration number cannot be taken back.
+ *
+ * `(adapter_id, external_id)` is unique, which is the whole of «повторная доставка не создаёт
+ * дубликат»: a transport that redelivers — because it was restarted, or because the acknowledge
+ * did not reach it — inserts nothing the second time.
+ */
+export const documentExchangeInbound = appSchema.table(
+  'document_exchange_inbound',
+  {
+    id: primaryId(),
+    /** Which adapter delivered it; part of the identity, since two adapters may reuse an id. */
+    adapterId: text('adapter_id').notNull(),
+    /** The transport's own message id, as given. Never generated here — a generated one would
+     *  be different on every redelivery, which is precisely what must not happen. */
+    externalId: text('external_id').notNull(),
+    status: text('status', { enum: INBOUND_EXCHANGE_STATUSES }).notNull().default('received'),
+    subject: text('subject').notNull(),
+    summary: text('summary'),
+    /** The sender as the transport stated it — matched against correspondents, never trusted. */
+    senderName: text('sender_name'),
+    senderContact: text('sender_contact'),
+    /** The date on the letter, if the transport carried one; not the arrival time. */
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    /** Resolved correspondent, once matched or chosen by a reviewer. */
+    correspondentId: uuid('correspondent_id').references(() => correspondents.id, {
+      onDelete: 'set null',
+    }),
+    typeCode: text('type_code'),
+    /** Why a person is being asked. Null while nothing is waiting on one. */
+    quarantineReason: text('quarantine_reason', { enum: INBOUND_QUARANTINE_REASONS }),
+    /** Refusals keep their reason as free text: it is read by a human, not matched on. */
+    rejectedReason: text('rejected_reason'),
+    /** The registered document, once it exists. */
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // The idempotency guarantee. Not partial: both columns are NOT NULL, and a message
+    // without an external id is one we could not deduplicate and therefore will not accept.
+    uniqueIndex('document_exchange_inbound_external_uq').on(t.adapterId, t.externalId),
+    // The review queue, oldest first — the order a person works through it.
+    index('document_exchange_inbound_status_idx').on(t.status, t.receivedAt),
+  ],
+);
+
+/**
+ * app.document_exchange_attachments — the files that came with an inbound message.
+ *
+ * Stored as ordinary file versions from the moment they arrive, so the antivirus pipeline
+ * scans them exactly like an uploaded file: there is no second scanner and no second verdict.
+ * They are linked to the DOCUMENT only once the message is registered — an attachment on a
+ * message that never becomes a document must not be reachable through any document.
+ */
+export const documentExchangeAttachments = appSchema.table(
+  'document_exchange_attachments',
+  {
+    id: primaryId(),
+    inboundId: uuid('inbound_id')
+      .notNull()
+      .references(() => documentExchangeInbound.id, { onDelete: 'cascade' }),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => fsNodes.id, { onDelete: 'restrict' }),
+    fileName: text('file_name').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('document_exchange_attachments_inbound_idx').on(t.inboundId)],
 );
