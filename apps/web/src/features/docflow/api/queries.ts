@@ -224,7 +224,15 @@ export function useCorrespondentCategories(): UseQueryResult<CorrespondentCatego
 
 export const documentsKey = [...docflowKey, 'documents'] as const;
 
-function documentsPath(query: ListDocumentsQuery): string {
+/**
+ * The register list URL.
+ *
+ * Every filter the DTO accepts must appear here. A key present in `ListDocumentsQuery` and
+ * missing from this function is not a small omission: the screen goes on rendering the filter
+ * as applied — a chip, a preselected dropdown, a saved view — while the request behind it asks
+ * for the unfiltered register. Covered by a unit test that walks the DTO's own key list.
+ */
+export function documentsPath(query: ListDocumentsQuery): string {
   const params = new URLSearchParams();
   params.set('page', String(query.page));
   params.set('limit', String(query.limit));
@@ -234,6 +242,9 @@ function documentsPath(query: ListDocumentsQuery): string {
   if (query.journalId) params.set('journalId', query.journalId);
   if (query.search) params.set('search', query.search);
   if (query.year) params.set('year', String(query.year));
+  if (query.sort) params.set('sort', query.sort);
+  if (query.overdue) params.set('overdue', 'true');
+  if (query.awaitingDispatch) params.set('awaitingDispatch', 'true');
   return `/v1/docflow/documents?${params}`;
 }
 

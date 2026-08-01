@@ -198,3 +198,33 @@ test('register UI: filters live in the URL, show as chips and save as a view', a
   await page.getByRole('button', { name: 'Удалить', exact: true }).click();
   await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
 });
+
+test('register UI: a drill-down filter actually reaches the API', async ({ page }) => {
+  // The failure this guards against was assertive rather than silent: the chip said
+  // «Просрочено», the dropdown looked applied, and the request behind them asked for the
+  // whole register. A screen that states a filter it did not send is worse than one with no
+  // filter at all.
+  const listCalls: string[] = [];
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.pathname.endsWith('/docflow/documents')) listCalls.push(u.search);
+  });
+
+  await page.goto('/app/docs?queue=registry&overdue=true');
+  await expect(page.getByRole('main').getByRole('heading', { name: 'Кабинет ДОУ' })).toBeVisible();
+  await expect(page.getByText('Просрочено', { exact: true })).toBeVisible();
+  await expect
+    .poll(() => listCalls.some((s) => s.includes('overdue=true')), {
+      message: 'the register asked for the overdue filter',
+    })
+    .toBe(true);
+
+  listCalls.length = 0;
+  await page.goto('/app/docs?queue=registry&docClass=outgoing&awaitingDispatch=true');
+  await expect(page.getByText('Ожидают отправки', { exact: true })).toBeVisible();
+  await expect
+    .poll(() => listCalls.some((s) => s.includes('awaitingDispatch=true')), {
+      message: 'and for the awaiting-dispatch filter',
+    })
+    .toBe(true);
+});
