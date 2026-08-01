@@ -28,6 +28,7 @@ export const HEALTH_SERVICES = [
   'martin',
   'livekit',
   'clamav',
+  'docflow_exchange',
 ] as const;
 export type HealthServiceKey = (typeof HEALTH_SERVICES)[number];
 

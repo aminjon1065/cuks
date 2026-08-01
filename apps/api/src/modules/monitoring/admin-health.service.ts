@@ -18,6 +18,7 @@ import { ConfigService } from '../../config/config.service';
 import { StorageService } from '../../common/storage/storage.service';
 import { HealthService } from '../health/health.service';
 import { MetricsService } from './metrics.service';
+import { ExchangeRegistryService } from '../docflow/exchange/exchange-registry.service';
 import { QueueStatsService } from './queue-stats.service';
 
 const PROBE_TIMEOUT_MS = 2000;
@@ -41,6 +42,7 @@ export class AdminHealthService {
     private readonly health: HealthService,
     private readonly queues: QueueStatsService,
     private readonly metrics: MetricsService,
+    private readonly exchange: ExchangeRegistryService,
   ) {}
 
   async overview(): Promise<HealthOverview> {
@@ -70,11 +72,12 @@ export class AdminHealthService {
 
   private async probeServices(): Promise<ServiceStatus[]> {
     const core = await this.health.readiness(); // postgres, redis, minio
-    const [geoserver, martin, livekit, clamav] = await Promise.all([
+    const [geoserver, martin, livekit, clamav, docflowExchange] = await Promise.all([
       this.probeGeoserver(),
       this.probeMartin(),
       this.probeLivekit(),
       this.probeClamav(),
+      this.probeDocflowExchange(),
     ]);
     const map: Record<HealthServiceKey, ServiceStatus> = {
       postgres: { key: 'postgres', state: core.dependencies.postgres },
@@ -84,8 +87,26 @@ export class AdminHealthService {
       martin,
       livekit,
       clamav,
+      docflow_exchange: docflowExchange,
     };
     return HEALTH_SERVICES.map((k) => map[k]);
+  }
+
+  /**
+   * Document exchange (plan этап 10 «Admin health/status без показа секретов»).
+   *
+   * The probe is delegated to the adapter, which knows what «reachable» means for its own
+   * transport, and only a state crosses back — never a path, a host or a credential. Not
+   * configured is the SHIPPED state and reads as such: `not-configured` is excluded from the
+   * overall status, so an installation with no transport is not permanently «unhealthy».
+   */
+  private async probeDocflowExchange(): Promise<ServiceStatus> {
+    if (!this.exchange.isConfigured) {
+      return { key: 'docflow_exchange', state: 'down', note: 'not-configured' };
+    }
+    const statuses = await this.exchange.status();
+    const allReachable = statuses.every((s) => s.reachable);
+    return { key: 'docflow_exchange', state: allReachable ? 'up' : 'down' };
   }
 
   private async probeGeoserver(): Promise<ServiceStatus> {

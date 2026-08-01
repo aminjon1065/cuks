@@ -30,9 +30,18 @@
       "twofa": "2ФА",
       "lastLogin": "Вход"
     },
-    "status": { "active": "Активен", "blocked": "Заблокирован" },
-    "twofa": { "on": "Вкл", "off": "Выкл" },
-    "empty": { "title": "Нет пользователей", "description": "Добавьте первого сотрудника." },
+    "status": {
+      "active": "Активен",
+      "blocked": "Заблокирован"
+    },
+    "twofa": {
+      "on": "Вкл",
+      "off": "Выкл"
+    },
+    "empty": {
+      "title": "Нет пользователей",
+      "description": "Добавьте первого сотрудника."
+    },
     "neverLoggedIn": "Не входил",
     "create_form": {
       "title": "Новый пользователь",
@@ -86,8 +95,16 @@
     "create": "Создать роль",
     "system": "Системная",
     "custom": "Пользовательская",
-    "columns": { "name": "Роль", "code": "Код", "type": "Тип", "permissions": "Прав" },
-    "empty": { "title": "Нет ролей", "description": "Создайте первую роль." },
+    "columns": {
+      "name": "Роль",
+      "code": "Код",
+      "type": "Тип",
+      "permissions": "Прав"
+    },
+    "empty": {
+      "title": "Нет ролей",
+      "description": "Создайте первую роль."
+    },
     "editor": {
       "titleNew": "Новая роль",
       "titleEdit": "Роль",
@@ -98,7 +115,10 @@
       "systemReadonly": "Системная роль — только просмотр. Скопируйте как основу для своей.",
       "copyAsBase": "Скопировать как основу"
     },
-    "confirm": { "deleteTitle": "Удалить роль?", "deleteBody": "Роль будет удалена." }
+    "confirm": {
+      "deleteTitle": "Удалить роль?",
+      "deleteBody": "Роль будет удалена."
+    }
   },
   "org": {
     "title": "Оргструктура",
@@ -107,7 +127,10 @@
     "addChild": "Добавить дочернее",
     "addPosition": "Добавить должность",
     "employees": "сотр.",
-    "empty": { "title": "Структура пуста", "description": "Добавьте первое подразделение." },
+    "empty": {
+      "title": "Структура пуста",
+      "description": "Добавьте первое подразделение."
+    },
     "unit": {
       "title": "Подразделение",
       "titleNew": "Новое подразделение",
@@ -155,7 +178,10 @@
       "to": "По"
     },
     "system": "система",
-    "empty": { "title": "Нет событий", "description": "События появятся по мере работы." },
+    "empty": {
+      "title": "Нет событий",
+      "description": "События появятся по мере работы."
+    },
     "detail": {
       "title": "Событие аудита",
       "action": "Действие",
@@ -177,7 +203,9 @@
       "degraded": "Есть проблемы",
       "down": "Недоступно"
     },
-    "services": { "title": "Сервисы" },
+    "services": {
+      "title": "Сервисы"
+    },
     "service": {
       "postgres": "PostgreSQL",
       "redis": "Redis",
@@ -185,7 +213,8 @@
       "geoserver": "GeoServer",
       "martin": "Тайлы (Martin)",
       "livekit": "Звонки (LiveKit)",
-      "clamav": "Антивирус (ClamAV)"
+      "clamav": "Антивирус (ClamAV)",
+      "docflow_exchange": "Обмен документами"
     },
     "serviceState": {
       "up": "Работает",

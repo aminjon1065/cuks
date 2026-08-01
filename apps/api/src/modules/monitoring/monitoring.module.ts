@@ -6,6 +6,7 @@ import { AdminHealthService } from './admin-health.service';
 import { MetricsService } from './metrics.service';
 import { MonitoringAlertController } from './monitoring-alert.controller';
 import { MonitoringAlertService } from './monitoring-alert.service';
+import { ExchangeRegistryService } from '../docflow/exchange/exchange-registry.service';
 import { QueueStatsService } from './queue-stats.service';
 
 /**
@@ -16,7 +17,15 @@ import { QueueStatsService } from './queue-stats.service';
 @Module({
   imports: [HealthModule, EventsModule],
   controllers: [AdminHealthController, MonitoringAlertController],
-  providers: [AdminHealthService, QueueStatsService, MetricsService, MonitoringAlertService],
+  providers: [
+    AdminHealthService,
+    QueueStatsService,
+    MetricsService,
+    MonitoringAlertService,
+    // Provided rather than imported from DocflowModule: it reads only configuration, and
+    // importing the whole docflow module into monitoring would close a dependency cycle.
+    ExchangeRegistryService,
+  ],
   exports: [MetricsService],
 })
 export class MonitoringModule {}

@@ -213,7 +213,8 @@
       "geoserver": "GeoServer",
       "martin": "Тайлҳо (Martin)",
       "livekit": "Зангҳо (LiveKit)",
-      "clamav": "Антивирус (ClamAV)"
+      "clamav": "Антивирус (ClamAV)",
+      "docflow_exchange": "Обмен документами"
     },
     "serviceState": {
       "up": "Кор мекунад",
