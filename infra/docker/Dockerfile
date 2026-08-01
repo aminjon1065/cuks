@@ -48,6 +48,8 @@ RUN apk add --no-cache restic postgresql17-client bash coreutils findutils tzdat
 ENV TZ=Asia/Dushanbe \
     RESTIC_REPOSITORY=/repo \
     BACKUP_STAGE_DIR=/staging
-COPY infra/scripts/backup.sh infra/scripts/restore.sh infra/scripts/backup-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/restore.sh /usr/local/bin/backup-entrypoint.sh
+COPY infra/scripts/backup.sh infra/scripts/restore.sh infra/scripts/restore-verify.sh \
+     infra/scripts/backup-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/backup.sh /usr/local/bin/restore.sh \
+      /usr/local/bin/restore-verify.sh /usr/local/bin/backup-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/backup-entrypoint.sh"]
