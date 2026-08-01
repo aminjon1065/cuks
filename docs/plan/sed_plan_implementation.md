@@ -1411,7 +1411,10 @@ Backend:
 - [x] регистрация только после обязательной подписи, если тип её требует;
 - [x] dispatch state machine;
 - [x] ручные каналы полностью;
-- [x] adapter interface для email/integration без внешней зависимости;
+- [x] adapter interface для email/integration без внешней зависимости; — **поправка (этап 10)**:
+  на этапе 6 «интерфейсом» был приватный массив каналов и `registerAdapter`, которого никто не
+  вызывал, то есть `email`/`integration` отказывались безусловно, а не «до настройки».
+  Настоящий `DocumentExchangePort` появился на этапе 10.
 - [x] успешная отправка и completion policy.
 
 Frontend:
@@ -1614,8 +1617,8 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 
 Не подключать внешний сервис по умолчанию. Реализовать порт и локальные adapters.
 
-- [ ] `DocumentExchangePort` с inbound/outbound contract.
-- [ ] Adapter registry через конфигурацию.
+- [x] `DocumentExchangePort` с inbound/outbound contract.
+- [x] Adapter registry через конфигурацию.
 - [ ] Idempotent inbound external id.
 - [ ] Outbox, retries, exponential backoff, dead-letter management.
 - [ ] Payload size/type validation.

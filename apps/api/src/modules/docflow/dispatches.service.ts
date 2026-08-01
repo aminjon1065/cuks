@@ -35,6 +35,7 @@ import {
 } from './dispatch-policy';
 import { assertNoOpenObligations, DocumentsService } from './documents.service';
 import { hasChancelleryRights } from './document-visibility';
+import { ExchangeRegistryService } from './exchange/exchange-registry.service';
 
 /** Title given to the scan the chancellery attaches when confirming a send. */
 const RECEIPT_TITLE = 'Квитанция об отправке';
@@ -52,13 +53,14 @@ const RECEIPT_TITLE = 'Квитанция об отправке';
 @Injectable()
 export class DispatchesService {
   /**
-   * Channels with a working local adapter. Empty by design: CUKS reaches no external
-   * service, and an email/integration send only becomes possible when a locally configured
-   * adapter registers itself here (docs/02 §1, plan этап 6 «adapter interface без внешней
-   * зависимости»). Until then those channels are refused up front rather than accepted and
-   * never sent.
+   * Which channels have a transport is asked of the registry, which builds adapters from the
+   * environment at boot (plan этап 10). Until stage 10 this was a private array with a
+   * `registerAdapter` nobody ever called — an interface in the comments only, so `email` and
+   * `integration` were refused unconditionally rather than «until configured».
    */
-  private readonly adapters: DispatchChannel[] = [];
+  private get adapters(): DispatchChannel[] {
+    return this.exchange.configuredChannels;
+  }
 
   constructor(
     @Inject(DB) private readonly db: Database,
@@ -66,12 +68,8 @@ export class DispatchesService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly realtime: RealtimeService,
+    private readonly exchange: ExchangeRegistryService,
   ) {}
-
-  /** Register a locally configured send adapter (see the field comment). */
-  registerAdapter(channel: DispatchChannel): void {
-    if (!this.adapters.includes(channel)) this.adapters.push(channel);
-  }
 
   private emitUpdated(
     documentId: string,

@@ -79,6 +79,20 @@ export const envSchema = z
     MONITORING_WEBHOOK_SECRET: optionalString(),
     MONITORING_ALERT_CHANNEL_ID: optionalString(),
 
+    /**
+     * Document exchange (plan этап 10). Unset by default and that is the shipped state: CUKS
+     * reaches no external service, and a machine dispatch channel stays refused up front
+     * rather than accepted and never sent. Setting the directory turns on the reference
+     * adapter — a watched folder on this same server, no network involved.
+     */
+    DOCFLOW_EXCHANGE_DIR: optionalString(),
+    /** Cap on one exchanged attachment. A transport folder is not a bulk file transfer. */
+    DOCFLOW_EXCHANGE_MAX_ATTACHMENT_MB: z.coerce.number().int().min(1).max(512).default(50),
+    /** How often the inbound poller looks in the folder, in seconds. */
+    DOCFLOW_EXCHANGE_POLL_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+    /** How many delivery attempts before an outgoing message is dead-lettered for an operator. */
+    DOCFLOW_EXCHANGE_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+
     // Later phases — optional for now.
     SMTP_URL: optionalString(),
     LIVEKIT_URL: optionalString(),

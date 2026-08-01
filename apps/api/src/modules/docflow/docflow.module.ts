@@ -29,6 +29,7 @@ import { AttentionService } from './attention.service';
 import { RegisterReportsService } from './register-reports.service';
 import { DocumentViewsController } from './document-views.controller';
 import { DocumentViewsService } from './document-views.service';
+import { ExchangeRegistryService } from './exchange/exchange-registry.service';
 import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
@@ -92,6 +93,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     AttentionService,
     RegisterReportsService,
     DocumentViewsService,
+    ExchangeRegistryService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,
