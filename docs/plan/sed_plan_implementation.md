@@ -1624,7 +1624,7 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 - [x] Payload size/type validation.
 - [x] AV до регистрации входящего вложения.
 - [ ] mTLS/service credentials из secret storage/environment.
-- [ ] Mapping external correspondent/type в quarantined review queue.
+- [x] Mapping external correspondent/type в quarantined review queue.
 - [x] Admin health/status без показа секретов.
 - [x] Полный audit exchange. — `docflow.exchange.received/rejected/sent/retry_scheduled/dead_lettered`; во всех — идентификаторы и коды, ни адреса, ни настройки транспорта.
 
@@ -1651,9 +1651,6 @@ Commit: `feat(docflow): add secure full text search and dashboard`.
 
 Открыто на конец сессии (честно):
 
-- **Экран разбора карантина** — таблица, статусы и правила допуска готовы и покрыты тестами,
-  но эндпоинта «выбрать корреспондента и зарегистрировать» и экрана пока нет: сообщение
-  доходит до `received`/`quarantined` и там ждёт.
 - **mTLS/service credentials из secret storage** — клиентских сертификатов нет нигде, vault в
   стеке отсутствует, а транспорта, который их потребует, заказчик не назвал. Строить хранилище
   секретов под гипотетический транспорт — значит выдумать и требование, и решение.

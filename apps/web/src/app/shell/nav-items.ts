@@ -7,6 +7,7 @@ import {
   CalendarClock,
   FileText,
   FolderClosed,
+  Inbox,
   LayoutDashboard,
   ListTodo,
   Map,
@@ -68,6 +69,12 @@ export const ADMIN_NAV: NavItem[] = [
     path: '/app/docs/control',
     icon: AlarmClock,
     permission: 'docflow.control',
+  },
+  {
+    key: 'docflowExchange',
+    path: '/app/docs/exchange',
+    icon: Inbox,
+    permission: 'docflow.register',
   },
   {
     key: 'docflowArchive',

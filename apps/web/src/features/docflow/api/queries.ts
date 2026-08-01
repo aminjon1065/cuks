@@ -7,6 +7,10 @@ import type {
   RegisterReportDto,
   RegisterReportQuery,
   DocumentViewDto,
+  InboundExchangeDto,
+  InboundExchangeQuery,
+  RegisterInboundExchangeInput,
+  RejectInboundExchangeInput,
   SaveDocumentViewInput,
   UpdateDocumentViewInput,
   ActivateCertificateInput,
@@ -1352,5 +1356,50 @@ export function useDeleteDocumentView() {
   return useMutation({
     mutationFn: (id: string) => api.delete<void>(`/v1/docflow/views/${id}`),
     onSuccess: () => void qc.invalidateQueries({ queryKey: documentViewsKey }),
+  });
+}
+
+// ---- Inbound exchange review queue (plan этап 10) --------------------------
+
+export const inboundExchangeKey = [...docflowKey, 'exchange', 'inbound'] as const;
+
+export function useInboundExchange(
+  query: InboundExchangeQuery,
+): UseQueryResult<PaginatedResult<InboundExchangeDto>> {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    limit: String(query.limit),
+    ...(query.status ? { status: query.status } : {}),
+  });
+  return useQuery({
+    queryKey: [...inboundExchangeKey, query.status ?? 'open', query.page, query.limit],
+    queryFn: () =>
+      api.get<PaginatedResult<InboundExchangeDto>>(
+        `/v1/docflow/exchange/inbound?${params.toString()}`,
+      ),
+    // A message waiting on the antivirus becomes registrable without anybody touching the
+    // screen, so the queue refetches on its own rather than looking stuck.
+    refetchInterval: 30 * 1000,
+  });
+}
+
+export function useRegisterInboundExchange() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RegisterInboundExchangeInput }) =>
+      api.post<InboundExchangeDto>(`/v1/docflow/exchange/inbound/${id}/actions/register`, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: inboundExchangeKey });
+      void qc.invalidateQueries({ queryKey: documentsKey });
+    },
+  });
+}
+
+export function useRejectInboundExchange() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RejectInboundExchangeInput }) =>
+      api.post<InboundExchangeDto>(`/v1/docflow/exchange/inbound/${id}/actions/reject`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: inboundExchangeKey }),
   });
 }

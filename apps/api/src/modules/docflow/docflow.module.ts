@@ -34,6 +34,8 @@ import { DocumentViewsService } from './document-views.service';
 import { ExchangeRegistryService } from './exchange/exchange-registry.service';
 import { ExchangeSenderService } from './exchange/exchange-sender.service';
 import { ExchangeReceiverService } from './exchange/exchange-receiver.service';
+import { InboundReviewController } from './exchange/inbound-review.controller';
+import { InboundReviewService } from './exchange/inbound-review.service';
 import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
@@ -77,6 +79,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ArchiveController,
     DocumentSearchController,
     DocumentViewsController,
+    InboundReviewController,
     SignaturesController,
     AcknowledgementsController,
     DocumentLinksController,
@@ -102,6 +105,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     ExchangeRegistryService,
     ExchangeSenderService,
     ExchangeReceiverService,
+    InboundReviewService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

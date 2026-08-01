@@ -23,7 +23,8 @@
     "docflowJournals": "Журналы",
     "docflowReports": "Отчёты",
     "docflowSubstitutions": "Замещения",
-    "docflowSettings": "Настройки ДОУ"
+    "docflowSettings": "Настройки ДОУ",
+    "docflowExchange": "Обмен"
   },
   "sidebar": {
     "collapse": "Свернуть меню",

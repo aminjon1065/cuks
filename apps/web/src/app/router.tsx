@@ -24,6 +24,7 @@ import { DocumentCardPage } from '@/features/docflow/pages/DocumentCardPage';
 import { VerifyPage } from '@/features/docflow/pages/VerifyPage';
 import { ArchivePage } from '@/features/docflow/pages/ArchivePage';
 import { SearchPage } from '@/features/docflow/pages/SearchPage';
+import { ExchangeInboxPage } from '@/features/docflow/pages/ExchangeInboxPage';
 import { JournalsRegisterPage } from '@/features/docflow/pages/JournalsRegisterPage';
 import { ControlPage } from '@/features/docflow/pages/ControlPage';
 import { ReportsPage as DocflowReportsPage } from '@/features/docflow/pages/ReportsPage';
@@ -153,6 +154,7 @@ export const router = createBrowserRouter([
       { path: 'docs/substitutions', element: <SubstitutionsPage /> },
       { path: 'docs/archive', element: <ArchivePage /> },
       { path: 'docs/search', element: <SearchPage /> },
+      { path: 'docs/exchange', element: <ExchangeInboxPage /> },
       { path: 'docs/journals', element: <JournalsRegisterPage /> },
       { path: 'docs/settings', element: <DocflowSettingsPage /> },
       { path: 'docs/:id', element: <DocumentCardPage /> },

@@ -9,6 +9,7 @@ import {
   DOCUMENT_FILE_KINDS,
   DOCUMENT_LINK_KINDS,
   DOCUMENT_STATUSES,
+  INBOUND_EXCHANGE_STATUSES,
   JOURNAL_SEQ_RESETS,
   ROUTE_ASSIGNEE_TYPES,
   DOCUMENT_COLLABORATOR_ROLES,
@@ -30,6 +31,8 @@ import {
   type DispositionItemDecision,
   type DispositionStatus,
   type DocumentStatus,
+  type InboundExchangeStatus,
+  type InboundQuarantineReason,
   type JournalSeqReset,
   RESOLUTION_ACTION_KINDS,
   type ResolutionActionKind,
@@ -531,6 +534,73 @@ export interface QuickSearchHitDto {
   docClass: DocClass;
   status: DocumentStatus;
 }
+
+// --- Inbound exchange review queue (plan этап 10) ---
+
+export const inboundExchangeQuerySchema = z.object({
+  /** Omitted means «всё, что ещё не разобрано» — the queue's own default view. */
+  status: z.enum(INBOUND_EXCHANGE_STATUSES).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type InboundExchangeQuery = z.infer<typeof inboundExchangeQuerySchema>;
+
+export interface InboundExchangeAttachmentDto {
+  fileId: string;
+  fileName: string;
+  /** The scanner's verdict. `pending` is why a message may be waiting on nobody. */
+  avStatus: AvStatus | null;
+}
+
+export interface InboundExchangeDto {
+  id: string;
+  adapterId: string;
+  externalId: string;
+  status: InboundExchangeStatus;
+  subject: string;
+  summary: string | null;
+  senderName: string | null;
+  senderContact: string | null;
+  sentAt: string | null;
+  receivedAt: string;
+  /** Matched or chosen; null is exactly what a reviewer is being asked to fix. */
+  correspondentId: string | null;
+  correspondentName: string | null;
+  typeCode: string | null;
+  quarantineReason: InboundQuarantineReason | null;
+  rejectedReason: string | null;
+  /** The registered document, once it exists. */
+  documentId: string | null;
+  documentRegNumber: string | null;
+  attachments: InboundExchangeAttachmentDto[];
+  /** Whether this message could be registered right now, as the server sees it. */
+  canRegister: boolean;
+  /** Why not, when it cannot — the same codes the queue filters on. */
+  blockedBy: InboundQuarantineReason | 'scan_pending' | null;
+}
+
+/**
+ * What a reviewer supplies to turn a message into a document. Everything else — the number,
+ * the date, the audit entry — comes from the ordinary registration command, so an exchanged
+ * letter is registered exactly like one brought in on paper.
+ */
+export const registerInboundExchangeSchema = z.object({
+  journalId: z.string().uuid(),
+  typeCode: z.string().min(1).max(64),
+  correspondentId: z.string().uuid(),
+  /** Editable: the transport's subject line is often a file name, not a subject. */
+  subject: z.string().min(1).max(500).optional(),
+  confidentiality: z.enum(DOCUMENT_CONFIDENTIALITY).default('normal'),
+  dueDate: z.string().datetime().nullish(),
+  caseIndex: z.string().max(32).nullish(),
+});
+export type RegisterInboundExchangeInput = z.infer<typeof registerInboundExchangeSchema>;
+
+export const rejectInboundExchangeSchema = z.object({
+  /** Mandatory: a refusal nobody can explain is one nobody can review. */
+  reason: z.string().trim().min(1).max(500),
+});
+export type RejectInboundExchangeInput = z.infer<typeof rejectInboundExchangeSchema>;
 
 // --- Saved register views (plan этап 9 «saved searches либо интеграция с общими saved views») ---
 
