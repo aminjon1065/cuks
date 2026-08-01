@@ -86,7 +86,7 @@ export function RegisterWizard({ onClose }: { onClose: () => void }): React.JSX.
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent closeLabel={t('common.close')} className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('register.wizard.title')}</DialogTitle>
         </DialogHeader>

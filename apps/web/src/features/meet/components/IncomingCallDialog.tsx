@@ -55,7 +55,7 @@ export function IncomingCallDialog(): React.JSX.Element | null {
 
   return (
     <Dialog open onOpenChange={(open) => !open && decline()}>
-      <DialogContent className="max-w-xs">
+      <DialogContent closeLabel={t('common:actions.close')} className="max-w-xs">
         <div className="flex flex-col items-center gap-4 py-2 text-center">
           <div className="flex size-14 items-center justify-center rounded-full bg-primary/15 text-primary">
             <Icon className="size-6" />

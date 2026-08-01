@@ -59,7 +59,7 @@ export function NewDmDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('dm.title')}</DialogTitle>
         </DialogHeader>

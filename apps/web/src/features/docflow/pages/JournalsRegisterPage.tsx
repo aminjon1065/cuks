@@ -143,6 +143,11 @@ export function JournalsRegisterPage(): React.JSX.Element {
       </div>
 
       <DataTable
+        labels={{
+          table: t('register.journals.title'),
+          previousPage: t('common.prevPage'),
+          nextPage: t('common.nextPage'),
+        }}
         columns={columns}
         data={list.data?.items ?? []}
         loading={list.isLoading}

@@ -28,7 +28,7 @@ export function CatalogDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('catalog.title')}</DialogTitle>
         </DialogHeader>

@@ -88,7 +88,7 @@ export function ShareDialog({ node, onClose }: ShareDialogProps): React.JSX.Elem
 
   return (
     <Dialog open={!!node} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent closeLabel={t('common:actions.close')} className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('share.title', { name: node?.name ?? '' })}</DialogTitle>
         </DialogHeader>

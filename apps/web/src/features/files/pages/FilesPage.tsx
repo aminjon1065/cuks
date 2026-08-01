@@ -648,7 +648,7 @@ function RenameDialog({
   const [name, setName] = useState(node?.name ?? '');
   return (
     <Dialog open={!!node} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('row.rename')}</DialogTitle>
         </DialogHeader>

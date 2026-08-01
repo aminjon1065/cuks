@@ -71,7 +71,7 @@ export function ScheduleMeetingDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent closeLabel={t('common:actions.close')} className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{meeting ? t('schedule.editTitle') : t('schedule.title')}</DialogTitle>
         </DialogHeader>

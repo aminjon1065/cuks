@@ -132,7 +132,7 @@ export function RouteBuilderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent closeLabel={t('common.close')} className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t('route.builder.title')}</DialogTitle>
         </DialogHeader>

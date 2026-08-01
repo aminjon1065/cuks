@@ -148,7 +148,7 @@ function RejectDialog({
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent onClick={(e) => e.stopPropagation()}>
+      <DialogContent closeLabel={t('common.close')} onClick={(e) => e.stopPropagation()}>
         <DialogHeader>
           <DialogTitle>{t('route.rejectTitle')}</DialogTitle>
         </DialogHeader>

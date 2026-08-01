@@ -122,7 +122,7 @@ function CreateDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('projects.create')}</DialogTitle>
         </DialogHeader>

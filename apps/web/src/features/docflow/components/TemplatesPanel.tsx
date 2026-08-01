@@ -224,7 +224,7 @@ function VersionPreview({ version }: { version: DocumentTemplateVersionDto }): R
       </Button>
       {open ? (
         <Dialog open onOpenChange={(o) => !o && setOpen(false)}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent closeLabel={t('common.close')} className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>
                 {t('templates.admin.versionTitle', { version: version.version })}
@@ -256,7 +256,7 @@ function ComposeVersionDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent closeLabel={t('common.close')} className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t('templates.admin.newVersionTitle', { name: template.name })}</DialogTitle>
         </DialogHeader>

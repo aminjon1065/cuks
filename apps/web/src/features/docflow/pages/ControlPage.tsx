@@ -100,6 +100,11 @@ export function ControlPage(): React.JSX.Element {
       <PageHeader title={t('control.title')} description={t('control.subtitle')} />
 
       <DataTable
+        labels={{
+          table: t('control.title'),
+          previousPage: t('common.prevPage'),
+          nextPage: t('common.nextPage'),
+        }}
         columns={columns}
         data={list.data ?? []}
         loading={list.isLoading}

@@ -165,5 +165,7 @@
     "loadError": "Боркунии корти ҲФ муяссар нашуд",
     "openChatChannel": "Канали ҲФ",
     "openChatChannelFailed": "Кушодани канал муяссар нашуд"
-  }
+  },
+  "prevPage": "Саҳифаи қаблӣ",
+  "nextPage": "Саҳифаи навбатӣ"
 }

@@ -462,6 +462,11 @@ export function IncidentsPage(): React.JSX.Element {
 
       <div className="rounded-lg border border-border bg-surface">
         <DataTable
+          labels={{
+            table: t('title'),
+            previousPage: t('prevPage'),
+            nextPage: t('nextPage'),
+          }}
           columns={columns}
           data={list.data?.items ?? []}
           loading={list.isLoading}

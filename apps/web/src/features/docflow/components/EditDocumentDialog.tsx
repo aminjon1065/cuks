@@ -107,7 +107,7 @@ export function EditDocumentDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent closeLabel={t('common.close')} className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('documents.edit.title')}</DialogTitle>
         </DialogHeader>

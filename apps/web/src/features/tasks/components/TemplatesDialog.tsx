@@ -53,7 +53,7 @@ export function TemplatesDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('templates.title')}</DialogTitle>
         </DialogHeader>

@@ -70,7 +70,7 @@ export function MoveDialog({
 
   return (
     <Dialog open={!!node} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent closeLabel={t('common:actions.close')}>
         <DialogHeader>
           <DialogTitle>{t('moveDialog.title', { name: node?.name ?? '' })}</DialogTitle>
         </DialogHeader>

@@ -109,7 +109,7 @@ export function ProposalDialog(props: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent closeLabel={t('common.close')} className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editing ? t('proposals.form.editTitle') : t('proposals.form.createTitle')}

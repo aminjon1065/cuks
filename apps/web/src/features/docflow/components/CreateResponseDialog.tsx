@@ -71,7 +71,7 @@ export function CreateResponseDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent closeLabel={t('common.close')} className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('response.title')}</DialogTitle>
         </DialogHeader>
