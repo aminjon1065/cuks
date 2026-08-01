@@ -58,6 +58,13 @@ restic forget --keep-daily "${KEEP_DAILY}" --keep-monthly "${KEEP_MONTHLY}" --pr
 # 5. Drop the staged dump — it now lives (encrypted) in the repo.
 rm -rf "${STAGE}/pg"
 
+# 5b. The snapshot size, for the admin dashboard. `size_bytes` has been in the schema and on
+#     the health screen since 0044 and nothing ever wrote it, so the panel showed a blank where
+#     «сколько занимает последний бэкап» belongs. Best-effort: a stats call that fails must not
+#     fail a backup that already succeeded.
+SNAP_BYTES="$(restic stats --mode raw-data --json "${SNAP_ID}" 2>/dev/null \
+  | grep -o '"total_size":[0-9]*' | head -n1 | cut -d: -f2)"
+
 # 6. Cheap integrity check: verify structure + read a 5% sample of pack data.
 log "restic check"
 restic check --read-data-subset=1/20
@@ -67,7 +74,7 @@ restic check --read-data-subset=1/20
 UUID="$(cat /proc/sys/kernel/random/uuid)"
 if PGPASSWORD="${POSTGRES_PASSWORD}" psql -h "${PG_HOST}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   -v ON_ERROR_STOP=1 -qtAc \
-  "INSERT INTO app.backup_runs (id, snapshot_id) VALUES ('${UUID}', NULLIF('${SNAP_ID}', ''));" \
+  "INSERT INTO app.backup_runs (id, snapshot_id, size_bytes) VALUES ('${UUID}', NULLIF('${SNAP_ID}', ''), NULLIF('${SNAP_BYTES}', '')::bigint);" \
   >/dev/null 2>&1; then
   log "recorded backup marker (snapshot ${SNAP_ID:-unknown})"
 else

@@ -38,11 +38,18 @@ PGPASSWORD="${POSTGRES_PASSWORD}" pg_restore -h "${PG_HOST}" -U "${POSTGRES_USER
   --clean --if-exists --no-owner --no-privileges "${DUMP}"
 
 # 3. Volumes: copy files back where the target is mounted read-write.
+#
+# A volume that is IN the snapshot but cannot be written is a FAILED restore, not a skipped
+# one: the database comes back referencing file versions whose bytes never returned, and the
+# CA key stays lost. That used to print «skip …» and then «restore complete», so running the
+# wrong command produced a broken system that reported success. Counted and fatal now.
+UNWRITABLE=0
 restore_volume() {
   local name="$1" src="${RESTORE_DIR}/data/$1" dst="/data/$1"
-  [ -d "${src}" ] || { log "skip ${name} (not in snapshot)"; return 0; }
+  [ -d "${src}" ] || { log "skip ${name} (not in snapshot — nothing to restore)"; return 0; }
   if [ ! -d "${dst}" ] || [ ! -w "${dst}" ]; then
-    log "skip ${name} — ${dst} is not writable (mount it :rw to restore, see runbook)"
+    log "FAILED ${name} — ${dst} is not writable (mount it :rw to restore, see runbook)"
+    UNWRITABLE=$((UNWRITABLE + 1))
     return 0
   fi
   log "restoring ${name} -> ${dst}"
@@ -52,5 +59,12 @@ restore_volume minio
 restore_volume geoserver
 restore_volume ca
 restore_volume caddy
+
+if [ "${UNWRITABLE}" -gt 0 ]; then
+  log "RESTORE INCOMPLETE: ${UNWRITABLE} volume(s) were in the snapshot but could not be written."
+  log "The database was restored and now references files that are NOT back. Re-run with the"
+  log "volumes mounted read-write before starting the stack (runbook §Восстановление)."
+  exit 1
+fi
 
 log "restore complete — start the full stack and run the smoke checks (runbook §Проверка)"
