@@ -960,6 +960,23 @@ export const documentDispatches = appSchema.table(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     failureCode: text('failure_code'),
     failureMessage: text('failure_message'),
+    /**
+     * Machine delivery (plan этап 10). The dispatch row IS the outbox entry: a pending machine
+     * attempt with `next_attempt_at <= now()` is exactly «что осталось отправить». A separate
+     * outbox table would be a second place where the same fact lives, and the two would
+     * eventually disagree about whether a letter went out.
+     */
+    adapterId: text('adapter_id'),
+    /** Which delivery attempt this is, counting from the first — 1 for a manual record. */
+    attemptNo: integer('attempt_no').notNull().default(1),
+    /** The attempt this one retries. The lineage the plan asks for, instead of audit meta. */
+    retryOf: uuid('retry_of').references((): AnyPgColumn => documentDispatches.id, {
+      onDelete: 'set null',
+    }),
+    /** When the sender may try again. Null means «not scheduled» — manual, or already settled. */
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
+    /** Set when the attempts ran out: the operator owns it now, the machine has stopped. */
+    deadLetteredAt: timestamp('dead_lettered_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     confirmedBy: uuid('confirmed_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
@@ -969,6 +986,20 @@ export const documentDispatches = appSchema.table(
   (t) => [
     index('document_dispatches_document_idx').on(t.documentId, t.createdAt.desc()),
     index('document_dispatches_status_idx').on(t.status, t.attemptedAt),
+    // The sender's own query: what is due, oldest first. Partial, because everything settled
+    // — the overwhelming majority of the table — is not due and never will be.
+    index('document_dispatches_due_idx')
+      .on(t.nextAttemptAt)
+      .where(sql`${t.nextAttemptAt} is not null and ${t.status} = 'pending'`),
+    // The dead-letter list an operator works through.
+    index('document_dispatches_dead_letter_idx')
+      .on(t.deadLetteredAt.desc())
+      .where(sql`${t.deadLetteredAt} is not null`),
+    // An adapter's own reference is unique within that adapter when it gives one, so a
+    // redelivered receipt cannot create a second record of the same send (plan §6.8).
+    uniqueIndex('document_dispatches_adapter_reference_uq')
+      .on(t.adapterId, t.externalReference)
+      .where(sql`${t.adapterId} is not null and ${t.externalReference} is not null`),
   ],
 );
 

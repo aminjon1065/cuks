@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { documentFiles, fileVersions, fsNodes, type Database } from '@cuks/db';
 import {
   DOCFLOW_FILES_ROOT_NAME,
@@ -161,6 +161,50 @@ export class DocflowFilesService {
     private readonly audit: AuditService,
     private readonly readLog: ReadLogService,
   ) {}
+
+  /**
+   * The document current files as BYTES, for a machine channel to send (plan этап 10).
+   *
+   * No `AuthUser`: this runs for the sender, which has no session. Access is not the question
+   * here — the document was already approved for dispatch by a person with chancellery rights
+   * — but SAFETY is: every version goes through `assertVersionServable`, so an unscanned or
+   * infected attachment refuses to leave the building. A letter sent without its body would be
+   * worse than one not sent, so the refusal is an exception the caller turns into a permanent
+   * failure rather than a silent omission.
+   */
+  async resolveOutboundAttachments(
+    documentId: string,
+  ): Promise<{ fileName: string; contentType: string; body: Buffer }[]> {
+    const rows = await this.db
+      .select({
+        name: fsNodes.name,
+        mime: fileVersions.mime,
+        storageKey: fileVersions.storageKey,
+        avStatus: fileVersions.avStatus,
+      })
+      .from(documentFiles)
+      .innerJoin(fsNodes, eq(fsNodes.id, documentFiles.fileId))
+      .leftJoin(fileVersions, eq(fileVersions.id, fsNodes.currentVersionId))
+      .where(and(eq(documentFiles.documentId, documentId), eq(documentFiles.isCurrent, true)))
+      .orderBy(asc(documentFiles.createdAt));
+
+    const out = [];
+    for (const row of rows) {
+      assertVersionServable(row.avStatus);
+      if (!row.storageKey) {
+        throw AppException.unprocessable(
+          'docflow.file.not_ready',
+          'The attachment has no stored body yet',
+        );
+      }
+      out.push({
+        fileName: row.name,
+        contentType: row.mime ?? 'application/octet-stream',
+        body: await this.storage.getObjectBytes(row.storageKey),
+      });
+    }
+    return out;
+  }
 
   /** A time-limited URL for the file body, or a 403/404 explaining nothing extra. */
   async downloadUrl(documentId: string, fileId: string, user: AuthUser): Promise<string> {

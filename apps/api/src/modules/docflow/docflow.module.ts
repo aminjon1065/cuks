@@ -30,6 +30,7 @@ import { RegisterReportsService } from './register-reports.service';
 import { DocumentViewsController } from './document-views.controller';
 import { DocumentViewsService } from './document-views.service';
 import { ExchangeRegistryService } from './exchange/exchange-registry.service';
+import { ExchangeSenderService } from './exchange/exchange-sender.service';
 import { ArchiveService } from './archive.service';
 import { DispatchesController } from './dispatches.controller';
 import { DistributionsController } from './distributions.controller';
@@ -94,6 +95,7 @@ import { DocflowDeadlineOutboxService } from './docflow-deadline-outbox.service'
     RegisterReportsService,
     DocumentViewsService,
     ExchangeRegistryService,
+    ExchangeSenderService,
     DocflowFilesService,
     DocumentCollaboratorsService,
     DocumentTemplatesService,

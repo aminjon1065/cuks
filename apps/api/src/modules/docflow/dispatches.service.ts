@@ -10,6 +10,7 @@ import {
   type Database,
 } from '@cuks/db';
 import {
+  MANUAL_DISPATCH_CHANNELS,
   wsRooms,
   type CancelDispatchInput,
   type ConfirmDispatchInput,
@@ -113,6 +114,10 @@ export class DispatchesService {
         externalReference: input.externalReference ?? null,
         note: input.note ?? null,
         attemptedAt: now,
+        // A machine channel is QUEUED, not performed: due immediately, and the sender picks
+        // it up on its next pass. A manual channel has already happened in the physical world
+        // — the row records it — so it is never scheduled and the sender never sees it.
+        nextAttemptAt: MANUAL_DISPATCH_CHANNELS.includes(input.channel) ? null : now,
         createdBy: actor.id,
       })
       .returning({ id: documentDispatches.id });
@@ -329,6 +334,11 @@ export class DispatchesService {
         recipientContact: previous.recipientContact,
         note: previous.note,
         attemptedAt: new Date(),
+        nextAttemptAt: MANUAL_DISPATCH_CHANNELS.includes(previous.channel) ? null : new Date(),
+        // The lineage the plan asks for, as a column rather than as audit metadata: «третья
+        // попытка, первая была 10-го» has to be answerable by the card, not by a log search.
+        attemptNo: previous.attemptNo + 1,
+        retryOf: previous.id,
         createdBy: actor.id,
       })
       .returning({ id: documentDispatches.id });

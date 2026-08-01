@@ -407,6 +407,13 @@
       "when": 1785540011000,
       "tag": "0057_spicy_the_captain",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785580396524,
+      "tag": "0058_tidy_firestar",
+      "breakpoints": true
     }
   ]
 }
