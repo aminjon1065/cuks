@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useFocusRestore } from '../lib/use-focus-restore';
 
 export const Sheet = SheetPrimitive.Root;
 export const SheetTrigger = SheetPrimitive.Trigger;
@@ -21,36 +22,40 @@ export interface SheetContentProps extends React.ComponentPropsWithoutRef<
 export const SheetContent = forwardRef<
   React.ComponentRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ className, children, closeLabel = 'Close', modal = true, ...props }, ref) => (
-  <SheetPrimitive.Portal>
-    {modal ? <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" /> : null}
-    <SheetPrimitive.Content
-      ref={ref}
-      // Non-modal content keeps interaction-outside from closing it (a peek panel
-      // is dismissed via the ✕ or by selecting another row), and doesn't steal
-      // focus back on open.
-      {...(modal
-        ? {}
-        : {
-            onInteractOutside: (e: Event) => e.preventDefault(),
-            onOpenAutoFocus: (e: Event) => e.preventDefault(),
-          })}
-      className={cn(
-        'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface text-text shadow-[var(--shadow-2)]',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <SheetPrimitive.Close
-        aria-label={closeLabel}
-        className="absolute right-4 top-4 rounded-sm text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+>(({ className, children, closeLabel = 'Close', modal = true, ...props }, ref) => {
+  const focusRestore = useFocusRestore();
+  return (
+    <SheetPrimitive.Portal>
+      {modal ? <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" /> : null}
+      <SheetPrimitive.Content
+        ref={ref}
+        // A modal sheet returns focus to whatever opened it. A non-modal peek panel keeps
+        // interaction-outside from closing it (it is dismissed via the ✕ or by selecting another
+        // row) and never takes focus in the first place — so it has nothing to give back, and
+        // stealing focus on close would yank the user out of the list they are arrowing through.
+        {...(modal
+          ? focusRestore
+          : {
+              onInteractOutside: (e: Event) => e.preventDefault(),
+              onOpenAutoFocus: (e: Event) => e.preventDefault(),
+            })}
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface text-text shadow-[var(--shadow-2)]',
+          className,
+        )}
+        {...props}
       >
-        <X className="size-4" />
-      </SheetPrimitive.Close>
-    </SheetPrimitive.Content>
-  </SheetPrimitive.Portal>
-));
+        {children}
+        <SheetPrimitive.Close
+          aria-label={closeLabel}
+          className="absolute right-4 top-4 rounded-sm text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <X className="size-4" />
+        </SheetPrimitive.Close>
+      </SheetPrimitive.Content>
+    </SheetPrimitive.Portal>
+  );
+});
 SheetContent.displayName = 'SheetContent';
 
 export const SheetTitle = forwardRef<

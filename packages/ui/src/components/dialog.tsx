@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useFocusRestore } from '../lib/use-focus-restore';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -30,28 +31,34 @@ export interface DialogContentProps extends React.ComponentPropsWithoutRef<
 export const DialogContent = forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, closeLabel = 'Close', ...props }, ref) => (
-  <DialogPrimitive.Portal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
-        'rounded-lg border border-border bg-surface p-6 text-text shadow-[var(--shadow-2)]',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close
-        aria-label={closeLabel}
-        className="absolute right-4 top-4 rounded-sm text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+>(({ className, children, closeLabel = 'Close', ...props }, ref) => {
+  // Focus goes back to the control that opened the dialog. Spread BEFORE `props` so a call
+  // site that needs its own auto-focus behaviour still wins.
+  const focusRestore = useFocusRestore();
+  return (
+    <DialogPrimitive.Portal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4',
+          'rounded-lg border border-border bg-surface p-6 text-text shadow-[var(--shadow-2)]',
+          className,
+        )}
+        {...focusRestore}
+        {...props}
       >
-        <X className="size-4" />
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-));
+        {children}
+        <DialogPrimitive.Close
+          aria-label={closeLabel}
+          className="absolute right-4 top-4 rounded-sm text-text-muted transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <X className="size-4" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+});
 DialogContent.displayName = 'DialogContent';
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

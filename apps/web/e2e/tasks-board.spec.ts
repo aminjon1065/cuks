@@ -46,18 +46,22 @@ async function userIds(admin: APIRequestContext): Promise<Record<string, string>
   return Object.fromEntries(rows.map((u) => [u.username, u.id]));
 }
 /** A unique ≤12-char project key so re-runs never collide (seed:e2e does not wipe tasks). */
-const uniqueKey = () => `T${Date.now() % 1e9}`;
+// Millisecond precision alone is not unique across parallel workers: two specs starting in the
+// same millisecond minted the same project key, the second creation 409'd, and the test then
+// failed several lines later on `cols[1]` being undefined — which reads like a board defect.
+const uniqueKey = () => `T${(Date.now() % 1e6) * 1e3 + Math.floor(Math.random() * 1e3)}`;
 
 async function createProject(
   admin: APIRequestContext,
   headers: Record<string, string>,
 ): Promise<ProjectDto> {
-  return json<ProjectDto>(
-    await admin.post('/api/v1/tasks/projects', {
-      headers,
-      data: { name: `Board ${Date.now()}`, key: uniqueKey(), visibleToOrgUnit: false },
-    }),
-  );
+  const res = await admin.post('/api/v1/tasks/projects', {
+    headers,
+    data: { name: `Board ${Date.now()}`, key: uniqueKey(), visibleToOrgUnit: false },
+  });
+  // Fail here, where the cause is visible, rather than on a missing column downstream.
+  expect(res.status(), `project creation failed: ${await res.text()}`).toBe(201);
+  return json<ProjectDto>(res);
 }
 const board = async (ctx: APIRequestContext, id: string) =>
   json<BoardDto>(await ctx.get(`/api/v1/tasks/projects/${id}/board`));

@@ -93,9 +93,18 @@ test('exchange UI: the queue explains itself when there is nothing to review', a
   // The filter defaults to «ждут разбора» — the reason somebody opened the screen.
   await expect(page.getByLabel('Состояние')).toHaveValue('');
 
+  // Wait for the query to settle before branching. Reading the row count while the skeleton is
+  // still up returns 0 and sends the test into the empty-state branch, where nothing it asserts
+  // is on screen yet — a failure that only appears when the machine is busy enough for the
+  // request to outlive the first paint, i.e. when several specs run at once.
+  const empty = page.getByText('Разбирать нечего');
   const cards = page.getByRole('main').locator('li');
+  await expect
+    .poll(async () => (await cards.count()) > 0 || (await empty.count()) > 0, { timeout: 15_000 })
+    .toBe(true);
+
   if ((await cards.count()) === 0) {
-    await expect(page.getByText('Разбирать нечего')).toBeVisible();
+    await expect(empty).toBeVisible();
   } else {
     // Whatever is in the queue, the register control is never offered without the server
     // having said it may be: a screen that offers a button the API refuses is worse than one
