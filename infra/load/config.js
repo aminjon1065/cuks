@@ -54,7 +54,16 @@ export function login(username, password) {
     .map((name) => `${name}=${cookies[name][0]}`)
     .join('; ');
   const csrf = (cookies[CSRF_COOKIE] || [''])[0];
-  return { ok, cookieHeader, csrf, username };
+  // The login response carries no user id, and the docflow scenario needs one to address a route
+  // step at itself. One extra call per pool member at setup time, never per iteration.
+  const me = ok
+    ? http.get(`${BASE}/api/auth/me`, {
+        headers: { Cookie: cookieHeader },
+        tags: { name: 'login' },
+      })
+    : null;
+  const userId = me && me.status === 200 ? me.json('id') : null;
+  return { ok, cookieHeader, csrf, username, userId };
 }
 
 /** setup() body shared by both scenarios: log in the whole pool, fail fast if none can. */
