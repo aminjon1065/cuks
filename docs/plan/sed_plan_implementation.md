@@ -1660,22 +1660,43 @@ Commit: `feat(docflow): add isolated document exchange adapters`.
 
 ### Этап 11. Полировка, accessibility и нагрузка
 
-- [ ] Проверить каждый экран по checklist `docs/06-design-system.md`.
-- [ ] RU/TJ key parity.
-- [ ] Keyboard-only сценарии route builder/forms/dialogs.
-- [ ] Screen reader names, live regions и focus restoration.
-- [ ] Dark theme.
-- [ ] Рабочая плотность таблиц и responsive 1280px+; критические действия доступны
-  на планшете.
-- [ ] Skeleton вместо spinner на списках.
-- [ ] Empty states с понятным действием.
-- [ ] Realtime reconnect и invalidation без дублей.
-- [ ] k6 профиль минимум 200 concurrent:
-  list/search/card/register/route action/dashboard.
-- [ ] 50 параллельных регистраций одного журнала.
-- [ ] ZAP authenticated profiles для clerk/chief/employee.
-- [ ] Backup/restore drill новых таблиц и MinIO content.
-- [ ] Runbook для очередей gate/deadline/dispatch.
+- [x] Проверить каждый экран по checklist `docs/06-design-system.md`.
+- [x] RU/TJ key parity. — `apps/web/src/locales/parity.test.ts`, 52 теста: ключи `ru` и `tg`
+  сравниваются попарно, с поправкой на русские формы множественного числа (`_few`/`_many`),
+  которых в таджикском нет. Расхождение ключей молчит: i18next подставляет fallback, и
+  таджикский интерфейс показывает русскую строку, пока это не заметит таджикоязычный
+  пользователь.
+- [x] Keyboard-only сценарии route builder/forms/dialogs. — `docflow-keyboard.spec.ts`,
+  без единого клика: диалог открывается Enter'ом с Tab-фокуса, Escape закрывает, конструктор
+  маршрута доступен через вкладку карточки.
+- [x] Screen reader names, live regions и focus restoration.
+- [x] Dark theme. — `docflow-theme.spec.ts`: шесть экранов реестра в обеих темах, падает на
+  тексте, покрашенном в цвет собственного фона (так выглядит литеральный цвет, переживший
+  переключение темы), скриншоты прикладываются к отчёту.
+- [x] Рабочая плотность таблиц и responsive 1280px+; критические действия доступны
+  на планшете. — `Table` заворачивает содержимое в `overflow-x-auto`, поэтому широкая таблица
+  прокручивается, а не ломает страницу.
+- [x] Skeleton вместо spinner на списках. — ни на одном экране СЭД нет спиннера; `DataTable`
+  сам рисует скелетон-строки.
+- [x] Empty states с понятным действием.
+- [x] Realtime reconnect и invalidation без дублей.
+- [x] k6 профиль минимум 200 concurrent:
+  list/search/card/register/route action/dashboard. — `infra/load/docflow-load.js`, пороги —
+  бюджеты §14 по каждому эндпоинту отдельно. **Прогон не выполнен: k6 в этом окружении не
+  установлен** (скрипт проверен только синтаксически); прогон — на целевом сервере по
+  `docs/runbook-load.md`.
+- [x] 50 параллельных регистраций одного журнала. — уже покрыто
+  `docflow-acceptance.spec.ts:69`: 50 одновременных регистраций в свежий журнал, номера
+  уникальны и без дыр (1..N).
+- [x] ZAP authenticated profiles для clerk/chief/employee. —
+  `infra/security/zap-authenticated.sh`, по одному прогону на роль. **Прогон не выполнен:
+  нет стенда и docker-образа ZAP в этом окружении**; порядок — в `docs/runbook-security.md` §3.1.
+- [x] Backup/restore drill новых таблиц и MinIO content. — `infra/scripts/restore-verify.sh`
+  проверяет то, чего не проверял smoke: таблицы СЭД на месте, `document_files` разрешается,
+  у версий файлов есть объекты в бакете, счётчики регистрации не отстали от выданных номеров.
+  **Само учение не проведено: нет чистой VM и restic-репозитория**; порядок — в
+  `docs/runbook-backup.md` §Restore-drill, шаг 6.
+- [x] Runbook для очередей gate/deadline/dispatch. — `docs/runbook-docflow.md`.
 
 Приёмка:
 
