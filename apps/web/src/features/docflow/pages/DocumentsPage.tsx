@@ -3,24 +3,28 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileStack, FileText, Plus } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Button, DataTable, EmptyState, PageHeader, StatusBadge, cn } from '@cuks/ui';
+import { Button, DataTable, EmptyState, FilterBar, PageHeader, StatusBadge, cn } from '@cuks/ui';
 import {
   DOC_CLASSES,
   DOCUMENT_STATUSES,
+  DOCUMENT_VIEW_PARAMS,
   type DocumentListItemDto,
   type DocumentQueue,
   type ListDocumentsQuery,
 } from '@cuks/shared';
 import { useCan } from '@/lib/ability';
 import { formatDateTime } from '@/lib/format';
-import { useDocuments, useQueueCounts } from '../api/queries';
+import { useDocuments, useJournals, useQueueCounts } from '../api/queries';
 import { documentStatusTone } from '../lib/document';
 import { CreateDocumentDialog } from '../components/CreateDocumentDialog';
 import { TemplatePickerDialog } from '../components/TemplatePickerDialog';
 import { QueueRowActions } from '../components/QueueRowActions';
+import { SavedViewsBar } from '../components/SavedViewsBar';
 import { useDocumentTitle } from '@/lib/use-document-title';
 
 const PAGE_SIZE = 50;
+/** Registration years the filter offers — the register started in 2020 and looks one ahead. */
+const YEARS = Array.from({ length: new Date().getFullYear() - 2018 }, (_, i) => 2019 + i).reverse();
 const selectClass = cn(
   'h-9 rounded-sm border border-border bg-surface px-3 text-[13px] text-text',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
@@ -77,6 +81,10 @@ export function DocumentsPage(): React.JSX.Element {
   const setSearch = (next: string): void => setParam('search', next);
   const setPage = (next: number): void => setParam('page', String(next));
 
+  const journalId = params.get('journalId') ?? '';
+  const year = params.get('year') ?? '';
+  const journals = useJournals();
+
   const query: ListDocumentsQuery = {
     page,
     limit: PAGE_SIZE,
@@ -84,9 +92,45 @@ export function DocumentsPage(): React.JSX.Element {
     ...(status ? { status: status as ListDocumentsQuery['status'] } : {}),
     ...(docClass ? { docClass: docClass as ListDocumentsQuery['docClass'] } : {}),
     ...(search.trim() ? { search: search.trim() } : {}),
+    ...(journalId ? { journalId } : {}),
+    ...(year ? { year: Number(year) } : {}),
     ...(overdue ? { overdue: true } : {}),
     ...(awaitingDispatch ? { awaitingDispatch: true } : {}),
   };
+
+  /**
+   * The filters exactly as a saved view stores them — the URL minus paging. `page` is deliberately
+   * excluded: «страница 3» is where you were, not what you were looking for.
+   */
+  const viewParams: Record<string, string> = Object.fromEntries(
+    DOCUMENT_VIEW_PARAMS.map((k) => [k, params.get(k) ?? '']).filter(([, v]) => v !== ''),
+  );
+  const applyView = (next: Record<string, string>): void => {
+    const p = new URLSearchParams();
+    for (const key of DOCUMENT_VIEW_PARAMS) if (next[key]) p.set(key, next[key]);
+    setParams(p);
+  };
+  const resetFilters = (): void => setParams(new URLSearchParams({ queue }));
+
+  /** One removable chip per filter in force — «что именно сейчас применено» in one glance. */
+  const chips = [
+    ...(status ? [{ key: 'status', label: t(`documentStatus.${status}`) }] : []),
+    ...(docClass ? [{ key: 'docClass', label: t(`docClass.${docClass}`) }] : []),
+    ...(journalId
+      ? [
+          {
+            key: 'journalId',
+            label: journals.data?.find((j) => j.id === journalId)?.name ?? journalId,
+          },
+        ]
+      : []),
+    ...(year ? [{ key: 'year', label: year }] : []),
+    ...(search.trim() ? [{ key: 'search', label: `«${search.trim()}»` }] : []),
+    ...(overdue ? [{ key: 'overdue', label: t('documents.filters.overdue') }] : []),
+    ...(awaitingDispatch
+      ? [{ key: 'awaitingDispatch', label: t('documents.filters.awaitingDispatch') }]
+      : []),
+  ].map((c) => ({ ...c, onRemove: () => setParam(c.key, '') }));
   const list = useDocuments(query);
   const counts = useQueueCounts();
   const total = list.data?.total ?? 0;
@@ -212,7 +256,12 @@ export function DocumentsPage(): React.JSX.Element {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <FilterBar
+        chips={chips}
+        {...(chips.length > 0 ? { onReset: resetFilters } : {})}
+        resetLabel={t('documents.filters.reset')}
+        removeLabel={(c) => t('documents.filters.remove', { name: c.label })}
+      >
         <select
           aria-label={t('documents.columns.status')}
           className={selectClass}
@@ -239,13 +288,43 @@ export function DocumentsPage(): React.JSX.Element {
             </option>
           ))}
         </select>
+        {/* The register has always been able to filter by book and by registration year; the
+            screen simply never offered it, so the only way in was a hand-built URL. */}
+        <select
+          aria-label={t('documents.filters.journal')}
+          className={selectClass}
+          value={journalId}
+          onChange={(e) => setParam('journalId', e.target.value)}
+        >
+          <option value="">{t('documents.filters.allJournals')}</option>
+          {(journals.data ?? []).map((j) => (
+            <option key={j.id} value={j.id}>
+              {j.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t('documents.filters.year')}
+          className={selectClass}
+          value={year}
+          onChange={(e) => setParam('year', e.target.value)}
+        >
+          <option value="">{t('documents.filters.allYears')}</option>
+          {YEARS.map((y) => (
+            <option key={y} value={String(y)}>
+              {y}
+            </option>
+          ))}
+        </select>
         <input
           className={cn(selectClass, 'min-w-48 flex-1')}
           placeholder={t('documents.filters.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-      </div>
+      </FilterBar>
+
+      <SavedViewsBar current={viewParams} onApply={applyView} />
 
       <DataTable
         columns={columns}

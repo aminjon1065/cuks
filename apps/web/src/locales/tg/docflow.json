@@ -143,7 +143,15 @@
     "filters": {
       "allStatuses": "Ҳамаи ҳолатҳо",
       "allClasses": "Ҳамаи синфҳо",
-      "searchPlaceholder": "Ҷустуҷӯ аз рӯи мавзӯъ ё рақам…"
+      "searchPlaceholder": "Ҷустуҷӯ аз рӯи мавзӯъ ё рақам…",
+      "journal": "Журнал",
+      "allJournals": "Все журналы",
+      "year": "Год регистрации",
+      "allYears": "Все годы",
+      "overdue": "Просрочено",
+      "awaitingDispatch": "Ожидают отправки",
+      "reset": "Сбросить",
+      "remove": "Убрать фильтр «{{name}}»"
     },
     "empty": {
       "title": "Ҳуҷҷатҳо нестанд",
@@ -1047,5 +1055,22 @@
     "group_postal": "Почта",
     "group_hand_delivery": "Лично в руки",
     "group_other": "Иное"
+  },
+  "savedViews": {
+    "save": "Сохранить вид",
+    "saveTitle": "Сохранить набор фильтров",
+    "nameLabel": "Название",
+    "namePlaceholder": "Например: Просроченные входящие",
+    "willStore_one": "Будет сохранён {{count}} фильтр",
+    "willStore_few": "Будет сохранено {{count}} фильтра",
+    "willStore_many": "Будет сохранено {{count}} фильтров",
+    "willStore_other": "Будет сохранено {{count}} фильтров",
+    "shareLabel": "Показать коллегам",
+    "shareHint": "Сохраняются только фильтры: каждый увидит по ним свои документы, а не ваши",
+    "rename": "Переименовать «{{name}}»",
+    "renameTitle": "Изменить вид",
+    "delete": "Удалить «{{name}}»",
+    "deleteTitle": "Удалить сохранённый вид?",
+    "deleteConfirm": "Вид «{{name}}» будет удалён. Документы это не затронет."
   }
 }

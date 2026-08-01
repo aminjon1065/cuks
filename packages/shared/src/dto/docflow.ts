@@ -532,6 +532,72 @@ export interface QuickSearchHitDto {
   status: DocumentStatus;
 }
 
+// --- Saved register views (plan этап 9 «saved searches либо интеграция с общими saved views») ---
+
+/** The discriminator inside the shared `app.saved_filters` table (docs/07 §saved_filters). */
+export const DOCFLOW_VIEW_MODULE = 'docflow_documents';
+
+/**
+ * The filter keys a saved view may carry — an ALLOW-LIST, and the same one the register list
+ * reads.
+ *
+ * `params` is a jsonb column, so without this a saved view is a place to keep arbitrary data
+ * that the client later pastes into a URL: whatever a preset holds ends up as a query string
+ * somebody else's browser executes. Bounded keys and short values keep a preset what it says
+ * it is — a set of filters.
+ */
+export const DOCUMENT_VIEW_PARAMS = [
+  'queue',
+  'status',
+  'docClass',
+  'journalId',
+  'search',
+  'year',
+  'overdue',
+  'awaitingDispatch',
+  'sort',
+] as const;
+export type DocumentViewParam = (typeof DOCUMENT_VIEW_PARAMS)[number];
+
+export const documentViewParamsSchema = z
+  .record(z.string(), z.string().max(200))
+  .refine(
+    (v) => Object.keys(v).every((k) => DOCUMENT_VIEW_PARAMS.includes(k as DocumentViewParam)),
+    {
+      message: 'Unsupported filter in a saved view',
+    },
+  )
+  .refine((v) => Object.keys(v).length <= DOCUMENT_VIEW_PARAMS.length, {
+    message: 'Too many filters',
+  });
+
+export const saveDocumentViewSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  params: documentViewParamsSchema,
+  /**
+   * A shared view is offered to every colleague who may use the register. Safe because a
+   * preset stores FILTERS, not rows: the list it opens is still built with the viewer's own
+   * visibility, so a shared «Все ДСП за март» shows each person only their own.
+   */
+  isShared: z.boolean().default(false),
+});
+export type SaveDocumentViewInput = z.infer<typeof saveDocumentViewSchema>;
+
+export const updateDocumentViewSchema = saveDocumentViewSchema.partial();
+export type UpdateDocumentViewInput = z.infer<typeof updateDocumentViewSchema>;
+
+export interface DocumentViewDto {
+  id: string;
+  name: string;
+  params: Record<string, string>;
+  isShared: boolean;
+  /** Who shared it — null on one's own views, where the name would be noise. */
+  ownerName: string | null;
+  /** Whether THIS caller may rename or delete it. Somebody else's shared view is read-only. */
+  canManage: boolean;
+  createdAt: string;
+}
+
 // --- «Требует внимания» (plan §8.8) ---
 
 /**

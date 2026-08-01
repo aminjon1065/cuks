@@ -6,6 +6,9 @@ import type {
   QuickSearchHitDto,
   RegisterReportDto,
   RegisterReportQuery,
+  DocumentViewDto,
+  SaveDocumentViewInput,
+  UpdateDocumentViewInput,
   ActivateCertificateInput,
   AddDocumentFileInput,
   CertificateDto,
@@ -1301,4 +1304,42 @@ export async function exportRegisterReportXlsx(query: RegisterReportQuery): Prom
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// ---- Saved register views (plan этап 9) ------------------------------------
+
+export const documentViewsKey = [...docflowKey, 'views'] as const;
+
+export function useDocumentViews(): UseQueryResult<DocumentViewDto[]> {
+  return useQuery({
+    queryKey: documentViewsKey,
+    queryFn: () => api.get<DocumentViewDto[]>('/v1/docflow/views'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useSaveDocumentView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveDocumentViewInput) =>
+      api.post<DocumentViewDto>('/v1/docflow/views', input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentViewsKey }),
+  });
+}
+
+export function useUpdateDocumentView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateDocumentViewInput }) =>
+      api.patch<DocumentViewDto>(`/v1/docflow/views/${id}`, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentViewsKey }),
+  });
+}
+
+export function useDeleteDocumentView() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/v1/docflow/views/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: documentViewsKey }),
+  });
 }
