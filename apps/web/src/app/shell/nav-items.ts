@@ -21,13 +21,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-/** A single sidebar / command-palette entry. `permission` gates admin items. */
+/** A single sidebar / command-palette entry. `permission` gates admin items; a list means ANY. */
 export interface NavItem {
   /** i18n key inside the `nav:items` namespace. */
   key: string;
   path: string;
   icon: LucideIcon;
-  permission?: string;
+  permission?: string | readonly string[];
 }
 
 export const MAIN_NAV: NavItem[] = [
@@ -80,7 +80,11 @@ export const ADMIN_NAV: NavItem[] = [
     key: 'docflowArchive',
     path: '/app/docs/archive',
     icon: Archive,
-    permission: 'docflow.register',
+    // The screen serves the chancellery's inventory AND the legal hold / disposal acts, and those
+    // are separate rights on purpose (packages/shared/src/permissions/index.ts). Gated on
+    // `docflow.register` alone it was invisible to `chief` — the only template that holds
+    // `docflow.archive.hold`/`dispose`, i.e. the one person who can actually stop a disposal.
+    permission: ['docflow.register', 'docflow.archive.hold', 'docflow.archive.dispose'],
   },
   {
     key: 'docflowJournals',

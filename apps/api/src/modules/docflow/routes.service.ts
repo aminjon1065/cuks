@@ -834,6 +834,9 @@ export class RoutesService {
   ): Promise<RouteDto[]> {
     const ctx = await this.actingContext(actor.id, new Date());
     let onBehalfOf: string | null = null;
+    // Captured inside the tx so the rejection can be told to the author afterwards — set only
+    // on the reject branch, so it doubles as «this action returned the document».
+    let rejectedAuthorId: string | null = null;
     const documentId = await this.db.transaction(async (tx) => {
       const [locate] = await tx
         .select({ routeId: routeSteps.routeId })
@@ -904,6 +907,7 @@ export class RoutesService {
           .update(documents)
           .set({ status: 'draft' })
           .where(eq(documents.id, route.documentId));
+        rejectedAuthorId = doc?.authorId ?? null;
         return route.documentId;
       }
       await this.applyStepCompletion(
@@ -944,6 +948,22 @@ export class RoutesService {
     );
     // Closing a step may have activated an acknowledge group — expand its sheet and notify.
     if (action !== 'reject') await this.expandAndNotifyAcknowledge(documentId);
+    // A rejection is the one route outcome the author has to act on, and the document silently
+    // reappearing in «Черновики» is not how they find out (AC-SED-04.3). Deliberately without the
+    // approver's comment: the comment is on the card, and a ДСП author outside the допуск-список
+    // cannot open the document their own notification would otherwise quote.
+    if (rejectedAuthorId && rejectedAuthorId !== actor.id) {
+      void this.notifications.notify({
+        userId: rejectedAuthorId,
+        type: 'docflow.document.route_rejected',
+        title: 'Документ возвращён на доработку',
+        body: 'Согласующий отклонил документ. Комментарий — в карточке, на вкладке «Маршрут».',
+        entityType: 'document',
+        entityId: documentId,
+        priority: 'normal',
+        emailMode: 'offline',
+      });
+    }
     return this.routesForDocument(documentId, actor);
   }
 

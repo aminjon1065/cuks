@@ -89,9 +89,17 @@ export const journals = appSchema.table(
 
 /**
  * app.journal_counters — the gap-free registration counter (docs/modules/11 §3).
- * One row per (journal, year); `last_seq` is incremented under a transaction-scoped
- * advisory lock so concurrent registrations never collide or skip a number. A
- * composition of the journal (cascade on hard delete).
+ *
+ * One row per (journal, year). `last_seq` is incremented by a single
+ * `INSERT … ON CONFLICT (journal_id, year) DO UPDATE … RETURNING`
+ * (`apps/api/src/modules/docflow/docflow-numbering.service.ts`): the row lock that statement
+ * takes is what serialises concurrent registrations, so they neither collide nor skip. There is
+ * NO advisory lock — this comment used to claim one, and an operator who went looking for it
+ * during an incident would find nothing. Allocation runs inside the caller's transaction, so a
+ * rolled-back registration rolls the increment back with it and burns no number.
+ *
+ * `year = 0` is the bucket for a journal with `seq_reset = 'never'` — one continuous book.
+ * A composition of the journal (cascade on hard delete).
  */
 export const journalCounters = appSchema.table(
   'journal_counters',

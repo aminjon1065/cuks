@@ -137,6 +137,13 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'admin.audit.view',
       'admin.substitutions.manage',
       'admin.system.monitor',
+      // Настройки ДОУ. docs/modules/11-docflow.md §роли names the platform admin as a holder of
+      // `docflow.journals.manage`, and `docflow.use` comes with it because every reference-data
+      // GET on the settings screen requires it — the manage right alone opens a screen that
+      // cannot load its own lists. It does not widen document visibility: that is decided per
+      // document by participation, journal chancellery and the owning unit's heads.
+      'docflow.use',
+      'docflow.journals.manage',
       'files.use',
       'chat.use',
       'meet.use',
@@ -191,6 +198,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       'docflow.use',
       'docflow.create',
       'docflow.register',
+      // «Настройки ДОУ (канцелярия): журналы, шаблоны маршрутов, номенклатура, виды документов»
+      // — docs/modules/11-docflow.md §7. The screen is the chancellery's own: it is the
+      // chancellery that opens a new journal for the year and adds a case to the nomenclature.
+      'docflow.journals.manage',
       'docflow.control',
       'docflow.reports.view',
       'docflow.confidential.view',

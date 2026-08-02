@@ -1,7 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { journals, orgUnits, type Database } from '@cuks/db';
-import type { CreateJournalInput, JournalDto, UpdateJournalInput } from '@cuks/shared';
+import {
+  JOURNAL_TEMPLATE_RESET_MESSAGE,
+  journalTemplateFitsReset,
+  type CreateJournalInput,
+  type JournalDto,
+  type UpdateJournalInput,
+} from '@cuks/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import type { AuthUser } from '../../common/auth/auth-user';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -75,7 +81,20 @@ export class JournalsService {
   }
 
   async update(id: string, input: UpdateJournalInput, actor: Actor): Promise<JournalDto> {
-    await this.require(id);
+    const current = await this.require(id);
+    // Checked against the MERGED row, not the payload: both fields are optional, so switching a
+    // journal to `yearly` without touching its template — or dropping {YYYY} from a template that
+    // is already yearly — each produce the January-collision combination while the request itself
+    // looks harmless. The create schema refuses it at the edge; only this catches the halves.
+    const numberTemplate = input.numberTemplate ?? current.numberTemplate;
+    const seqReset = input.seqReset ?? current.seqReset;
+    if (!journalTemplateFitsReset(numberTemplate, seqReset)) {
+      throw AppException.unprocessable(
+        'docflow.journal.template_reset_mismatch',
+        JOURNAL_TEMPLATE_RESET_MESSAGE,
+        { numberTemplate, seqReset },
+      );
+    }
     await this.db
       .update(journals)
       .set({

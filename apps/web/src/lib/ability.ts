@@ -33,10 +33,22 @@ export function useCan(permission: string): boolean {
   return ability ? hasPermission(ability, permission) : false;
 }
 
-/** Filters a list to the permissions the current user holds (no permission = kept). */
-export function useVisibleByPermission<T extends { permission?: string }>(items: T[]): T[] {
+/**
+ * Filters a list to the permissions the current user holds (no permission = kept).
+ *
+ * A list of permissions means ANY of them. Some screens serve two different jobs: «Архив» is the
+ * chancellery's inventory AND the place a legal hold is placed, and those are separate rights on
+ * purpose — so gating the menu entry on one of them hid the screen from the only role that holds
+ * the other.
+ */
+export function useVisibleByPermission<T extends { permission?: string | readonly string[] }>(
+  items: T[],
+): T[] {
   const ability = useContext(AbilityContext);
-  return items.filter(
-    (item) => !item.permission || (ability !== null && hasPermission(ability, item.permission)),
-  );
+  return items.filter((item) => {
+    if (!item.permission) return true;
+    if (ability === null) return false;
+    const needed = typeof item.permission === 'string' ? [item.permission] : item.permission;
+    return needed.some((permission) => hasPermission(ability, permission));
+  });
 }

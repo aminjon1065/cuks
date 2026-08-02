@@ -7,6 +7,7 @@ import {
   createDocumentSchema,
   createJournalSchema,
   createNomenclatureSchema,
+  journalTemplateFitsReset,
   registerDocumentSchema,
   registerIncomingSchema,
   updateDocumentSchema,
@@ -33,6 +34,32 @@ describe('createJournalSchema', () => {
     expect(
       createJournalSchema.safeParse({ ...base, numberTemplate: '{П}-{YYYY}/{seq4}' }).success,
     ).toBe(true);
+  });
+
+  it('refuses a yearly journal whose template prints no year', () => {
+    // On 1 January the counter buckets on the new year and restarts at 0001 — a number that
+    // already exists in that journal. The unique index refuses the insert, and because the
+    // allocation runs inside the registration transaction the increment rolls back with it: the
+    // journal jams on the same number until somebody edits the template.
+    expect(createJournalSchema.safeParse({ ...base, numberTemplate: '{П}-{seq4}' }).success).toBe(
+      false,
+    );
+    // `never` is a single continuous book (bucket 0), so it needs no year.
+    expect(
+      createJournalSchema.safeParse({ ...base, numberTemplate: '{П}-{seq4}', seqReset: 'never' })
+        .success,
+    ).toBe(true);
+    // Either year token satisfies it.
+    expect(
+      createJournalSchema.safeParse({ ...base, numberTemplate: '{П}-{YY}/{seq4}' }).success,
+    ).toBe(true);
+  });
+
+  it('journalTemplateFitsReset is the same rule the service applies to a partial update', () => {
+    expect(journalTemplateFitsReset('{seq4}', 'never')).toBe(true);
+    expect(journalTemplateFitsReset('{seq4}', 'yearly')).toBe(false);
+    expect(journalTemplateFitsReset('{YYYY}/{seq4}', 'yearly')).toBe(true);
+    expect(journalTemplateFitsReset('{YY}-{seq4}', 'yearly')).toBe(true);
   });
 
   it('rejects a code with disallowed characters', () => {

@@ -58,22 +58,47 @@ const numberTemplateSchema = z
   .max(64)
   .regex(/\{seq\d+\}/, 'The template must contain a {seqN} sequence token');
 
+/**
+ * A yearly journal whose template prints no year mints a duplicate every January.
+ *
+ * The counter buckets on `(journal_id, year)`, so on 1 January `{seq4}` alone restarts at 0001 —
+ * a number that already exists in that journal. The unique index `documents_journal_reg_number_uq`
+ * then refuses the insert, and because the allocation runs inside the registration transaction
+ * the increment rolls back with it: the journal does not merely fail once, it jams on the same
+ * number until somebody edits the template. Cheap to prevent, expensive to notice.
+ */
+export function journalTemplateFitsReset(
+  numberTemplate: string,
+  seqReset: JournalSeqReset,
+): boolean {
+  return seqReset !== 'yearly' || /\{YYYY\}|\{YY\}/.test(numberTemplate);
+}
+
+/** The message both the schema and the service use, so the operator reads one sentence. */
+export const JOURNAL_TEMPLATE_RESET_MESSAGE =
+  'A yearly journal needs {YYYY} or {YY} in its number template, otherwise January repeats last year’s numbers';
+
 const journalCodeSchema = z
   .string()
   .min(1)
   .max(32)
   .regex(/^[a-z0-9_-]+$/i, 'The code may contain only letters, digits, "-" and "_"');
 
-export const createJournalSchema = z.object({
-  code: journalCodeSchema,
-  name: z.string().min(1).max(200),
-  docClass: z.enum(DOC_CLASSES),
-  numberTemplate: numberTemplateSchema,
-  seqReset: z.enum(JOURNAL_SEQ_RESETS).default('yearly'),
-  orgUnitId: z.string().uuid().nullish(),
-  sort: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-});
+export const createJournalSchema = z
+  .object({
+    code: journalCodeSchema,
+    name: z.string().min(1).max(200),
+    docClass: z.enum(DOC_CLASSES),
+    numberTemplate: numberTemplateSchema,
+    seqReset: z.enum(JOURNAL_SEQ_RESETS).default('yearly'),
+    orgUnitId: z.string().uuid().nullish(),
+    sort: z.number().int().min(0).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => journalTemplateFitsReset(v.numberTemplate, v.seqReset), {
+    message: JOURNAL_TEMPLATE_RESET_MESSAGE,
+    path: ['numberTemplate'],
+  });
 export type CreateJournalInput = z.infer<typeof createJournalSchema>;
 
 /** Code is immutable after creation (it identifies the book). */
