@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { ControlItemDto } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
@@ -16,6 +16,10 @@ export class ControlController {
   @Get('control')
   @RequirePermission('docflow.control')
   @ApiOperation({ summary: 'Everything on control — resolutions and documents with deadlines' })
+  @ApiOkResponse({
+    description:
+      'Control rows, each with its overdue severity and whether the caller may extend or uncontrol it',
+  })
   list(@CurrentUser() user: AuthUser): Promise<ControlItemDto[]> {
     return this.control.list(user);
   }

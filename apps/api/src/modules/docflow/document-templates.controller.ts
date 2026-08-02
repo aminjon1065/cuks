@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createDocumentTemplateSchema,
@@ -34,6 +34,7 @@ export class DocumentTemplatesController {
   @Get()
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List document templates with their versions' })
+  @ApiOkResponse({ description: 'Templates, each carrying its version list' })
   list(@CurrentUser() user: AuthUser): Promise<DocumentTemplateDto[]> {
     return this.templates.list(user);
   }
@@ -41,6 +42,7 @@ export class DocumentTemplatesController {
   @Get(':id')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'One template with its version history' })
+  @ApiOkResponse({ description: 'The template and every version it has had' })
   detail(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -51,6 +53,7 @@ export class DocumentTemplatesController {
   @Post()
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Create a document template' })
+  @ApiCreatedResponse({ description: 'The new template — versions are added separately' })
   create(
     @Body(new ZodValidationPipe(createDocumentTemplateSchema)) body: CreateDocumentTemplateInput,
     @CurrentUser() user: AuthUser,
@@ -61,6 +64,7 @@ export class DocumentTemplatesController {
   @Patch(':id')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Update a template (its code is immutable)' })
+  @ApiOkResponse({ description: 'The updated template' })
   update(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(updateDocumentTemplateSchema)) body: UpdateDocumentTemplateInput,
@@ -72,6 +76,7 @@ export class DocumentTemplatesController {
   @Post(':id/versions')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Add the next draft version (published ones are immutable)' })
+  @ApiCreatedResponse({ description: 'The template with the new draft version appended' })
   addVersion(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(createTemplateVersionSchema)) body: CreateTemplateVersionInput,
@@ -83,6 +88,7 @@ export class DocumentTemplatesController {
   @Post(':id/versions/:version/actions/publish')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Publish a draft version, freezing its body' })
+  @ApiCreatedResponse({ description: 'The template with that version now published' })
   publish(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Param('version', new ZodValidationPipe(versionSchema)) version: number,
@@ -94,6 +100,7 @@ export class DocumentTemplatesController {
   @Post(':id/actions/deactivate')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Retire a template (its versions stay readable)' })
+  @ApiCreatedResponse({ description: 'The template, now inactive; its versions stay readable' })
   deactivate(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -104,6 +111,7 @@ export class DocumentTemplatesController {
   @Post(':id/actions/instantiate')
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Create a draft document from a published template version' })
+  @ApiCreatedResponse({ description: 'The id of the draft document that was created' })
   instantiate(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(instantiateDocumentTemplateSchema))

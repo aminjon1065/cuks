@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
@@ -34,6 +34,9 @@ export class SignaturesController {
   @Post('signatures/activate')
   @RequirePermission('docflow.sign')
   @ApiOperation({ summary: 'Issue a device signing certificate from a browser-generated key' })
+  @ApiCreatedResponse({
+    description: 'The issued certificate — the private key never leaves the browser',
+  })
   activate(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(activateCertificateSchema)) body: ActivateCertificateInput,
@@ -44,6 +47,7 @@ export class SignaturesController {
   @Get('signatures/certificates')
   @RequirePermission('docflow.sign')
   @ApiOperation({ summary: "The caller's own signing certificates" })
+  @ApiOkResponse({ description: 'The caller’s certificates, never anybody else’s' })
   myCertificates(@CurrentUser() user: AuthUser): Promise<CertificateDto[]> {
     return this.signatures.myCertificates(user);
   }
@@ -51,6 +55,9 @@ export class SignaturesController {
   @Get('docflow/documents/:id/signatures')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Signatures on a document (with a live validity check)' })
+  @ApiOkResponse({
+    description: 'Each signature with `valid` recomputed against the current file version',
+  })
   forDocument(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -61,6 +68,7 @@ export class SignaturesController {
   @Get('docflow/documents/:id/sign-payload')
   @RequirePermission('docflow.sign')
   @ApiOperation({ summary: 'The canonical payload to sign for the current file version' })
+  @ApiOkResponse({ description: 'The exact bytes to sign, plus the file hash they cover' })
   signPayload(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -71,6 +79,7 @@ export class SignaturesController {
   @Post('docflow/documents/:id/actions/sign')
   @RequirePermission('docflow.sign')
   @ApiOperation({ summary: 'Sign the document at its active signing step' })
+  @ApiCreatedResponse({ description: 'The document’s signatures, including the one just made' })
   sign(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -82,6 +91,7 @@ export class SignaturesController {
   @Get('verify/:signatureId')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Verify a signature (validity, CA chain, revocation, file hash)' })
+  @ApiOkResponse({ description: 'The verdict with each individual check that produced it' })
   verify(
     @CurrentUser() user: AuthUser,
     @Param('signatureId', new ZodValidationPipe(uuidSchema)) signatureId: string,
@@ -92,6 +102,10 @@ export class SignaturesController {
   @Post('docflow/documents/:id/export-pdf')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Export a stamped PDF with the signature table + QR codes' })
+  @ApiCreatedResponse({
+    description:
+      'PDF attachment (201, not 200): the stamp sheet with the signature table and its verification QR codes',
+  })
   async exportPdf(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createDocumentLinkSchema,
@@ -24,6 +24,10 @@ export class DocumentLinksController {
   @Get(':id/links')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Related documents (bidirectional)' })
+  @ApiOkResponse({
+    description:
+      'Links in both directions; a link whose other end the caller may not see is omitted',
+  })
   list(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -34,6 +38,7 @@ export class DocumentLinksController {
   @Post(':id/links')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Link this document to another' })
+  @ApiCreatedResponse({ description: 'The document’s links after the new one was added' })
   add(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -45,6 +50,7 @@ export class DocumentLinksController {
   @Delete(':id/links/:linkId')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Remove a document link' })
+  @ApiOkResponse({ description: 'The links that remain' })
   remove(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   approveRouteStepSchema,
@@ -38,6 +38,7 @@ export class RoutesController {
   @Post('documents/:id/route')
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Send a document to an approval route (from a template or steps)' })
+  @ApiCreatedResponse({ description: 'Every route cycle of the document, newest cycle included' })
   startRoute(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -49,6 +50,7 @@ export class RoutesController {
   @Get('documents/:id/routes')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'The route history (cycles) of a document' })
+  @ApiOkResponse({ description: 'Each cycle with its steps, assignees and decisions' })
   documentRoutes(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -59,6 +61,7 @@ export class RoutesController {
   @Post('route-steps/:id/actions/approve')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Approve an active route step' })
+  @ApiCreatedResponse({ description: 'The document’s route cycles after the step was approved' })
   approve(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -73,6 +76,10 @@ export class RoutesController {
   @ApiOperation({
     summary: 'Dry-run a route definition: who each step would reach and what is wrong',
   })
+  @ApiOkResponse({
+    description:
+      'Per-step findings plus the parallel groups in execution order; nothing is written',
+  })
   validateRoute(
     @Param('id', new ZodValidationPipe(uuidSchema)) _id: string,
     @Body(new ZodValidationPipe(startRouteSchema)) body: StartRouteInput,
@@ -83,6 +90,7 @@ export class RoutesController {
   @Post('route-steps/:id/actions/complete')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Report an active `execute` route step as done' })
+  @ApiCreatedResponse({ description: 'The document’s route cycles after the step was completed' })
   complete(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -94,6 +102,9 @@ export class RoutesController {
   @Post('route-steps/:id/actions/reject')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Reject an active route step (returns the document to the author)' })
+  @ApiCreatedResponse({
+    description: 'The route cycles with this one cancelled; the document is back in `draft`',
+  })
   reject(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -107,12 +118,15 @@ export class RoutesController {
   @Get('route-templates')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List route templates' })
+  @ApiOkResponse({ description: 'Templates with their step definitions' })
   listTemplates(): Promise<RouteTemplateDto[]> {
     return this.routes.listTemplates();
   }
 
   @Post('route-templates')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({ summary: 'Create a route template (`docflow.journals.manage`)' })
+  @ApiCreatedResponse({ description: 'The new template' })
   createTemplate(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createRouteTemplateSchema)) body: CreateRouteTemplateInput,
@@ -122,6 +136,11 @@ export class RoutesController {
 
   @Patch('route-templates/:id')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({
+    summary:
+      'Edit a route template (`docflow.journals.manage`); routes already running are untouched',
+  })
+  @ApiOkResponse({ description: 'The updated template' })
   updateTemplate(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -133,6 +152,7 @@ export class RoutesController {
   @Post('route-templates/:id/actions/clone')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Copy a template as a new one, to edit without touching the original' })
+  @ApiCreatedResponse({ description: 'The copy, ready to edit' })
   cloneTemplate(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -143,6 +163,11 @@ export class RoutesController {
   @Delete('route-templates/:id')
   @RequirePermission('docflow.journals.manage')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Retire a route template (`docflow.journals.manage`) — a soft delete, routes built from it stay',
+  })
+  @ApiOkResponse({ description: '`{ ok: true }` — 200 with a body, not 204' })
   async removeTemplate(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

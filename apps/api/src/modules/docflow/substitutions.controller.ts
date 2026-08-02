@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createSubstitutionSchema,
@@ -25,7 +25,14 @@ export class SubstitutionsController {
 
   @Get()
   @RequirePermission('docflow.use')
-  @ApiOperation({ summary: 'Substitutions I am party to (or a principal’s, for an admin)' })
+  @ApiOperation({
+    summary:
+      'Substitutions I am party to (an admin sees all; the optional `?principalId` narrows to one principal)',
+  })
+  @ApiOkResponse({
+    description:
+      'Delegations with their window and whether they are effective right now; asking for someone else’s without `admin.substitutions.manage` is refused',
+  })
   list(
     @Query('principalId', new ZodValidationPipe(optionalUuid)) principalId: string | undefined,
     @CurrentUser() user: AuthUser,
@@ -38,6 +45,7 @@ export class SubstitutionsController {
   @ApiOperation({
     summary: 'Delegate route duties to a deputy (own duties, or anyone’s for admin)',
   })
+  @ApiCreatedResponse({ description: 'The new substitution with its window' })
   create(
     @Body(new ZodValidationPipe(createSubstitutionSchema)) body: CreateSubstitutionInput,
     @CurrentUser() user: AuthUser,
@@ -48,6 +56,7 @@ export class SubstitutionsController {
   @Delete(':id')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Revoke a substitution (its principal, or an admin)' })
+  @ApiOkResponse({ description: 'Revoked — 200 with an empty body, not 204' })
   remove(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createDistributionSchema,
@@ -31,6 +31,10 @@ export class DistributionsController {
   @Get('documents/:id/distributions')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: "A document's distribution sheets, newest first" })
+  @ApiOkResponse({
+    description:
+      'Each sheet with its readers, its release moment, and whether the caller still owes a reading',
+  })
   list(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -41,6 +45,7 @@ export class DistributionsController {
   @Post('documents/:id/distributions')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Send a registered internal document round for acknowledgement' })
+  @ApiCreatedResponse({ description: 'The new distribution sheet with its readers' })
   create(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(createDistributionSchema)) body: CreateDistributionInput,

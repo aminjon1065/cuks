@@ -1,5 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Redirect } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   addDocumentCollaboratorSchema,
@@ -63,7 +69,13 @@ export class DocumentsController {
 
   @Get()
   @RequirePermission('docflow.use')
-  @ApiOperation({ summary: 'List documents by queue (mine / drafts / authored / registry)' })
+  @ApiOperation({
+    summary:
+      'List documents by queue: mine, drafts, authored, registry, to_approve, to_sign, to_acknowledge, my_tasks',
+  })
+  @ApiOkResponse({
+    description: 'A page of register rows, already narrowed to what this caller may see',
+  })
   list(
     @Query(new ZodValidationPipe(listDocumentsQuerySchema)) query: ListDocumentsQuery,
     @CurrentUser() user: AuthUser,
@@ -75,6 +87,7 @@ export class DocumentsController {
   @Get('queue-counts')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Pending-work counts for the cabinet queue badges' })
+  @ApiOkResponse({ description: 'Counts for to_approve, to_sign, to_acknowledge and my_tasks' })
   queueCounts(@CurrentUser() user: AuthUser): Promise<DocumentQueueCountsDto> {
     return this.documents.queueCounts(user);
   }
@@ -84,6 +97,9 @@ export class DocumentsController {
   @RequirePermission('docflow.register')
   @ApiOperation({
     summary: 'Create and register an incoming document atomically (idempotent on a client key)',
+  })
+  @ApiCreatedResponse({
+    description: 'The registered card with its minted number; a replayed key returns the same one',
   })
   registerIncoming(
     @CurrentUser() user: AuthUser,
@@ -95,6 +111,7 @@ export class DocumentsController {
   @Post()
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Create a draft document' })
+  @ApiCreatedResponse({ description: 'The new draft card, with no registration number yet' })
   create(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createDocumentSchema)) body: CreateDocumentInput,
@@ -105,6 +122,10 @@ export class DocumentsController {
   @Get(':id')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Get a document card' })
+  @ApiOkResponse({
+    description:
+      'The card with its files, collaborators, archive block, `version` token and the actions THIS caller may take',
+  })
   detail(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -115,6 +136,7 @@ export class DocumentsController {
   @Get(':id/history')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: "A document's audit history (История tab)" })
+  @ApiOkResponse({ description: 'Audit entries for this document, newest first, at most 200' })
   history(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -125,6 +147,7 @@ export class DocumentsController {
   @Get(':id/timeline')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: "The document's unified timeline (audited business events)" })
+  @ApiOkResponse({ description: 'Business events in one stream, whatever subsystem raised them' })
   timeline(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -135,6 +158,7 @@ export class DocumentsController {
   @Get(':id/collaborators')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Who besides the author works on the document' })
+  @ApiOkResponse({ description: 'Collaborators with their role on this document' })
   listCollaborators(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -145,6 +169,7 @@ export class DocumentsController {
   @Post(':id/collaborators')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Assign a preparer / editor / viewer (author only)' })
+  @ApiCreatedResponse({ description: 'The collaborator list after the assignment' })
   addCollaborator(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(addDocumentCollaboratorSchema))
@@ -157,6 +182,7 @@ export class DocumentsController {
   @Delete(':id/collaborators/:collaboratorId')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Revoke a collaborator (author only)' })
+  @ApiOkResponse({ description: 'The collaborators that remain' })
   removeCollaborator(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Param('collaboratorId', new ZodValidationPipe(uuidSchema)) collaboratorId: string,
@@ -168,6 +194,10 @@ export class DocumentsController {
   @Get(':id/access')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Get the confidentiality grif + access list (ДСП allow-list)' })
+  @ApiOkResponse({
+    description:
+      'The grif, the users on the access list (resolved whenever the list is non-empty, whatever the grif) and `canManage` — whether the caller may change them',
+  })
   getAccess(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -180,6 +210,7 @@ export class DocumentsController {
   @ApiOperation({
     summary: 'Set the confidentiality grif + access list (author / confidential.view)',
   })
+  @ApiOkResponse({ description: 'The grif and allow-list as they now stand' })
   setAccess(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(setDocumentAccessSchema)) body: SetDocumentAccessInput,
@@ -191,6 +222,7 @@ export class DocumentsController {
   @Get(':id/read-log')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'The ДСП access trail (author / confidential.view)' })
+  @ApiOkResponse({ description: 'Who opened the document, and when' })
   readLog(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,
@@ -201,6 +233,9 @@ export class DocumentsController {
   @Patch(':id')
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Edit a draft document (author only)' })
+  @ApiOkResponse({
+    description: 'The saved card with its `version` bumped — a stale `expectedVersion` is refused',
+  })
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -212,6 +247,7 @@ export class DocumentsController {
   @Post(':id/files')
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Attach a file (main body or attachment) to a draft' })
+  @ApiCreatedResponse({ description: 'The card with the file in its `files` list' })
   addFile(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -226,6 +262,10 @@ export class DocumentsController {
   @ApiOperation({
     summary: "Download a document's file (document visibility + ДСП + antivirus gate)",
   })
+  @ApiFoundResponse({
+    description:
+      '302 to a short-lived presigned object URL — there is no JSON body to read; follow the `Location` header',
+  })
   async downloadFile(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -238,7 +278,13 @@ export class DocumentsController {
   @Get(':id/files/:fileId/preview')
   @RequirePermission('docflow.use')
   @Redirect()
-  @ApiOperation({ summary: "A preview tile for a document's file (same access gate)" })
+  @ApiOperation({
+    summary:
+      "A preview tile for a document's file (same access gate); optional `?size` — small, medium (default) or large",
+  })
+  @ApiFoundResponse({
+    description: '302 to a short-lived presigned URL for the rendered tile, not a JSON body',
+  })
   async previewFile(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -252,6 +298,7 @@ export class DocumentsController {
   @Post(':id/actions/register')
   @RequirePermission('docflow.register')
   @ApiOperation({ summary: 'Register the document: assign a journal and mint its number' })
+  @ApiCreatedResponse({ description: 'The card with its journal, registration number and date' })
   register(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -263,6 +310,7 @@ export class DocumentsController {
   @Post(':id/actions/create-response')
   @RequirePermission('docflow.create')
   @ApiOperation({ summary: 'Draft the outgoing answer to this incoming document' })
+  @ApiCreatedResponse({ description: 'The card of the NEW outgoing draft, linked to the incoming' })
   createResponse(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -274,6 +322,7 @@ export class DocumentsController {
   @Post(':id/actions/status')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Advance / roll back the document status' })
+  @ApiCreatedResponse({ description: 'The card in its new status, with `availableActions` redone' })
   changeStatus(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

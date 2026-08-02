@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import type { AcknowledgementSheetDto } from '@cuks/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -23,6 +23,10 @@ export class AcknowledgementsController {
   @Get('documents/:id/acquaintances')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: "A document's acknowledgement sheet" })
+  @ApiOkResponse({
+    description:
+      'Every reader on the sheet, how many have signed off, and the step (if any) the caller may acknowledge against',
+  })
   sheet(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -33,6 +37,7 @@ export class AcknowledgementsController {
   @Post('route-steps/:id/actions/acknowledge')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Acknowledge (read) the document at an acknowledge step' })
+  @ApiCreatedResponse({ description: 'The sheet again, with the caller’s line marked read' })
   acknowledge(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,

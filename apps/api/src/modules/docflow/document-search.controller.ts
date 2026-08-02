@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   documentSearchQuerySchema,
@@ -43,6 +43,7 @@ export class DocumentSearchController {
   @RequirePermission('docflow.use')
   @Throttle(SEARCH_PER_MINUTE)
   @ApiOperation({ summary: 'Full-text search over the documents the caller may see' })
+  @ApiOkResponse({ description: 'A page of hits with their highlighted fragments' })
   find(
     @Query(new ZodValidationPipe(documentSearchQuerySchema)) query: DocumentSearchQuery,
     @CurrentUser() user: AuthUser,
@@ -54,6 +55,7 @@ export class DocumentSearchController {
   @RequirePermission('docflow.use')
   @Throttle(QUICK_PER_MINUTE)
   @ApiOperation({ summary: 'Command palette: at most five visible documents' })
+  @ApiOkResponse({ description: 'Up to five hits, unpaginated' })
   quick(
     @Query(new ZodValidationPipe(quickQuerySchema)) query: { q: string },
     @CurrentUser() user: AuthUser,
@@ -64,6 +66,9 @@ export class DocumentSearchController {
   @Get('attention')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Dashboard counts: what is waiting on the caller right now' })
+  @ApiOkResponse({
+    description: 'A count per queue; a queue the caller may not see is absent rather than zero',
+  })
   attentionCounts(@CurrentUser() user: AuthUser): Promise<AttentionCountsDto> {
     return this.attention.counts(user);
   }

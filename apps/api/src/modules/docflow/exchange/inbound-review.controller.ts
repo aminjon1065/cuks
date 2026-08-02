@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   inboundExchangeQuerySchema,
@@ -32,6 +32,10 @@ export class InboundReviewController {
   @Get()
   @RequirePermission('docflow.register')
   @ApiOperation({ summary: 'Messages that arrived and are waiting to be turned into documents' })
+  @ApiOkResponse({
+    description:
+      'A page of inbound messages with their attachments, matched correspondent and quarantine reason',
+  })
   list(
     @Query(new ZodValidationPipe(inboundExchangeQuerySchema)) query: InboundExchangeQuery,
     @CurrentUser() user: AuthUser,
@@ -43,6 +47,9 @@ export class InboundReviewController {
   @RequirePermission('docflow.register')
   @HttpCode(200)
   @ApiOperation({ summary: 'Register the message as an incoming document' })
+  @ApiOkResponse({
+    description: 'The message, now carrying the id and registration number of the created document',
+  })
   register(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(registerInboundExchangeSchema))
@@ -56,6 +63,7 @@ export class InboundReviewController {
   @RequirePermission('docflow.register')
   @HttpCode(200)
   @ApiOperation({ summary: 'Refuse the message, with a reason' })
+  @ApiOkResponse({ description: 'The message, now rejected, with the reason recorded on it' })
   reject(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(rejectInboundExchangeSchema)) body: RejectInboundExchangeInput,

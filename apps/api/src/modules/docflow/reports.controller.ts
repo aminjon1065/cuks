@@ -36,6 +36,7 @@ export class ReportsController {
   @Get('discipline')
   @RequirePermission('docflow.reports.view')
   @ApiOperation({ summary: 'Executive-discipline report by subdivision and executor' })
+  @ApiOkResponse({ description: 'Counts per subdivision and executor — no document is named' })
   discipline(
     @Query(new ZodValidationPipe(disciplineReportQuerySchema)) query: DisciplineReportQuery,
     @CurrentUser() user: AuthUser,
@@ -60,6 +61,9 @@ export class ReportsController {
   @Get('acknowledgement')
   @RequirePermission('docflow.reports.view')
   @ApiOperation({ summary: 'Who was told to read what, and who actually did' })
+  @ApiOkResponse({
+    description: 'Named documents and readers, filtered row by row to the caller’s own visibility',
+  })
   acknowledgement(
     @Query(new ZodValidationPipe(acknowledgementReportQuerySchema))
     query: AcknowledgementReportQuery,
@@ -88,6 +92,7 @@ export class ReportsController {
   @ApiOperation({
     summary: 'Register reports: movement, registration, deadlines, dispatch, archive',
   })
+  @ApiOkResponse({ description: 'Column keys, rows and column-wise totals for the chosen kind' })
   register(
     @Query(new ZodValidationPipe(registerReportQuerySchema)) query: RegisterReportQuery,
     @CurrentUser() user: AuthUser,
@@ -97,7 +102,11 @@ export class ReportsController {
 
   @Get('register/export')
   @RequirePermission('docflow.reports.view')
-  @ApiOperation({ summary: 'The same report as an XLSX workbook' })
+  @ApiOperation({
+    summary:
+      'Register report (movement / registration / deadlines / dispatch / archive) as an XLSX workbook',
+  })
+  @ApiOkResponse({ description: 'XLSX workbook attachment' })
   async registerExport(
     @Query(new ZodValidationPipe(registerReportQuerySchema)) query: RegisterReportQuery,
     @CurrentUser() user: AuthUser,

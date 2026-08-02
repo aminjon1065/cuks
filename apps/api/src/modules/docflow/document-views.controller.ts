@@ -1,5 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   saveDocumentViewSchema,
@@ -29,6 +35,7 @@ export class DocumentViewsController {
   @Get()
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'My saved register views, plus the ones colleagues shared' })
+  @ApiOkResponse({ description: 'The caller’s own views and the shared ones' })
   list(@CurrentUser() user: AuthUser): Promise<DocumentViewDto[]> {
     return this.views.list(user);
   }
@@ -36,6 +43,7 @@ export class DocumentViewsController {
   @Post()
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Save the current filters as a named view' })
+  @ApiCreatedResponse({ description: 'The saved view' })
   create(
     @Body(new ZodValidationPipe(saveDocumentViewSchema)) body: SaveDocumentViewInput,
     @CurrentUser() user: AuthUser,
@@ -46,6 +54,7 @@ export class DocumentViewsController {
   @Patch(':id')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Rename a view, re-save its filters, or share it' })
+  @ApiOkResponse({ description: 'The updated view' })
   update(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @Body(new ZodValidationPipe(updateDocumentViewSchema)) body: UpdateDocumentViewInput,
@@ -58,6 +67,7 @@ export class DocumentViewsController {
   @RequirePermission('docflow.use')
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete one of my views' })
+  @ApiNoContentResponse({ description: 'Deleted — 204 with no body' })
   async remove(
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
     @CurrentUser() user: AuthUser,

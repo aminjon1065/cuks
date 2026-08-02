@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   correspondentsQuerySchema,
@@ -55,6 +55,7 @@ export class DocflowController {
   @Get('journals')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List registration journals' })
+  @ApiOkResponse({ description: 'Journals with their number template and sequence-reset rule' })
   listJournals(): Promise<JournalDto[]> {
     return this.journals.list();
   }
@@ -62,6 +63,7 @@ export class DocflowController {
   @Post('journals')
   @RequirePermission('docflow.journals.manage')
   @ApiOperation({ summary: 'Create a registration journal' })
+  @ApiCreatedResponse({ description: 'The new journal' })
   createJournal(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createJournalSchema)) body: CreateJournalInput,
@@ -71,6 +73,11 @@ export class DocflowController {
 
   @Patch('journals/:id')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({
+    summary:
+      'Edit a registration journal (`docflow.journals.manage`) — numbers already minted are untouched',
+  })
+  @ApiOkResponse({ description: 'The updated journal' })
   patchJournal(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -82,6 +89,11 @@ export class DocflowController {
   @Delete('journals/:id')
   @RequirePermission('docflow.journals.manage')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Retire a registration journal (`docflow.journals.manage`) — a soft delete; documents already registered in it keep their numbers',
+  })
+  @ApiOkResponse({ description: '`{ ok: true }` — 200 with a body, not 204' })
   async removeJournal(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -95,6 +107,7 @@ export class DocflowController {
   @Get('correspondents')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List/search correspondents' })
+  @ApiOkResponse({ description: 'Correspondents matching the query, with their category' })
   listCorrespondents(
     @Query(new ZodValidationPipe(correspondentsQuerySchema)) query: CorrespondentsQuery,
   ): Promise<CorrespondentDto[]> {
@@ -104,6 +117,7 @@ export class DocflowController {
   @Post('correspondents')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Create a correspondent (inline from the registration wizard)' })
+  @ApiCreatedResponse({ description: 'The new correspondent' })
   createCorrespondent(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createCorrespondentSchema)) body: CreateCorrespondentInput,
@@ -115,6 +129,11 @@ export class DocflowController {
   // reserved for the chancellery — only create-on-the-fly is open to docflow.use.
   @Patch('correspondents/:id')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({
+    summary:
+      'Edit a correspondent — needs `docflow.journals.manage`, unlike creating one, which any `docflow.use` may do',
+  })
+  @ApiOkResponse({ description: 'The updated correspondent' })
   patchCorrespondent(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -126,6 +145,11 @@ export class DocflowController {
   @Delete('correspondents/:id')
   @RequirePermission('docflow.journals.manage')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Retire a correspondent (`docflow.journals.manage`) — a soft delete; documents that name it are untouched',
+  })
+  @ApiOkResponse({ description: '`{ ok: true }` — 200 with a body, not 204' })
   async removeCorrespondent(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -139,12 +163,15 @@ export class DocflowController {
   @Get('nomenclature')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List the case-index nomenclature' })
+  @ApiOkResponse({ description: 'Cases with their index, title and retention term' })
   listNomenclature(): Promise<NomenclatureDto[]> {
     return this.nomenclature.list();
   }
 
   @Post('nomenclature')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({ summary: 'Add a case to the nomenclature (`docflow.journals.manage`)' })
+  @ApiCreatedResponse({ description: 'The new case' })
   createNomenclature(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(createNomenclatureSchema)) body: CreateNomenclatureInput,
@@ -154,6 +181,11 @@ export class DocflowController {
 
   @Patch('nomenclature/:id')
   @RequirePermission('docflow.journals.manage')
+  @ApiOperation({
+    summary:
+      'Edit a nomenclature case (`docflow.journals.manage`) — retention terms already frozen on filed documents do not move',
+  })
+  @ApiOkResponse({ description: 'The updated case' })
   patchNomenclature(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -165,6 +197,11 @@ export class DocflowController {
   @Delete('nomenclature/:id')
   @RequirePermission('docflow.journals.manage')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Retire a nomenclature case (`docflow.journals.manage`) — a soft delete; documents filed into it stay filed',
+  })
+  @ApiOkResponse({ description: '`{ ok: true }` — 200 with a body, not 204' })
   async removeNomenclature(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -178,6 +215,7 @@ export class DocflowController {
   @Get('document-types')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List active document types for registration forms' })
+  @ApiOkResponse({ description: 'Active types only — retired ones are never offered' })
   listDocumentTypes(): Promise<DocumentTypeDto[]> {
     return this.dictionaries.documentTypes();
   }
@@ -185,6 +223,7 @@ export class DocflowController {
   @Get('correspondent-categories')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'List active correspondent categories' })
+  @ApiOkResponse({ description: 'Active categories only' })
   listCorrespondentCategories(): Promise<CorrespondentCategoryDto[]> {
     return this.dictionaries.correspondentCategories();
   }

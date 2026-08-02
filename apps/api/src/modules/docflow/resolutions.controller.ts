@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   createResolutionSchema,
@@ -33,6 +33,7 @@ export class ResolutionsController {
   @Get('documents/:id/resolutions')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'The resolution tree of a document' })
+  @ApiOkResponse({ description: 'Resolutions with their sub-resolutions nested under them' })
   forDocument(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -43,6 +44,7 @@ export class ResolutionsController {
   @Post('documents/:id/resolutions')
   @RequirePermission('docflow.resolve')
   @ApiOperation({ summary: 'Issue a resolution on a document' })
+  @ApiCreatedResponse({ description: 'The document’s resolution tree, including the new one' })
   create(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -54,6 +56,7 @@ export class ResolutionsController {
   @Post('resolutions/:id/subresolutions')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Delegate a sub-resolution (executor only)' })
+  @ApiCreatedResponse({ description: 'The resolution tree with the sub-resolution in place' })
   createSub(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -65,6 +68,7 @@ export class ResolutionsController {
   @Post('resolutions/:id/actions/report')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Submit the execution report (executor)' })
+  @ApiCreatedResponse({ description: 'The resolution tree with the report recorded' })
   report(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -76,6 +80,7 @@ export class ResolutionsController {
   @Post('resolutions/:id/actions/done')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Mark the resolution executed' })
+  @ApiCreatedResponse({ description: 'The resolution tree with this branch closed' })
   complete(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -86,6 +91,7 @@ export class ResolutionsController {
   @Post('resolutions/:id/actions/extend')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Extend the deadline (author or control officer)' })
+  @ApiCreatedResponse({ description: 'The resolution tree with the new deadline' })
   extend(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -97,6 +103,7 @@ export class ResolutionsController {
   @Post('resolutions/:id/actions/cancel')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Cancel the resolution (author or control officer)' })
+  @ApiCreatedResponse({ description: 'The resolution tree with this branch cancelled' })
   cancel(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
@@ -107,6 +114,9 @@ export class ResolutionsController {
   @Post('resolutions/:id/actions/uncontrol')
   @RequirePermission('docflow.use')
   @ApiOperation({ summary: 'Remove the resolution from control, keeping it active (with reason)' })
+  @ApiCreatedResponse({
+    description: 'The resolution tree; the resolution is no longer on control',
+  })
   removeFromControl(
     @CurrentUser() user: AuthUser,
     @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
