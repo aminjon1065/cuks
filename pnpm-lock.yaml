@@ -394,6 +394,9 @@ importers:
       gdal-async:
         specifier: ^3.12.3
         version: 3.12.3
+      ioredis:
+        specifier: ^5.4.2
+        version: 5.11.1
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0

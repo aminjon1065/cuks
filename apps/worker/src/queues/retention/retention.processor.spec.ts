@@ -50,6 +50,11 @@ function makeDb(queue: unknown[][], opts: { txThrowsOnNodeIndex?: number } = {})
   return { db };
 }
 
+/** Stands in for JobMetricsService — records the calls the sweep makes, never fails. */
+function makeMetrics() {
+  return { record: vi.fn().mockResolvedValue(undefined) };
+}
+
 function makeProcessor(queue: unknown[][], opts: { txThrowsOnNodeIndex?: number } = {}) {
   const { db } = makeDb(queue, opts);
   const storage = {
@@ -57,8 +62,14 @@ function makeProcessor(queue: unknown[][], opts: { txThrowsOnNodeIndex?: number 
     abortMultipartUpload: vi.fn().mockResolvedValue(undefined),
   };
   const avScanQueue = { add: vi.fn().mockResolvedValue(undefined) };
-  const processor = new RetentionProcessor(db as never, storage as never, avScanQueue as never);
-  return { processor, db, storage, avScanQueue };
+  const metrics = makeMetrics();
+  const processor = new RetentionProcessor(
+    db as never,
+    storage as never,
+    avScanQueue as never,
+    metrics as never,
+  );
+  return { processor, db, storage, avScanQueue, metrics };
 }
 
 const oldDate = new Date('2020-01-01T00:00:00Z');
@@ -187,6 +198,56 @@ describe('RetentionProcessor — abandoned upload purge', () => {
     ]);
     storage.abortMultipartUpload.mockRejectedValueOnce(new Error('NoSuchUpload'));
     await expect(processor.process({} as never)).resolves.toBeUndefined();
+  });
+});
+
+describe('RetentionProcessor — run metrics', () => {
+  it('records a successful run with the counts from its own log line', async () => {
+    const { processor, metrics } = makeProcessor([
+      [{ id: 'u1' }], // one abandoned upload…
+      [{ id: 'u1', storageKey: 'k1', s3UploadId: 's3-1' }], // …claimed
+      [], // trash: nothing eligible
+      [], // reconcile: nothing stale
+    ]);
+    await processor.process({} as never);
+
+    expect(metrics.record).toHaveBeenCalledTimes(1);
+    const [job, , outcome] = metrics.record.mock.calls[0]!;
+    expect(job).toBe('retention');
+    expect(outcome).toEqual({
+      ok: true,
+      counts: {
+        purged: 0,
+        abandoned: 1,
+        reconciled: 0,
+        expiredLinks: 0,
+        recordingsPurged: 0,
+        dispositionCandidates: 0,
+      },
+    });
+  });
+
+  it('records a failure and still propagates it, so BullMQ retries as before', async () => {
+    const boom = new Error('connection terminated unexpectedly');
+    const db = {
+      select() {
+        throw boom;
+      },
+    };
+    const metrics = makeMetrics();
+    const processor = new RetentionProcessor(
+      db as never,
+      {} as never,
+      {} as never,
+      metrics as never,
+    );
+
+    await expect(processor.process({} as never)).rejects.toThrow(boom);
+
+    expect(metrics.record).toHaveBeenCalledTimes(1);
+    const [job, , outcome] = metrics.record.mock.calls[0]!;
+    expect(job).toBe('retention');
+    expect(outcome).toEqual({ ok: false, error: boom });
   });
 });
 

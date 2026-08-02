@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolutions, tasks, userPositions } from '@cuks/db';
+import { decodeJobRun } from '@cuks/shared';
+import { JobMetricsService } from '../../common/job-metrics.service';
 import { DeadlinesProcessor } from './deadlines.processor';
 
 /**
@@ -67,18 +69,32 @@ const resolutionRow = (over: Partial<Record<string, unknown>>) => ({
 
 const NOW = new Date('2026-07-15T06:00:00.000Z'); // due today for the base row
 
-async function run(
+/** Stands in for JobMetricsService — records the calls the sweep makes, never fails. */
+function makeMetrics() {
+  return { record: vi.fn().mockResolvedValue(undefined) };
+}
+
+async function runWithMetrics(
   scanRows: unknown[],
   headRows: { userId: string }[] = [],
   taskRows: unknown[] = [],
 ) {
   const { db, inserted } = makeDb(scanRows, headRows, taskRows);
+  const metrics = makeMetrics();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
-  const proc = new DeadlinesProcessor(db as never);
+  const proc = new DeadlinesProcessor(db as never, metrics as never);
   await proc.process({ id: 'job1' } as never);
   vi.useRealTimers();
-  return inserted;
+  return { inserted, metrics };
+}
+
+async function run(
+  scanRows: unknown[],
+  headRows: { userId: string }[] = [],
+  taskRows: unknown[] = [],
+) {
+  return (await runWithMetrics(scanRows, headRows, taskRows)).inserted;
 }
 
 const taskRow = (over: Partial<Record<string, unknown>>) => ({
@@ -194,6 +210,102 @@ describe('DeadlinesProcessor', () => {
     ).toHaveLength(0);
     // Due today but unassigned → nothing to remind.
     expect(taskInserts(await run([], [], [taskRow({ assigneeIds: [] })]))).toHaveLength(0);
+  });
+});
+
+describe('DeadlinesProcessor — run metrics', () => {
+  it('records a successful run with the counts from its own log line', async () => {
+    const { metrics } = await runWithMetrics(
+      [resolutionRow({})], // one scanned resolution, due today → one docflow reminder
+      [],
+      [taskRow({})], // one task due today → one task reminder
+    );
+    expect(metrics.record).toHaveBeenCalledTimes(1);
+    const [job, , outcome] = metrics.record.mock.calls[0]!;
+    expect(job).toBe('deadlines');
+    expect(outcome).toEqual({
+      ok: true,
+      counts: { scanned: 1, emitted: 1, taskEmitted: 1, routeEmitted: 0 },
+    });
+  });
+
+  it('records a failure and still propagates it, so BullMQ retries as before', async () => {
+    const boom = new Error('connection terminated unexpectedly');
+    const db = {
+      select() {
+        throw boom;
+      },
+    };
+    const metrics = makeMetrics();
+    const proc = new DeadlinesProcessor(db as never, metrics as never);
+
+    await expect(proc.process({ id: 'job1' } as never)).rejects.toThrow(boom);
+
+    expect(metrics.record).toHaveBeenCalledTimes(1);
+    const [job, , outcome] = metrics.record.mock.calls[0]!;
+    expect(job).toBe('deadlines');
+    expect(outcome).toEqual({ ok: false, error: boom });
+  });
+});
+
+describe('DeadlinesProcessor — the recorder cannot fail the sweep', () => {
+  /** The real JobMetricsService over a stub Redis, so the whole chain is under test. */
+  const realMetrics = (set: ReturnType<typeof vi.fn>) => new JobMetricsService({ set } as never);
+
+  it('completes a sweep even when Redis is unreachable at the success record', async () => {
+    const { db, inserted } = makeDb([resolutionRow({})], [], []);
+    const set = vi.fn().mockRejectedValue(new Error('redis down'));
+    const proc = new DeadlinesProcessor(db as never, realMetrics(set) as never);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    try {
+      await expect(proc.process({ id: 'job1' } as never)).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(set, 'the write was attempted').toHaveBeenCalledTimes(1);
+    expect(inserted, 'and the sweep still did its work').toHaveLength(1);
+  });
+
+  it('never stores a completed sweep as failed, even if the recorder throws', async () => {
+    const { db } = makeDb([], [], []);
+    // The real recorder never rejects (job-metrics.service.spec.ts pins that); this stub exists
+    // to prove the success record sits OUTSIDE the try. From inside it, this rejection would be
+    // caught by the failure branch and a sweep that finished would be stored as `ok: false`.
+    const metrics = { record: vi.fn().mockRejectedValue(new Error('metrics down')) };
+    const proc = new DeadlinesProcessor(db as never, metrics as never);
+
+    await expect(proc.process({ id: 'job1' } as never)).rejects.toThrow('metrics down');
+
+    expect(metrics.record).toHaveBeenCalledTimes(1);
+    expect(metrics.record.mock.calls[0]![2]).toEqual({
+      ok: true,
+      counts: { scanned: 0, emitted: 0, taskEmitted: 0, routeEmitted: 0 },
+    });
+  });
+
+  it('hands BullMQ the original thrown value, however hostile', async () => {
+    // `String()` on this throws; rendering it in front of the Redis write would make `record()`
+    // reject and that rejection — not the real cause — would be what BullMQ sees.
+    const hostile: unknown = Object.create(null);
+    const db = {
+      select() {
+        throw hostile;
+      },
+    };
+    const set = vi.fn().mockResolvedValue('OK');
+    const proc = new DeadlinesProcessor(db as never, realMetrics(set) as never);
+
+    const caught = await proc.process({ id: 'job1' } as never).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(caught, "the sweep's own throw, not the recorder's").toBe(hostile);
+    const record = decodeJobRun(set.mock.calls[0]![1] as string);
+    expect(record?.ok).toBe(false);
+    expect(record?.error).toBe('unstringifiable error');
   });
 });
 

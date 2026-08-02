@@ -30,6 +30,7 @@ import {
   type TasksDeadlinePayload,
 } from '@cuks/shared';
 import { DB } from '../../common/db.module';
+import { JobMetricsService } from '../../common/job-metrics.service';
 
 const DUSHANBE_OFFSET_MS = 5 * 60 * 60 * 1000;
 
@@ -50,11 +51,36 @@ const headUserPosition = aliasedTable(userPositions, 'head_user_position');
 export class DeadlinesProcessor extends WorkerHost {
   private readonly logger = new Logger(DeadlinesProcessor.name);
 
-  constructor(@Inject(DB) private readonly db: Database) {
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly metrics: JobMetricsService,
+  ) {
     super();
   }
 
+  /**
+   * Times the whole sweep and records its outcome (plan этап 4 «метрики длительности/ошибок»)
+   * before letting a failure through unchanged — BullMQ's retry and failed-count behaviour must
+   * stay exactly as it was; the recorder only observes.
+   */
   async process(job: Job): Promise<void> {
+    const startedAt = Date.now();
+    let counts: Record<string, number>;
+    try {
+      counts = await this.sweep(job);
+    } catch (error) {
+      await this.metrics.record('deadlines', startedAt, { ok: false, error });
+      throw error;
+    }
+    // Outside the guarded block on purpose: only the sweep's own failure may reach the branch
+    // above. Recorded from inside it, a throw out of the recorder would store a sweep that
+    // finished its work as failed and re-throw it to BullMQ as a failed job — the exact
+    // inversion this feature exists to prevent.
+    await this.metrics.record('deadlines', startedAt, { ok: true, counts });
+  }
+
+  /** The sweep itself; returns what it did, in its own units. */
+  private async sweep(job: Job): Promise<Record<string, number>> {
     const now = new Date();
     const day = new Date(now.getTime() + DUSHANBE_OFFSET_MS).toISOString().slice(0, 10);
 
@@ -136,6 +162,7 @@ export class DeadlinesProcessor extends WorkerHost {
       { jobId: job.id, scanned: rows.length, emitted, taskEmitted, routeEmitted },
       'deadline sweep',
     );
+    return { scanned: rows.length, emitted, taskEmitted, routeEmitted };
   }
 
   /**

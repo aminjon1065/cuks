@@ -12,6 +12,23 @@ export function formatDateTime(iso: string): string {
   return DT.format(new Date(iso));
 }
 
+/** Unit a duration is worth printing in; the words themselves live in i18n. */
+export type DurationUnit = 'ms' | 'sec' | 'min';
+
+/**
+ * Split a duration into a number and a unit key.
+ *
+ * The scheduled sweeps span four orders of magnitude — a retention pass over an empty day is
+ * milliseconds, an audit-maintenance run is minutes — so a single fixed unit would print either
+ * «0 мин» or «2 400 000 мс». One decimal is kept: the operator needs to notice 40 s → 4 мин, not
+ * to time the run.
+ */
+export function durationParts(ms: number): { unit: DurationUnit; value: number } {
+  if (ms < 1000) return { unit: 'ms', value: Math.round(ms) };
+  if (ms < 60_000) return { unit: 'sec', value: Math.round(ms / 100) / 10 };
+  return { unit: 'min', value: Math.round(ms / 6_000) / 10 };
+}
+
 function csvCell(value: unknown): string {
   const s = value === null || value === undefined ? '' : String(value);
   return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

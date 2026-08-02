@@ -10,7 +10,9 @@ import { E2E_DUTY, STORAGE_STATE } from './support/fixtures';
  */
 const API = 'http://localhost:3000';
 
-test('health dashboard renders services, queues and storage', async ({ page }) => {
+test('health dashboard renders services, queues, storage and scheduled sweeps', async ({
+  page,
+}) => {
   await page.goto('/app/admin/health');
   await expect(
     page.getByRole('main').getByRole('heading', { name: 'Здоровье платформы' }),
@@ -18,6 +20,10 @@ test('health dashboard renders services, queues and storage', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Сервисы' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Очереди задач' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Хранилище' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Регламентные развёртки' })).toBeVisible();
+  // The panel always has one card per METERED_JOBS, run or not — so a named job is a safe
+  // assertion on a fresh e2e database, where no sweep has fired yet.
+  await expect(page.getByText('Сроки документов')).toBeVisible();
   // A known probe label — its presence means /admin/health answered end-to-end.
   await expect(page.getByText('PostgreSQL')).toBeVisible();
 });
@@ -34,6 +40,7 @@ test('admin health API: shape, ACL and unknown-queue 404', async () => {
       storage: unknown;
       errors24h: number;
       backup: unknown;
+      jobs: { job: string; health: string; ran: boolean }[];
     };
     expect(Array.isArray(body.services)).toBe(true);
     expect(body.services.length).toBeGreaterThan(0);
@@ -41,6 +48,13 @@ test('admin health API: shape, ACL and unknown-queue 404', async () => {
     expect(body.storage).toBeTruthy();
     expect(typeof body.errors24h).toBe('number');
     expect(body).toHaveProperty('backup');
+    // One row per METERED_JOBS, unconditionally: a job with nothing in Redis is reported as
+    // never-run rather than omitted, so the panel can say so instead of silently shrinking.
+    expect(body.jobs.map((j) => j.job).sort()).toEqual([
+      'audit-maintenance',
+      'deadlines',
+      'retention',
+    ]);
 
     // duty_officer has meet/chat/etc. but not admin.system.monitor → 403.
     expect((await duty.get('/api/v1/admin/health')).status()).toBe(403);

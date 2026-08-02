@@ -5,6 +5,7 @@ export * from './docflow/template-variables';
 export * from './dto/index';
 export * from './enums/index';
 export * from './gis/slug';
+export * from './metrics/index';
 export * from './permissions/index';
 export * from './notifications/index';
 export * from './ordering/fractional-index';

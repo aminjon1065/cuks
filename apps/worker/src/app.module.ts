@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DEFAULT_JOB_OPTIONS } from '@cuks/shared';
 import { DbModule } from './common/db.module';
+import { JobMetricsModule } from './common/job-metrics.module';
+import { RedisModule } from './common/redis.module';
 import { StorageModule } from './common/storage.module';
 import { validateEnv, type WorkerEnv } from './config/env';
 import { AuditMaintenanceModule } from './queues/audit-maintenance/audit-maintenance.module';
@@ -22,7 +24,9 @@ import { TextExtractModule } from './queues/text-extract/text-extract.module';
  * text-extract/retention) with its own S3 client (StorageModule — no cross-app
  * import from apps/api, same precedent as the DB pool/mail transport). Phase 2.8
  * adds the geodata pipeline (geo-import/geo-export), which reads and writes GIS
- * formats with GDAL/OGR through `gdal-async`.
+ * formats with GDAL/OGR through `gdal-async`. Plan этап 4 adds a plain Redis
+ * client (RedisModule — again the worker's own, not apps/api's) so the scheduled
+ * sweeps can record their runs for the admin health screen (JobMetricsModule).
  */
 @Module({
   imports: [
@@ -38,6 +42,8 @@ import { TextExtractModule } from './queues/text-extract/text-extract.module';
       }),
     }),
     DbModule,
+    RedisModule,
+    JobMetricsModule,
     StorageModule,
     EmailModule,
     DeadlinesModule,

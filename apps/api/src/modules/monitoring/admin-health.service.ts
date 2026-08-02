@@ -5,10 +5,16 @@ import { desc, sql } from 'drizzle-orm';
 import { backupRuns, type Database } from '@cuks/db';
 import {
   HEALTH_SERVICES,
+  METERED_JOBS,
+  jobRunHealth,
+  truncateSafe,
   type DependencyState,
   type HealthOverview,
   type HealthServiceKey,
   type HealthState,
+  type JobRunRecord,
+  type JobRunStatus,
+  type MeteredJob,
   type SchemaSize,
   type ServiceStatus,
   type StorageStats,
@@ -23,6 +29,14 @@ import { QueueStatsService } from './queue-stats.service';
 
 const PROBE_TIMEOUT_MS = 2000;
 const STORAGE_CACHE_MS = 60_000;
+
+/**
+ * Cap on the error text of a job run as it leaves the api.
+ *
+ * Same 2 000 chars the deadline and notification outboxes already cap their `last_error` at, so a
+ * message that survives one path survives the other.
+ */
+const MAX_ERROR_LENGTH = 2_000;
 
 /**
  * Aggregates the admin "Здоровье" dashboard (docs/modules/16 §7): backing-service probes, storage sizes,
@@ -46,21 +60,25 @@ export class AdminHealthService {
   ) {}
 
   async overview(): Promise<HealthOverview> {
-    const [services, storage, queues, errors24h, backup] = await Promise.all([
+    const [services, storage, queues, errors24h, backup, jobRuns] = await Promise.all([
       this.probeServices(),
       this.storageStats(),
       this.queues.stats(),
       this.metrics.errorsLast24h(),
       this.lastBackup(),
+      this.metrics.jobRuns(),
     ]);
+    const now = new Date();
+    const jobs = jobStatuses(jobRuns, now);
     return {
-      status: aggregate(services),
+      status: withJobs(aggregate(services), jobs),
       services,
       queues,
       storage,
       backup,
+      jobs,
       errors24h,
-      generatedAt: new Date().toISOString(),
+      generatedAt: now.toISOString(),
     };
   }
 
@@ -229,6 +247,97 @@ export function aggregate(services: ServiceStatus[]): HealthState {
   if (up === configured.length) return 'ok';
   if (up === 0) return 'down';
   return 'degraded';
+}
+
+/**
+ * Flatten the last-run records into dashboard rows, in METERED_JOBS order. Exported for tests.
+ *
+ * A job with no record is not omitted: «нет данных» about a sweep that is supposed to run every
+ * night is itself the finding, and a missing row would simply be invisible on the screen.
+ */
+export function jobStatuses(
+  runs: Record<MeteredJob, JobRunRecord | null>,
+  now: Date = new Date(),
+): JobRunStatus[] {
+  return METERED_JOBS.map((job): JobRunStatus => {
+    const record = runs[job];
+    const health = jobRunHealth(job, record, now);
+    return record
+      ? { job, health, ran: true, ...record, error: cappedError(record.error) }
+      : {
+          job,
+          health,
+          ran: false,
+          finishedAt: null,
+          durationMs: null,
+          ok: null,
+          counts: null,
+          error: null,
+        };
+  });
+}
+
+/**
+ * Bound the stored error text on the way out.
+ *
+ * The record carries whatever the processor threw, and that is not a sentence: a driver exception
+ * arrives with the failing statement inlined, a fetch failure with the whole cause chain. Unbounded,
+ * it goes onto a JSON response the dashboard polls every few seconds and into a table cell with no
+ * room for it.
+ *
+ * Capping at the write is not enough on its own, which is why the bound is repeated here rather
+ * than assumed: a record already in Redis outlives any change to the writer by up to
+ * `JOB_RUN_TTL_SECONDS` (45 days), and the api and the worker are separate deployables that roll
+ * independently. So this is a backstop over a value the api did not produce — an older format, a
+ * hand-edited key, a worker that has not rolled yet — and it is deliberately WIDER than the
+ * worker's own cap (500 chars) rather than equal to it: anything the current writer stored is
+ * already shorter and passes through untouched, so nothing is cut twice, and a backstop pinned to
+ * the writer's number would have to be changed in lockstep across two deployables to keep meaning
+ * the same thing.
+ *
+ * `truncateSafe`, not `slice`, so a message ending in an emoji does not leave a lone surrogate.
+ */
+function cappedError(error: string | null): string | null {
+  return error === null ? null : truncateSafe(error, MAX_ERROR_LENGTH);
+}
+
+/**
+ * Fold the sweeps into the overall status. Exported for tests.
+ *
+ * A sweep that threw (`failed`) or is overdue against its OWN schedule (`stale`) makes the
+ * platform degraded — that is exactly the case an operator currently cannot see. Two deliberate
+ * limits:
+ *
+ * - never worse than `degraded`: the sweeps are background bookkeeping, and a stuck retention run
+ *   does not mean the platform stopped serving. `down` stays reserved for the backing services.
+ * - `unknown` does not degrade anything. Nothing recorded means a fresh install before the first
+ *   nightly run, a flushed Redis, or Redis being unreachable — and in that last case the redis
+ *   probe is already red. Painting a new installation permanently yellow would teach people to
+ *   ignore the colour.
+ *
+ * Treating `unknown` as benign is only defensible while a job that HAS run cannot arrive back at
+ * it without being shown as broken first. That is not a property of this function — it is
+ * `JOB_RUN_TTL_COVERS_STALENESS`: the record's TTL outlives every threshold in
+ * `JOB_STALE_AFTER_HOURS`, so a sweep that stops running is still holding its last record when it
+ * crosses its own deadline, and the row turns `stale` — degrading and visible — instead of
+ * expiring quietly back into the benign label. The order is what the invariant buys, not
+ * permanence: the row stays `stale` for the rest of the record's life (the TTL minus the
+ * threshold — twelve days for the monthly sweep, about six weeks for the daily ones) and reads
+ * `unknown` again once the key does expire. So `unknown` means «no run is on record», which covers
+ * both a fresh install and a sweep dead for longer than the TTL; `stale` is the state that carries
+ * the «did not run» signal, and every job passes through it on the way.
+ *
+ * Cut the TTL below the longest threshold and this silently inverts for exactly the job it matters
+ * for: the monthly `audit-maintenance` record would expire before its 33-day deadline, so a dead
+ * sweep would go `ok` → `unknown` — indistinguishable from a fresh install, and by the rule above
+ * degrading nothing. That was the shipped behaviour of the first version (8-day TTL) and is why
+ * the invariant is a named export rather than a remark; `admin-health.service.spec.ts` asserts it
+ * here, at the reader that depends on it.
+ */
+export function withJobs(base: HealthState, jobs: JobRunStatus[]): HealthState {
+  if (base === 'down') return 'down';
+  const troubled = jobs.some((j) => j.health === 'failed' || j.health === 'stale');
+  return troubled ? 'degraded' : base;
 }
 
 function trimSlash(url: string): string {

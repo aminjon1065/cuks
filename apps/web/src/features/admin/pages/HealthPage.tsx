@@ -24,6 +24,8 @@ import type {
 } from '@cuks/shared';
 import { formatBytes, formatDateTime } from '@/lib/format';
 import { useDocumentTitle } from '@/lib/use-document-title';
+import { JobRunsSection } from '../components/JobRunsSection';
+import { Section } from '../components/Section';
 import { useHealth, useRetryQueue } from '../api/queries';
 
 const OVERALL_TONE: Record<HealthState, 'success' | 'warning' | 'danger'> = {
@@ -92,6 +94,7 @@ export function HealthPage(): React.JSX.Element {
           <Services services={data.services} t={t} />
           <Storage storage={data.storage} t={t} />
           <Queues queues={data.queues} onRetry={onRetry} retrying={retry.isPending} t={t} />
+          <JobRunsSection jobs={data.jobs} />
           <BackupAndErrors data={data} t={t} />
         </div>
       )}
@@ -100,21 +103,6 @@ export function HealthPage(): React.JSX.Element {
 }
 
 type TFn = ReturnType<typeof useTranslation>['t'];
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-text-muted">{title}</h2>
-      {children}
-    </section>
-  );
-}
 
 function Services({ services, t }: { services: ServiceStatus[]; t: TFn }): React.JSX.Element {
   const stateLabel = (s: ServiceStatus): string =>
@@ -282,6 +270,11 @@ function HealthSkeleton(): React.JSX.Element {
         ))}
       </div>
       <Skeleton className="h-48" />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-24" />
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 /** Health check contracts (docs/01 §Health). */
 
+import type { JobRunHealth, JobRunSummary } from '../metrics/index';
+
 export type HealthState = 'ok' | 'degraded' | 'down';
 export type DependencyState = 'up' | 'down';
 
@@ -68,6 +70,23 @@ export interface StorageStats {
   diskTotalBytes: number | null;
 }
 
+/**
+ * One scheduled sweep on the dashboard: its last recorded run plus the verdict on it
+ * (plan этап 4 «метрики длительности/ошибок»).
+ *
+ * The verdict travels with the row instead of being derived on the client, because it is not
+ * readable off the record: «26 hours ago» is late for the daily sweeps and perfectly normal for
+ * the monthly one, and only `jobRunHealth` knows which is which.
+ *
+ * `error` is the message of whatever the processor threw, bounded on both sides of Redis: the
+ * worker caps what it writes, and the api caps again on the way out, because a record stored
+ * before either bound existed outlives the change. Bounded is not short — a driver exception can
+ * still carry the failing statement inline — so it needs a wrapping block, not a fixed-width cell.
+ * Raw exception text either way: a diagnostic line for an operator, never something to parse or
+ * key off.
+ */
+export type JobRunStatus = JobRunSummary & { health: JobRunHealth };
+
 export interface BackupStatus {
   /** ISO timestamp of the last successful backup run, or null if none recorded yet. */
   lastSuccessAt: string | null;
@@ -80,6 +99,8 @@ export interface HealthOverview {
   queues: QueueStats[];
   storage: StorageStats;
   backup: BackupStatus;
+  /** Last recorded run of every metered scheduled sweep, one row per METERED_JOBS entry. */
+  jobs: JobRunStatus[];
   /** Count of 5xx responses in the last 24h (rolling, from Redis metric buckets). */
   errors24h: number;
   generatedAt: string;
