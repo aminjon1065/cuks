@@ -1,12 +1,24 @@
 # Модуль 16. Администрирование, уведомления, дашборд платформы
 
-## A. Админ-панель (`/app/admin`, по правам `admin.*`)
+## A. Админ-панель (по правам `admin.*`)
+
+Экраны SPA: `/app/admin/users`, `/app/admin/roles`, `/app/admin/org`, `/app/admin/audit`, `/app/admin/health`, `/app/admin/gis-access` (`apps/web/src/app/router.tsx`). Общего индекса `/app/admin` нет. Разделы §5 (настройки платформы) и §4 (единый справочник) не реализованы — см. соответствующие пункты; §8 и §9 живут в модуле ДОУ, а не здесь.
 
 ### 1. Пользователи (`admin.users.manage`)
 - DataTable: ФИО, username, должность/подразделение, роли, статус, 2FA, последний вход. Фильтры, поиск.
-- Создание: ФИО, username (генерация из ФИО с транслитом), временный пароль (генерация, показать один раз), подразделение+должность, роли. Импорт CSV списком (мастер с валидацией) — для первичного наполнения.
-- Карточка: профиль, должности (несколько), роли со скоупами, сессии (отзыв), сброс пароля (новый временный), сброс 2FA, блокировка/разблокировка (мгновенный разрыв сессий), сертификаты ЭЦП (список, отзыв), квоты файлов, журнал действий пользователя (фильтр аудита).
-- Увольнение = блокировка + мастер передачи: открытые шаги маршрутов, задачи, владение проектами/папками → выбрать преемника.
+- Создание: ФИО, username (генерация из ФИО с транслитом), временный пароль (генерация, показать один раз), подразделение+должность, роли.
+- Карточка: профиль, должности (несколько), роли со скоупами, сброс пароля (новый временный), сброс 2FA, блокировка/разблокировка, удаление.
+- Блокировка, сброс пароля и удаление отзывают **все** сессии пользователя и шлют WS-событие `auth.forced_logout` (`AdminUsersService.forceLogout` → `SessionService.revokeAll`), поэтому разрыв активной сессии — свойство самого действия, а не отдельного экрана сессий.
+
+Реализованные эндпоинты — ровно эти (`apps/api/src/modules/admin/admin-users.controller.ts`): `GET /admin/users`, `GET /admin/users/:id`, `POST /admin/users`, `PATCH /admin/users/:id`, `POST /admin/users/:id/{block,unblock,reset-password,reset-totp}`, `DELETE /admin/users/:id`.
+
+**Не реализовано** (осталось из исходного замысла, ни эндпоинта, ни экрана):
+- список сессий пользователя с точечным отзывом (`/:id/sessions`);
+- увольнение как мастер передачи дел (`/:id/transfer`) — открытые шаги маршрутов, задачи, владение проектами/папками на преемника; с приходом СЭД именно эта передача стала значимой;
+- импорт пользователей CSV;
+- редактирование файловых квот из карточки пользователя (колонка `users.quota_bytes` существует и читается файловым модулем, но админского UI для неё нет);
+- список/отзыв сертификатов ЭЦП из карточки;
+- журнал действий пользователя как вкладка карточки (фильтр `actorId` поддерживается API аудита, но UI его не выставляет — §6).
 
 ### 2. Орг-структура (`admin.org.manage`)
 Дерево с dnd-перемещением, CRUD подразделений и должностей, назначение руководителя. Перемещение сотрудника — обновляет каналы подразделений и скоупы. Визуализация: дерево + счётчики сотрудников.
@@ -14,26 +26,80 @@
 ### 3. Роли и права (`admin.roles.manage`)
 Список ролей; редактор роли — матрица чекбоксов permissions по модулям (из каталога shared) с описаниями по-русски. Системные роли — read-only (копировать как основу). Назначение ролей — из карточки пользователя (роль + опциональный скоуп-подразделение).
 
-### 4. Справочники (`admin.dicts.manage`)
-Единый UI дерева/списка для: виды ЧС, типы документов, категории/реестр корреспондентов, виды объектов инфраструктуры, номенклатура дел, журналы ДОУ (совместно с канцелярией), шаблоны маршрутов, метки-цвета. Деактивация вместо удаления, если код используется.
+### 4. Справочники
 
-### 5. Настройки платформы (`admin.settings.manage`)
+Единого админского экрана справочников **нет**, и `admin.dicts.manage` ничего не открывает: право есть в каталоге (`packages/shared/src/permissions/index.ts`) и выдано роли «Администратор платформы», но ни один контроллер и ни один экран его не проверяет.
+
+Фактическая поверхность — страница **«Настройки ДОУ» `/app/docs/settings`** (`apps/web/src/features/docflow/pages/DocflowSettingsPage.tsx`) с шестью вкладками: Журналы, Корреспонденты, Номенклатура дел, Типы резолюций, Шаблоны документов, Шаблоны маршрутов. Данные отдают контроллеры ДОУ под `/docflow/*`, а доступ решают **права ДОУ, а не `admin.*`**: `docflow.journals.manage` + `docflow.use` (последнее обязательно — без него экран открывается, но не может загрузить свои же списки; это отдельно записано в каталоге прав у роли платформенного администратора).
+
+Типы документов отдельной таблицы не имеют: это записи справочника `doc_type`, а их флаги (например `requiresSignature`, от которого зависит требование подписи перед регистрацией) лежат в `dictionaries.meta` — зафиксированное решение этапа 6.
+
+Без UI пока остались: виды ЧС, виды объектов инфраструктуры, метки-цвета.
+
+### 5. Настройки платформы — **не реализовано**
+
+Экрана настроек платформы нет. Нет ни таблицы `app.settings`, ни `SettingsService`, ни контроллера `/admin/settings`, ни маршрута в SPA. Хранилища пользовательских настроек в `packages/db/src/schema` тоже нет — единственная пер-пользовательская таблица предпочтений это `app.notification_prefs` (`packages/db/src/schema/notifications.ts`, §B). Право `admin.settings.manage` существует в каталоге и выдано роли платформенного администратора, но **ничего не открывает**.
+
+Всё, что понадобилось настраивать в ходе СЭД-трека, стало переменными окружения — причина записана прямо в `apps/api/src/config/env.ts`: «The project has no runtime settings store yet». Фактические переключатели СЭД (там же, zod-схема с дефолтами):
+
+| Переменная | По умолчанию | Что делает |
+|---|---|---|
+| `DOCFLOW_ACQUAINTANCE_GATE_HOURS` | 4 | Сколько исполнители ждут за гейтом предварительного ознакомления, пока он не откроется сам (`docs/modules/11-docflow.md` §12.3) |
+| `DOCFLOW_EXCHANGE_DIR` | не задана | Каталог референс-адаптера обмена. Не задана = адаптер выключен, и это **штатное поставочное состояние**: машинный канал отправки отказывает сразу, а не «принимает и никогда не шлёт» |
+| `DOCFLOW_EXCHANGE_MAX_ATTACHMENT_MB` | 50 | Потолок на одно вложение обмена |
+| `DOCFLOW_EXCHANGE_POLL_SECONDS` | 60 | Как часто входящий поллер заглядывает в каталог |
+| `DOCFLOW_EXCHANGE_MAX_ATTEMPTS` | 5 | Сколько попыток доставки до перевода исходящего в dead-letter (§9) |
+
+Ниже — планировавшийся, но не сделанный состав экрана; оставлен как список требований, а не как описание работающего:
 - Брендинг: название инсталляции, логотип (svg/png), цвет primary (опционально).
 - Почта: SMTP-параметры + кнопка «Отправить тестовое письмо».
 - Файлы: лимит размера, квоты по умолчанию, политика pending-файлов (AV).
 - Встречи: retention записей, лимит параллельных записей.
 - Карта: центр/зум по умолчанию, доступные подложки (+ URL внешнего XYZ при наличии), extent региона.
 - Безопасность: TTL сессий, обязательность 2FA по ролям, IP-allowlist для админки (опция).
-- Хранение настроек: таблица `app.settings` (key, value jsonb) + кэш Redis + типизированный SettingsService.
 
 ### 6. Аудит (`admin.audit.view`)
-DataTable по `audit.audit_log`: период, актор, action (дерево модулей), тип/ID сущности, IP. Экспорт CSV. Отдельная вкладка — read_log ДСП. Карточка события — полный meta-JSON.
 
-### 7. Здоровье платформы (суперадмин/админ)
-Виджеты: диск (данные/бэкапы, % занято, прогноз), размеры БД по схемам и бакетов MinIO, очереди BullMQ (waiting/failed + кнопка retry failed), статусы сервисов (health-пинги api→pg/redis/minio/livekit/geoserver/martin/clamav), последний успешный бэкап (файл-маркер от backup-скрипта), ошибки за 24 ч (счётчик из логов уровня error). Каждый виджет — статус-цвет. Это НЕ замена мониторингу (08-deployment), это «взгляд одним глазом».
+Одна DataTable по `audit.audit_log` + SidePanel карточки события с полным meta-JSON (`apps/web/src/features/admin/pages/AuditPage.tsx`). Единственный эндпоинт — `GET /admin/audit` (`apps/api/src/modules/admin/audit.controller.ts`).
 
-### 8. Замещения (админ + сам руководитель в настройках)
-CRUD substitutions, активные подсвечены, история.
+- **Фильтры.** API принимает `actorId`, `action` (префиксное совпадение, например `auth.`), `entityType`, `entityId`, `from`, `to` (`packages/shared/src/dto/audit.ts`). UI выставляет только `action` и период. IP в таблице **показывается, но не фильтруется** — ни на клиенте, ни на сервере такого параметра нет.
+- **Экспорт CSV — клиентский.** Кнопка сама пагинирует `GET /v1/admin/audit` по 100 строк (потолок `limit` на сервере) и собирает CSV в браузере, с ограничением 10 000 строк. Серверного экспорта нет.
+- **Вкладки read_log ДСП здесь нет.** След чтения ДСП-документа читается с карточки документа (`GET /docflow/documents/:id/read-log`, панель доступа), а не из админки.
+
+### 7. Здоровье платформы (`admin.system.monitor`)
+
+Экран `/app/admin/health`, API `GET /admin/health` + `POST /admin/health/queues/:name/retry` (`apps/api/src/modules/monitoring/`). Каждый виджет — статус-цвет. Это НЕ замена мониторингу (08-deployment), это «взгляд одним глазом».
+
+Виджеты: диск, размеры БД по схемам и бакета MinIO, очереди BullMQ (waiting/failed + кнопка retry failed), статусы сервисов, последний успешный бэкап, ошибки за 24 ч.
+
+**Про диск — одна карточка и без процентов.** Показываются свободные байты с подписью «свободно из общего» (`StorageStats.diskFreeBytes`/`diskTotalBytes`, `packages/shared/src/dto/health.ts`; `HealthPage.tsx`). Это файловая система **самого контейнера api** — в комментарии DTO она прямо названа прокси; разделения «данные/бэкапы» нет, доля занятого не считается. Диск данных хоста мониторится снаружи (08-deployment).
+
+**Статусы сервисов — восемь проб, не семь** (`HEALTH_SERVICES`, `packages/shared/src/dto/health.ts`): postgres (ключ именно такой, не `pg`), redis, minio, geoserver, martin, livekit, clamav и **`docflow_exchange`** («Обмен документами»). Проба обмена делегирована самому адаптеру, и обратно переходит **только состояние** — никогда путь, хост или учётные данные (`AdminHealthService.probeDocflowExchange`). Если адаптер не сконфигурирован, проба возвращает `{state:'down', note:'not-configured'}`, а агрегат (`aggregate()`) **исключает все `not-configured`-сервисы из общего статуса**, поэтому инсталляция без транспорта не считается вечно нездоровой. Тот же механизм объясняет поведение geoserver/martin/livekit, когда их URL не задан.
+
+`/health` и `/health/ready` при этом не изменились (`apps/api/src/modules/health/health.controller.ts`): readiness по-прежнему покрывает только postgres/redis/minio, дополнительные пробы существуют исключительно для админ-дашборда.
+
+**Последний бэкап — строка-маркер, а не файл.** `infra/scripts/backup.sh` после снапшота restic вставляет строку в `app.backup_runs` (`finished_at`, `snapshot_id`, `size_bytes` — `packages/db/src/schema/system.ts`), терпимо: отсутствующая таблица или сбой БД не должны обрушить уже успешный бэкап. Дашборд показывает самую свежую строку — время `finished_at` и `snapshot_id` (`AdminHealthService.lastBackup()`).
+
+**Известное расхождение:** размер снапшота пишется в `app.backup_runs.size_bytes` (скрипт берёт его из `restic stats --mode raw-data --json`), но **на экран не выводится** — `lastBackup()` его не выбирает, в `BackupStatus` поля нет, HealthPage рисует только время и id снапшота. Комментарий в `infra/scripts/backup.sh`, утверждающий обратное, устарел.
+
+**Очереди — только BullMQ.** Виджет обходит `QUEUE` (`packages/shared/src/queues/index.ts`), где очередей СЭД нет. Все **четыре** фоновых цикла СЭД — это `setInterval` внутри процесса api, а не задания BullMQ: гейт ознакомления (`AcquaintanceGateService`, раз в минуту, идемпотентен по предикату `released_at is null`), аутбокс сроков (`DocflowDeadlineOutboxService`) и два независимых цикла обмена — приём (`ExchangeReceiverService`) и отправка (`ExchangeSenderService`), каждый со своим таймером. Из этой панели они не видны и не диагностируются — процедуры по ним в `docs/runbook-docflow.md`.
+
+**«Ошибки за 24 ч»** — не парсинг логов: это скользящий 24-часовой счётчик 5xx-ответов, который глобальный exception-фильтр инкрементирует в почасовые Redis-бакеты, а дашборд суммирует (`apps/api/src/modules/monitoring/metrics.service.ts`).
+
+### 8. Замещения
+
+Замещения живут **в модуле ДОУ, а не в админке**: API `/docflow/substitutions` (GET, POST, DELETE `:id` — `apps/api/src/modules/docflow/substitutions.controller.ts`), экран `/app/docs/substitutions`. Право `admin.substitutions.manage` есть в каталоге, но поверхность — докфлоу-модуля; подробности и правила подстановки — в `docs/modules/11-docflow.md`.
+
+### 9. Обмен документами (СЭД)
+
+Контур обмена добавил операторскую поверхность, которая **принадлежит канцелярии, а не администратору**:
+
+- **Очередь разбора входящих** — `/app/docs/exchange` (`ExchangeInboxPage`). API: `GET /docflow/exchange/inbound`, `POST /docflow/exchange/inbound/:id/actions/register`, `POST /docflow/exchange/inbound/:id/actions/reject` (`apps/api/src/modules/docflow/exchange/inbound-review.controller.ts`).
+- **Право — `docflow.register`, никакое не `admin.*`**: здесь либо рождается регистрационный номер, либо отказ фиксируется против реестра, и то и другое — канцелярский акт.
+- **AV-блокировка регистрации.** Сообщение нельзя зарегистрировать, пока хоть одно вложение в статусе `pending` или `infected` (чистая функция `planPromotion`, `apps/api/src/modules/docflow/exchange/inbound-policy.ts`; `inbound-review.service.ts` её только вызывает). То же решение отражено в DTO полями `canRegister`/`blockedBy`, поэтому кнопка на экране и сервер не могут разойтись во мнениях.
+- **Исходящие.** Исчерпав `DOCFLOW_EXCHANGE_MAX_ATTEMPTS` (или получив постоянную ошибку), попытка отправки помечается `dead_lettered_at` и переходит человеку. Оператор повторяет её из панели отправок карточки документа — `POST /docflow/dispatches/:id/actions/retry` (`docflow.register`). Проверка (`assertRetryable`, `apps/api/src/modules/docflow/dispatch-policy.ts`) смотрит **только на статус**, а не на `dead_lettered_at`: повторяется попытка в статусе `failed` (dead-letter — её частный случай) или `cancelled`; `pending` и `sent` дают 409 `docflow.dispatch.not_retryable`. То есть пока попытку ещё ведёт машина, повтора не будет — иначе адресат получил бы письмо дважды, — но вручную проваленная (`POST /docflow/dispatches/:id/actions/fail`) или отменённая попытка повторяется наравне с dead-letter.
+
+Бейджа «сколько сообщений на карантине» в админке нет — соответствующая серверная функция ниоткуда не вызывается.
 
 ## B. Подсистема уведомлений (общая для всех модулей)
 
@@ -52,18 +118,29 @@ CRUD substitutions, активные подсвечены, история.
 Профиль (ФИО read-only — меняет админ, аватар, телефон, email), Безопасность (пароль, 2FA, сессии, сертификаты ЭЦП — активация/список устройств), Уведомления (выше), Интерфейс (тема, язык ru/tg, плотность таблиц).
 
 ## API (основное)
+
+Сверено по `@Controller('admin…')` во всём `apps/api/src`:
 ```
-/admin/users CRUD + /:id/{reset-password,reset-totp,block,sessions,transfer}
-/admin/org-units CRUD (+move)  /admin/positions CRUD  /admin/roles CRUD  /admin/role-assignments
-/admin/dicts/:type CRUD  /admin/settings GET/PUT  /admin/audit?filters  /admin/health
-/admin/substitutions CRUD  /admin/pg-accounts (ГИС-доступ)
-/notifications?cursor  POST /notifications/read(-all)  /settings/notification-prefs GET/PUT
+GET/POST /admin/users   GET/PATCH/DELETE /admin/users/:id
+POST /admin/users/:id/{block,unblock,reset-password,reset-totp}
+GET/POST /admin/org-units   PATCH/DELETE /admin/org-units/:id   POST /admin/org-units/:id/move
+GET/POST /admin/positions   PATCH/DELETE /admin/positions/:id
+GET/POST /admin/user-positions   POST /admin/user-positions/:id/primary   DELETE /admin/user-positions/:id
+GET /admin/permissions   GET/POST /admin/roles   PATCH/DELETE /admin/roles/:id
+GET/POST /admin/role-assignments   DELETE /admin/role-assignments/:id
+GET /admin/audit?actorId&action&entityType&entityId&from&to&page&limit
+GET /admin/health   POST /admin/health/queues/:name/retry
+GET/POST /admin/gis/db-accounts   DELETE /admin/gis/db-accounts/:id
+GET /notifications   GET /notifications/unread-count
+POST /notifications/:id/read   POST /notifications/read-all
+GET/PATCH /notifications/prefs
 ```
+Чего **нет** вопреки прежним редакциям этого документа: `/admin/dicts/:type` (§4), `/admin/settings` (§5), `/admin/substitutions` (замещения — `/docflow/substitutions`, §8), `/admin/pg-accounts` (правильное имя — `/admin/gis/db-accounts`), `/settings/notification-prefs` (правильное — `GET/PATCH /notifications/prefs`).
 
 ## Критерии приёмки
 - Создание пользователя → вход по временному паролю → форс-смена — сквозной e2e.
 - Блокировка рвёт активную сессию < 5 c (WS-forced logout).
 - Матрица прав применяется без перелогина (инвалидация ability-кэша).
-- Тестовое письмо SMTP доходит; уведомление офлайн-пользователю дублируется в email.
-- Health-дашборд показывает падение сервиса (остановить clamav → красный виджет).
-- Аудит фильтруется по всем измерениям и выгружается в CSV.
+- Уведомление офлайн-пользователю дублируется в email. (Кнопки «Отправить тестовое письмо» нет — экран настроек платформы не реализован, §5; SMTP задаётся переменной окружения `SMTP_URL`.)
+- Health-дашборд показывает падение сервиса (остановить clamav → красный виджет); несконфигурированный сервис (`not-configured`) при этом не портит общий статус.
+- Аудит фильтруется по action-префиксу и периоду и выгружается в CSV (сборка клиентская, потолок 10 000 строк). Фильтры по актору и сущности поддержаны API, но не выведены в UI; по IP фильтра нет нигде.

@@ -1709,18 +1709,31 @@ Commit: `test(docflow): complete sed acceptance hardening`.
 
 ### Этап 12. Финальная документация и ввод
 
-- [ ] Обновить Swagger/OpenAPI.
-- [ ] Обновить `docs/modules/11-docflow.md`, `12-files.md`, `15-tasks.md`,
+- [x] Обновить Swagger/OpenAPI. — все 125 маршрутов модуля несут `@ApiOperation` + декоратор
+  ответа, соответствующий фактическому коду (201 у POST без `@HttpCode`, 204 у двух маршрутов,
+  302 у download/preview, «XLSX attachment» у выгрузок). **Открыто**: zod-DTO невидимы для
+  Swagger, поэтому обязательные query-параметры (`q` поиска, `kind/from/to` отчётов) из
+  `/api/docs` не выводятся — закрывать это значит вводить `@ApiQuery` на ~50 маршрутов, то есть
+  новую конвенцию для всего приложения.
+- [x] Обновить `docs/modules/11-docflow.md`, `12-files.md`, `15-tasks.md`,
   `16-admin.md`.
-- [ ] Обновить data model diagrams.
-- [ ] Добавить operator runbook: registration counter, stuck route, gate, worker,
-  dispatch retry, archive hold.
-- [ ] Добавить admin guide для journals/templates/types/routes.
-- [ ] Добавить user guide для clerk/chief/executor/archivist.
-- [ ] Составить migration/rollback checklist.
-- [ ] Провести UAT по сценариям §13.
-- [ ] Зафиксировать известные ограничения в `STATUS.md`.
-- [ ] Получить явный финальный ОК заказчика.
+- [x] Обновить data model diagrams. — `docs/07-data-model.md` переписан под схему трека,
+  добавлены ER-диаграммы по областям (регистрация, маршруты и резолюции, ознакомление и
+  подписи, архив, обмен).
+- [x] Добавить operator runbook: registration counter, stuck route, gate, worker,
+  dispatch retry, archive hold. — `docs/runbook-docflow.md` (§1–3 циклы, §4–7 процедуры).
+- [x] Добавить admin guide для journals/templates/types/routes. — `docs/admin-guide-docflow.md`.
+- [x] Добавить user guide для clerk/chief/executor/archivist. —
+  `docs/user-guide-docflow.md`. Роли «архивариус» в системе нет: архивный раздел адресован
+  держателю `docflow.archive.hold` / `docflow.archive.dispose`, а это сегодня `chief`.
+- [x] Составить migration/rollback checklist. — `docs/migration-rollback-checklist.md`
+  (миграции 0047–0060 с оценкой обратимости каждой, точки невозврата, порядок отката).
+- [x] Провести UAT по сценариям §13. — `docs/uat-sed.md`: пошаговое покрытие AC-SED-01…07 со
+  ссылками на конкретные утверждения тестов, честной градацией и списком ручных проверок.
+  Прогон: 95 passed / 5 failed / 1 skipped (`--workers=1`), все 5 — троттлинг логина, не дефекты
+  продукта; закрыто кэшированием сессий в `apps/web/e2e/support/api.ts`.
+- [x] Зафиксировать известные ограничения в `STATUS.md`.
+- [ ] Получить явный финальный ОК заказчика. — **не в моей власти**: остаётся открытым.
 
 Commit: `docs(docflow): finalize sed operations and acceptance`.
 

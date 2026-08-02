@@ -11,7 +11,15 @@
 - **Номенклатура дел** — справочник индексов дел для списания документов в дело.
 
 ## 2. Права
-`docflow.use` (базовое) · `docflow.create` · `docflow.register` · `docflow.journals.manage` · `docflow.sign` · `docflow.resolve` · `docflow.control` · `docflow.reports.view` · `docflow.confidential.view`. Видимость документа: участники (автор, маршрут, резолюции, допуск-список) + канцелярия своего журнала + руководство подразделения-владельца (поддерево). ДСП — только допуск-список ∩ право.
+`docflow.use` (базовое) · `docflow.create` · `docflow.register` · `docflow.journals.manage` · `docflow.sign` · `docflow.resolve` · `docflow.control` · `docflow.reports.view` · `docflow.confidential.view` · `docflow.archive.hold` · `docflow.archive.dispose`. Полный каталог прав — `packages/shared/src/permissions/index.ts`. Legal hold и выделение к уничтожению — **два отдельных права**, а не часть registry-доступа: запрет на уничтожение есть юридическое указание, исполнение акта необратимо, и ни то, ни другое не должно доставаться тому, кому просто выдали реестр.
+
+**Видимость документа** (`apps/api/src/modules/docflow/document-visibility.ts`) — **участие ИЛИ registry-доступ**, и поверх этого отдельным `AND` — гриф:
+
+- **участие** (`documentInvolvementWhere`): автор, допуск-список, соисполнитель (`document_collaborators`), названный подписант проекта резолюции, адресат шага маршрута (с учётом замещений), автор/исполнитель/соисполнитель резолюции, назначенный на ознакомление;
+- **registry-доступ** (`hasRegistryAccess`): носитель `docflow.register` **или** `docflow.control` видит **весь не-ДСП реестр целиком** — без разделения по журналам и без ограничения подразделением;
+- **гриф** (`confidentialityGuard`): ДСП — только допуск-список ∩ `docflow.confidential.view`. Это отдельное «И», поэтому registry-доступ в ДСП не проходит никогда.
+
+Отдельного правила «руководитель подразделения-владельца видит своё поддерево» в коде **нет** — ни в предикате списка `visibleDocumentsWhere`, ни в гейте карточки. Иерархия оргструктуры участвует в модуле только при эскалации просрочки (§5).
 
 **Роли внешнего ТЗ — через permissions, не через проверки `role === '…'`** (СЭД 2.0 §5.1). Отображение ролей ТЗ на CUKS:
 
@@ -20,11 +28,17 @@
 | Администратор | `superadmin` / platform admin | `docflow.journals.manage` + админ-права |
 | Директор / председатель | руководитель глобального scope | `docflow.sign`, `docflow.resolve`, `docflow.control` |
 | Заместитель | руководитель + активное замещение | те же права в разрешённом scope, действия помечаются «за» |
-| **Канцелярия (общий отдел)** | clerk/registrar | `docflow.register` (регистрация, отправка, архив) |
+| **Канцелярия (общий отдел)** | clerk | `docflow.register` — регистрация и отправка; настройки ДОУ — `docflow.journals.manage`; сдача в дело / возврат из архива — `docflow.register` **или** `docflow.control`; legal hold — `docflow.archive.hold`; акты о выделении — `docflow.archive.dispose` |
 | Начальник управления/отдела | руководитель ветки оргструктуры | `docflow.resolve`, `docflow.control` в своём поддереве |
 | Сотрудник | employee | `docflow.use`, `docflow.create` |
 
-**Канцелярия** — носитель `docflow.register`; **подписант** — носитель `docflow.sign` и адресат проекта резолюции. Бизнес-сервисы проверяют право и org-scope, а не название должности. Новые права трека (`docflow.document.dispatch`, `docflow.archive.hold`, `docflow.template.manage`, …) вводятся только там, где действующего эквивалента нет.
+Таблица описывает **намерение** отображения ролей ТЗ, а не реализованное сужение: строка «в своём поддереве» — это то, как роль выдают, а не то, что проверяет код. Права в CUKS глобальны, и носитель `docflow.control` видит весь не-ДСП реестр, а не только своё поддерево (см. выше). Сужение до подразделения на уровне видимости документов не реализовано.
+
+Как права разложены по **штатным шаблонам** (`ROLE_TEMPLATES`, `packages/shared/src/permissions/index.ts` — семь шаблонов: `superadmin`, `platform_admin`, `chief`, `duty_officer`, `clerk`, `gis_analyst`, `employee`): `docflow.journals.manage` держат `clerk` («Делопроизводитель» — экран настроек ДОУ канцелярский) и `platform_admin` («Администратор платформы», вместе с `docflow.use`, без которого экран настроек не загрузит собственные списки). `docflow.archive.hold` и `docflow.archive.dispose` лежат на `chief` («Руководитель»); отдельного шаблона «архивариус» в системе **нет**, поэтому канцелярии архивные права достаются только именной выдачей роли или прав.
+
+**Канцелярия** — носитель `docflow.register`. **Подписант проекта резолюции** — названный в проекте `signer_id`, его активный заместитель либо суперадмин; право `docflow.sign` к решению по проекту отношения **не имеет** — оно нужно для ЭЦП (`POST /docflow/documents/:id/actions/sign`), а все маршруты проектов резолюций гейтятся `docflow.use`, и решающего выбирает `resolveProposalDecider`, который прав вообще не читает (`apps/api/src/modules/docflow/resolution-proposals.controller.ts`, `resolution-proposals.policy.ts` — подробно в §12.11). Бизнес-сервисы проверяют право и org-scope, а не название должности.
+
+Трек СЭД 2.0 добавил в каталог **ровно два** права — `docflow.archive.hold` и `docflow.archive.dispose` (`packages/shared/src/permissions/index.ts`). Всё остальное легло на действующие: отправка гейтится `docflow.register` (`dispatches.controller.ts`), шаблоны документов и типы резолюций — `docflow.journals.manage` (`document-templates.controller.ts`, `resolution-proposals.controller.ts`), проекты резолюций и распространение — `docflow.use`. Прав `docflow.document.dispatch` и `docflow.template.manage` в системе не существует.
 
 ## 3. Модель данных (`app`)
 
@@ -32,7 +46,15 @@
 
 **Календарь нумерации — Asia/Dushanbe.** `{YYYY}`/`{YY}`/`{MM}` и бакет счётчика (`journal_counters.year`) вычисляются по местной гражданской дате момента регистрации, а не по UTC: регистрационная книга канцелярии переворачивается в местную полночь = 19:00 UTC. Момент `2026-12-31T19:30Z` — это уже 1 января 2027 в Душанбе, и документ попадает в книгу 2027 года. В БД `reg_date` по-прежнему хранится в UTC (`timestamptz`). Общий helper — `businessDateParts()` в `@cuks/shared` (`src/time`); журнал с `seq_reset='never'` остаётся сплошной книгой (бакет 0), но в номере печатается местный год. Уже выданные номера пересчёту не подлежат.
 
-**documents**: journal_id null (до регистрации), reg_number null, reg_date null, doc_class, type_code (справочник видов), subject, summary, org_unit_id (владелец), author_id, status: `draft → on_route → pending_registration → registered → in_progress(исполнение) → completed → archived` (+ `rejected`, `recalled`), confidentiality `normal|dsp`, access_list uuid[] (для ДСП), due_date null, case_index null (номенклатура), correspondent_id null (для входящих/исходящих), outgoing_number/date null (реквизиты письма контрагента), delivery `mail|email|courier|fax`, FTS(subject+summary+reg_number).
+**documents**: journal_id null (до регистрации), reg_number null, reg_date null, doc_class, type_code (справочник видов), subject, summary, org_unit_id (владелец), author_id, status `draft → on_route → pending_registration → registered → in_progress(исполнение) → completed ⇢ archived` (+ `rejected`, `recalled`), confidentiality `normal|dsp`, access_list uuid[] (для ДСП), due_date null, case_index null (номенклатура), correspondent_id null (для входящих/исходящих), outgoing_number/date null (реквизиты письма контрагента), delivery `mail|email|courier|fax`.
+
+Стрелка `completed ⇢ archived` — **не переход графа**: `DOCUMENT_STATUS_TRANSITIONS.completed` пуст, и `archived` не является целью ни одного ручного перехода (`packages/shared/src/enums/index.ts`). Единственный вход в архив — команда сдачи в дело; попытка сменить статус получает `docflow.document.use_archive_command` (§12.12).
+
+**Полнотекстовый вектор** `documents.search_tsv` — генерируемая колонка со **взвешенными** зонами (`packages/db/src/schema/docflow.ts`): **A** — `subject` + `reg_number`, **B** — `summary` + `sender_name` + `recipient_name`, **C** — `content_text`. Имя корреспондента и текст вложений в этот вектор не входят — они матчатся собственными индексами и присоединяются запросом поиска (§12.13).
+
+**`documents.delivery` и `document_dispatches.channel` — разные вещи, и перечисления у них не пересекаются.** `delivery` (`mail|email|courier|fax`) — реквизит карточки, унаследованный от мастера регистрации входящего (`registerIncomingSchema.delivery`): «как письмо к нам попало». Факт нашей отправки фиксируется **только** строкой `document_dispatches` с каналом `courier|postal|email|integration|hand_delivery|other` (§12.3). Ответ на вопрос «как ушло» берётся из dispatches, `delivery` на него не отвечает.
+
+Состав колонок `documents` вырос за трек СЭД 2.0 (`version`, `content_json`/`content_text`, `template_version_id`, `registration_key`, снимки корреспондента, `response_due_at`, архивные и disposition-поля, legal hold) — перечень выше показывает исходное ядро; полный актуальный состав с индексами и ограничениями — `packages/db/src/schema/docflow.ts`, обзор добавленного — §12.4a.
 
 **document_files**: document_id, file_id, kind `main|attachment`, version int (авто), title, is_current. Новая версия main-файла до подписания — свободно; после первой подписи файл заморожен (новая версия = снятие подписей с предупреждением).
 
@@ -56,42 +78,184 @@
 ## 5. Контроль исполнения
 
 - Всё с `is_control=true` (резолюции) и `due_date` (документы) попадает в представление «На контроле» (`docflow.control`): таблица с цветовой шкалой сроков (>3 дней — норм, ≤3 — warning, просрочено — danger).
-- Напоминания (worker `docflow-deadlines`, ежедневно 08:00): исполнителю за 3 дня/1 день/в день срока; при просрочке — исполнителю + автору резолюции + контролёру, ежедневно. Эскалация просрочки >5 дней — руководителю подразделения.
+- Напоминания — очередь BullMQ **`deadlines`** (`QUEUE.deadlines` в `packages/shared/src/queues/index.ts`), repeatable-задание `0 8 * * *` с `tz: 'Asia/Dushanbe'` (`apps/worker/src/queues/deadlines/deadlines.module.ts`). Одна развёртка закрывает три предмета: контрольные резолюции, сроки задач и SLA шагов маршрута (§12.9). Очереди `docflow-deadlines` не существует.
+- Адресаты (`deadlines.processor.ts`): напоминание за 3 / 1 / 0 дней до срока — **исполнителю**; просрочка, ежедневно — **исполнителю и автору резолюции**. Поля «контролёр» у `app.resolutions` нет (есть только `is_control`), и третьего адресата в развёртке нет.
+- Эскалация просрочки >5 дней — руководителям подразделения исполнителя. Для **ДСП**-документа этот список дополнительно фильтруется: остаются только автор документа и те, кто в допуск-списке. Иначе эскалация вынесла бы тему закрытого документа наружу через принудительное (critical) уведомление.
 - Снятие с контроля/продление срока — только `docflow.control` или автор резолюции, с причиной (аудит).
 - **Отчёт исполнительской дисциплины**: за период по подразделениям/исполнителям: всего поручений, исполнено в срок, с просрочкой, не исполнено; % дисциплины; XLSX.
 
 ## 6. ЭЦП в UI
 
 - Кнопка «Подписать» на шаге sign: модал — что подписывается (файл+хэш, реквизиты), подтверждение паролем/TOTP → WebCrypto-подпись → шаг done. Первая подпись пользователя — мастер активации (генерация ключа устройства, выпуск сертификата, 30 сек).
-- В карточке — блок «Подписи»: кто/когда/валидность (проверка на лету), ссылка на страницу проверки `/verify/:id`.
+- В карточке — блок «Подписи» (`GET /docflow/documents/:id/signatures`): кто/когда/валидность, ссылка на страницу проверки **`/app/verify/:signatureId`** (SPA-маршрут внутри оболочки `/app` — `apps/web/src/app/router.tsx`). API проверки — `GET /verify/:signatureId` под `@RequirePermission('docflow.use')` (`apps/api/src/modules/docflow/signatures.controller.ts`): **анонимной страницы проверки сегодня нет**, для проверки нужна активная сессия. Публичная проверка по QR потребовала бы отдельного неаутентифицированного эндпоинта и здесь не реализована.
 - Экспорт «PDF с отметкой об ЭЦП» — штамп-страница + QR (09-security §4).
 
 ## 7. UI-экраны
 
-- **`/app/docs` — Мой кабинет ДОУ**: вкладки-очереди: «На согласование (N)», «На подпись (N)», «На ознакомление (N)», «Мои поручения (N, с индикаторами сроков)», «Мои документы», «Черновики». Строка = документ: номер, тема, от кого, срок, кнопки прямого действия (Согласовать/Отклонить — прямо из списка с комментарием).
+- **`/app/docs` — Мой кабинет ДОУ**: вкладки-очереди в порядке экрана (`apps/web/src/features/docflow/pages/DocumentsPage.tsx`): «Мои документы», «На согласование (N)», «На подпись (N)», «На ознакомление (N)», «Мои поручения (N)», «Черновики» и — только носителю `docflow.register` **или** `docflow.control` — «Реестр» (весь не-ДСП реестр целиком, §12.13). Счётчик показан на четырёх очередях действий, у «Моих документов», «Черновиков» и «Реестра» его нет. Значение `authored` в `DOCUMENT_QUEUES` есть, но вкладки для него экран не строит. Колонки строки: регномер, тема, класс, статус, автор, дата (регистрации либо создания) и — по правам — ячейка прямых действий (Согласовать/Отклонить с комментарием, не заходя в карточку). Отдельной колонки срока в списке нет; срок виден в карточке и в «Требует внимания».
 - **Карточка документа**: PageHeader (регномер+тема+StatusBadge+гриф ДСП бейдж; действия: Отправить по маршруту / Подписать / Зарегистрировать / Резолюция / Экспорт PDF / ⋯). Вкладки: Обзор (реквизиты+файлы с inline-PDF-просмотром), Маршрут (визуальный степпер шагов: аватары, статусы, комментарии, время), Резолюции (дерево поручений со статусами), Связи, История (полный лог). Правая колонка-сводка: срок, дело, корреспондент, подписи.
-- **Журналы** (`docflow.register`): выбор журнала → DataTable записей за год, фильтры, печать реестра, карточка регистрации (мастер для входящих — 60 секунд: файл → корреспондент (поиск+создание на лету) → тема → адресат).
-- **Контроль** (`/app/docs/control`), **Отчёты** (`/app/docs/reports`).
-- **Настройки ДОУ** (канцелярия): журналы, шаблоны маршрутов, номенклатура, виды документов.
+- **Журналы** — `/app/docs/journals` (`JournalsRegisterPage`, пункт меню под `docflow.register`): выбор журнала → DataTable записей за год, фильтры, печать реестра, карточка регистрации (мастер для входящих — 60 секунд: файл → корреспондент (поиск+создание на лету) → тема → адресат).
+- **Поиск** — `/app/docs/search` (`SearchPage`): полнотекстовый поиск по реестру, сохранённые представления (§12.13). Собственного пункта меню нет — вход из реестра и из панели «Требует внимания».
+- **Архив** — `/app/docs/archive` (`ArchivePage`, меню под `docflow.register`): опись, акты о выделении, legal hold (§12.12).
+- **Очередь разбора обмена** — `/app/docs/exchange` (`ExchangeInboxPage`, меню под `docflow.register`): входящие сообщения транспорта до превращения в документ (§12.14).
+- **Контроль** — `/app/docs/control` (меню под `docflow.control`), **Отчёты** — `/app/docs/reports` (меню под `docflow.reports.view`).
+- **Замещения** — `/app/docs/substitutions` (меню под `docflow.use`, §12.8).
+- **Проверка подписи** — `/app/verify/:signatureId`.
+- **Настройки ДОУ** — `/app/docs/settings` (меню под `docflow.journals.manage`). Шесть вкладок: журналы, корреспонденты, номенклатура, типы резолюций, шаблоны документов, шаблоны маршрутов (`apps/web/src/features/docflow/pages/DocflowSettingsPage.tsx`). Вкладки «виды документов» здесь **нет**: виды приходят из общей таблицы `app.dictionaries` (тип `doc_type`) и доступны только на чтение — `GET /docflow/document-types`. Экрана и CRUD-API для их правки в системе нет вовсе: справочник наполняется сидом (`packages/db/src/seed.ts`) или SQL. Право `admin.dicts.manage` в каталоге объявлено, но ни один контроллер его сегодня не требует.
 
-## 8. API (основное)
+Маршруты — `apps/web/src/app/router.tsx`, права пунктов меню — `apps/web/src/app/shell/nav-items.ts`.
 
-```
-POST /docflow/documents  GET /docflow/documents?queue=to_approve|to_sign|to_ack|my_tasks|mine
-POST /docflow/documents/register-incoming (атомарно, idempotencyKey — см. §12.2)
-GET /docflow/documents/:id/files/:fileId/{download|preview} (visibility+ДСП+AV — см. §12.2)
-GET /docflow/documents/:id/timeline  GET/POST/DELETE /docflow/documents/:id/collaborators[/:id]
-GET/PATCH /docflow/documents/:id  POST /docflow/documents/:id/files (+версии)
-POST /docflow/documents/:id/route (из шаблона/ручной)  POST /docflow/route-steps/:id/actions/{approve|complete|reject}
-POST /docflow/documents/:id/actions/register {journal}  POST /docflow/documents/:id/actions/sign {signature}
-POST /docflow/documents/:id/resolutions  PATCH /docflow/resolutions/:id (отчёт/исполнено/продление)
-GET /docflow/control  GET /docflow/reports/discipline?period  GET/POST /docflow/journals
-GET /docflow/route-templates  POST /signatures/activate (выпуск сертификата)  GET /verify/:signatureId
-POST /docflow/documents/:id/export-pdf (штампованный)
-```
+## 8. API
 
-## 9. События/уведомления/аудит
-WS+notify: назначение шага, резолюции, возврат на доработку, регистрация, напоминания сроков. Полный аудит: docs/09 §5. Событие `document.signed` → лента карточки, `route.completed` → автопереход статуса.
+Перечень собран из контроллеров `apps/api/src/modules/docflow/*.controller.ts`; право в таблице — это то, что стоит на декораторе `@RequirePermission`, поэтому его можно проверить построчно. Право маршрута — **гейт входа, а не достаточное условие**: почти каждый обработчик дополнительно проверяет видимость документа, гриф и состояние (см. §12), а у архива фактическое разграничение целиком лежит в сервисе.
+
+**Реестр и карточка** (`documents.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/documents` | `docflow.use` |
+| `GET /docflow/documents/queue-counts` | `docflow.use` |
+| `POST /docflow/documents` | `docflow.create` |
+| `POST /docflow/documents/register-incoming` (атомарно, `idempotencyKey` — §12.2) | `docflow.register` |
+| `GET /docflow/documents/:id` | `docflow.use` |
+| `PATCH /docflow/documents/:id` (`expectedVersion` — §12.5) | `docflow.create` |
+| `GET /docflow/documents/:id/history` · `/timeline` | `docflow.use` |
+| `GET /docflow/documents/:id/read-log` | `docflow.use` |
+| `GET` · `PATCH /docflow/documents/:id/access` | `docflow.use` |
+| `GET` · `POST /docflow/documents/:id/collaborators`, `DELETE …/collaborators/:collaboratorId` | `docflow.use` |
+| `POST /docflow/documents/:id/files` (+ версии) | `docflow.create` |
+| `GET /docflow/documents/:id/files/:fileId/download` · `/preview` (видимость + ДСП + AV — §12.2) | `docflow.use` |
+| `POST /docflow/documents/:id/actions/register` | `docflow.register` |
+| `POST /docflow/documents/:id/actions/create-response` (§12.3) | `docflow.create` |
+| `POST /docflow/documents/:id/actions/status` | `docflow.use` |
+| `GET` · `POST /docflow/documents/:id/links`, `DELETE …/links/:linkId` (`document-links.controller.ts`) | `docflow.use` |
+
+Параметры списка (`listDocumentsQuerySchema`, `packages/shared/src/dto/docflow.ts`): `queue` — `mine｜drafts｜authored｜registry｜to_approve｜to_sign｜to_acknowledge｜my_tasks` (значения `to_ack` не существует), а также `page`, `limit`, `status`, `docClass`, `journalId`, `search`, `year`, `sort` (allow-list `DOCUMENT_SORT_FIELDS`), `overdue`, `awaitingDispatch`.
+
+**Маршруты и ознакомление по шагу** (`routes.controller.ts`, `acknowledgements.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `POST /docflow/documents/:id/route` (из шаблона / ручной) | `docflow.create` |
+| `POST /docflow/documents/:id/route/validate` (dry-run — §12.9) | `docflow.create` |
+| `GET /docflow/documents/:id/routes` | `docflow.use` |
+| `POST /docflow/route-steps/:id/actions/approve` · `complete` · `reject` · `acknowledge` | `docflow.use` |
+| `GET /docflow/documents/:id/acquaintances` | `docflow.use` |
+| `GET /docflow/route-templates` | `docflow.use` |
+| `POST` · `PATCH` · `DELETE /docflow/route-templates[/:id]`, `POST …/:id/actions/clone` | `docflow.journals.manage` |
+
+**Резолюции** (`resolutions.controller.ts`). `PATCH /docflow/resolutions/:id` **не существует** — жизненный цикл резолюции выражен командами:
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/documents/:id/resolutions` | `docflow.use` |
+| `POST /docflow/documents/:id/resolutions` | `docflow.resolve` |
+| `POST /docflow/resolutions/:id/subresolutions` | `docflow.use` |
+| `POST /docflow/resolutions/:id/actions/report` · `done` · `extend` · `cancel` · `uncontrol` | `docflow.use` |
+
+**Проекты резолюций, типы, предварительное ознакомление** (`resolution-proposals.controller.ts`, §12.11)
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/resolution-types` | `docflow.use` |
+| `POST` · `PATCH` · `DELETE /docflow/resolution-types[/:id]` | `docflow.journals.manage` |
+| `GET` · `POST /docflow/documents/:id/resolution-proposals` | `docflow.use` |
+| `PATCH /docflow/resolution-proposals/:id` | `docflow.use` |
+| `POST /docflow/resolution-proposals/:id/actions/submit` · `approve` · `reject` | `docflow.use` |
+| `POST /docflow/acquaintance-batches/:id/actions/acknowledge` | `docflow.use` |
+
+**Распространение и отправка** (`distributions.controller.ts`, `dispatches.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `GET` · `POST /docflow/documents/:id/distributions` (§12.4) | `docflow.use` |
+| `GET /docflow/documents/:id/dispatches` | `docflow.use` |
+| `POST /docflow/documents/:id/dispatches` | `docflow.register` |
+| `POST /docflow/dispatches/:id/actions/confirm` · `fail` · `cancel` · `retry` | `docflow.register` |
+
+**Архив, legal hold и акты о выделении** (`archive.controller.ts`, §12.12). На декораторе у всех маршрутов стоит `docflow.use`; реальное разграничение делает сервис — `hasRegistryAccess` (`docflow.register` **или** `docflow.control`) для описи, сдачи в дело и возврата, `docflow.archive.hold` для hold (`docflow.archive.hold_forbidden`) и `docflow.archive.dispose` для актов (`docflow.archive.dispose_forbidden`), см. `archive.service.ts`.
+
+| Метод и путь | Фактическое право (сервис) |
+|---|---|
+| `GET /docflow/archive` · `GET /docflow/archive/export` | registry-доступ |
+| `POST /docflow/documents/:id/actions/archive` · `restore` | registry-доступ |
+| `POST /docflow/documents/:id/actions/legal-hold`, `DELETE /docflow/documents/:id/legal-hold` | `docflow.archive.hold` |
+| `GET` · `POST /docflow/archive/disposition-batches` | `docflow.archive.dispose` |
+| `POST /docflow/archive/disposition-batches/:id/items` | `docflow.archive.dispose` |
+| `POST /docflow/archive/disposition-batches/:id/actions/submit` · `approve` · `reject` · `execute` | `docflow.archive.dispose` |
+
+**Поиск, представления, контроль** (`document-search.controller.ts`, `document-views.controller.ts`, `control.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/search` · `/search/quick` · `/attention` (§12.13) | `docflow.use` |
+| `GET` · `POST /docflow/views`, `PATCH` · `DELETE /docflow/views/:id` | `docflow.use` |
+| `GET /docflow/control` | `docflow.control` |
+| `GET` · `POST /docflow/substitutions`, `DELETE /docflow/substitutions/:id` (§12.8) | `docflow.use` |
+
+**Отчёты** (`reports.controller.ts`) — все под `docflow.reports.view`: `GET /docflow/reports/discipline[/export]`, `GET /docflow/reports/acknowledgement[/export]`, `GET /docflow/reports/register[/export]?kind=movement｜registration｜deadlines｜dispatch｜archive&from&to`.
+
+**Обмен** (`exchange/inbound-review.controller.ts`, §12.14) — все под `docflow.register`: `GET /docflow/exchange/inbound`, `POST /docflow/exchange/inbound/:id/actions/register` · `reject`.
+
+**Шаблоны документов** (`document-templates.controller.ts`, §12.7)
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/document-templates` · `GET …/:id` | `docflow.use` |
+| `POST /docflow/document-templates`, `PATCH …/:id`, `POST …/:id/versions`, `POST …/:id/versions/:version/actions/publish`, `POST …/:id/actions/deactivate` | `docflow.journals.manage` |
+| `POST /docflow/document-templates/:id/actions/instantiate` | `docflow.create` |
+
+**Справочники ДОУ** (`docflow.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `GET /docflow/journals` · `/nomenclature` · `/correspondents` · `/document-types` · `/correspondent-categories` | `docflow.use` |
+| `POST /docflow/correspondents` | `docflow.use` |
+| `POST` · `PATCH` · `DELETE /docflow/journals[/:id]` · `/nomenclature[/:id]`, `PATCH` · `DELETE /docflow/correspondents/:id` | `docflow.journals.manage` |
+
+Виды документов доступны только на чтение (`GET /docflow/document-types`) — справочник `doc_type` в `app.dictionaries` правится сидом или SQL, эндпоинта записи для него нет (§7).
+
+**Подписи и экспорт** (`signatures.controller.ts`)
+
+| Метод и путь | Право |
+|---|---|
+| `POST /signatures/activate` (выпуск сертификата) · `GET /signatures/certificates` | `docflow.sign` |
+| `GET /docflow/documents/:id/sign-payload` · `POST /docflow/documents/:id/actions/sign` | `docflow.sign` |
+| `GET /docflow/documents/:id/signatures` | `docflow.use` |
+| `GET /verify/:signatureId` (сессия обязательна — §6) | `docflow.use` |
+| `POST /docflow/documents/:id/export-pdf` (штампованный) | `docflow.use` |
+
+## 9. События, уведомления, аудит
+
+**Realtime.** Модуль публикует **четыре** WS-события (контракт — `packages/shared/src/ws-events/index.ts`); событий `document.signed` и `route.completed` в контракте нет:
+
+| Событие | Когда | Комнаты |
+|---|---|---|
+| `docflow.route.updated` (`action: started｜step_completed｜rejected`) | старт маршрута, закрытие шага, отклонение | `entity:document:{id}` |
+| `docflow.resolution.updated` (`action: proposed｜approved｜rejected｜acknowledged｜released`) | движение проекта резолюции и снятие gate | `entity:document:{id}`; на `released` дополнительно `user:{id}` каждого исполнителя |
+| `docflow.dispatch.updated` (`action: created｜sent｜failed｜cancelled`) | открытие и решение попытки отправки | `entity:document:{id}` |
+| `docflow.distribution.updated` (`action: created｜acknowledged｜released`) | распространение и подтверждения листа | `entity:document:{id}` |
+
+Payload у всех четырёх — **только идентификаторы и действие**: ни темы, ни номера, ни имени адресата. Документ может быть ДСП, а сокет не должен становиться каналом раскрытия мимо политики. Клиент, получив событие, перечитывает карточку обычным API-запросом и проходит тот же гейт видимости. Подписка `document.subscribe` проверяется гейтвеем по той же базовой видимости, что и REST-карточка (§12.9).
+
+Уведомления (notify): назначение шага, резолюция, возврат на доработку, регистрация, напоминания сроков (`docflow.deadline`, `docflow.route_deadline` — §5, §12.9), назначение на ознакомление (`docflow.acquaintance.assigned`).
+
+**Аудит модуля.** Событий заметно больше, чем перечислено в docs/09 §5, и часть имён там разошлась с кодом: `step_completed` в коде нет (пишутся `docflow.document.route_step_done` и `docflow.document.route_rejected`, `routes.service.ts`), события `docflow.document.completed` тоже нет. **Список в docs/09 §5 требует такой же правки** — здесь приведён фактический перечень (литералы `action:` в `apps/api/src/modules/docflow/**`):
+
+| Группа | Действия |
+|---|---|
+| Карточка | `docflow.document.created` · `updated` (meta `changedFields` — только **имена** полей) · `registered` (meta `atomic` для §12.2) · `status_changed` · `access_changed` · `collaborator_added` · `collaborator_removed` · `file_added` · `file_downloaded` (`fileId`/`versionId`/`mode`) · `exported` · `linked` · `unlinked` · `response_created` · `signed` · `acknowledged` |
+| Маршруты | `docflow.document.route_started` · `route_step_done` · `route_rejected` |
+| Резолюции | `docflow.document.resolution_added` · `resolution_reported` · `resolution_done` · `resolution_extended` · `resolution_cancelled` · `resolution_uncontrolled` |
+| Проекты и gate | `docflow.resolution_proposal.created` · `submitted` · `approved` · `rejected`; `docflow.acquaintance.released` |
+| Распространение и отправка | `docflow.distribution.created`; `docflow.dispatch.created` · `sent` · `failed` · `cancelled` |
+| Архив и выбытие | `docflow.archive.archived` · `restored` · `legal_hold_set` · `legal_hold_cleared`; `docflow.disposition.created` · `submitted` · `approved` · `rejected` · `executed` |
+| Обмен | `docflow.exchange.received` · `registered` · `rejected` · `sent` · `retry_scheduled` · `dead_lettered` (два последних пишет `exchange-sender.service.ts` без актора: `actorId: null`) |
+| Замещения | `auth.substitution.created` · `auth.substitution.revoked` (`substitutions.service.ts`); `auth.substitution.used` — отдельной записью рядом с решением шага и подписью, когда действие сделано «за» принципала (`routes.service.ts`, `signatures.service.ts`, §12.8) |
+| Справочники и шаблоны | `docflow.journal.*` · `docflow.nomenclature.*` · `docflow.correspondent.*` · `docflow.resolution_type.*` (`created`/`updated`/`deleted`); `docflow.document_template.created` · `updated` · `version_added` · `version_published` · `deactivated`; `docflow.route_template.created` · `updated` · `cloned` · `deleted` |
+| Подписи | `signature.created` · `signature.cert_issued` |
+
+Два ограничителя определяют, что из аудита вообще попадает на экран: **allow-list ключей метаданных** ленты карточки (§12.5) — новое место аудита не может вывести содержимое документа, ключ файла или чужой контакт одним фактом своего появления, — и **read_log** для ДСП, куда дополнительно пишется каждое чтение закрытого документа и его файлов.
 
 ## 10. Критерии приёмки
 - Полный цикл входящего и исходящего проходят e2e-тестом (регистрация→резолюция→исполнение; проект→согласование→подпись→регистрация).
@@ -100,7 +264,7 @@ WS+notify: назначение шага, резолюции, возврат н�
 - Отклонение возвращает автору с комментарием; новый цикл маршрута сохраняет историю первого.
 - Просрочка генерирует напоминания по расписанию (тест с фейк-таймером).
 - Замещение: заместитель видит и исполняет шаг за отсутствующего, подпись помечена «за».
-- ДСП-документ невидим без допуска даже канцелярии другого журнала (e2e), чтение логируется.
+- ДСП-документ невидим **любому** носителю `docflow.register`/`docflow.control`, не входящему в допуск-список: гриф — отдельное «И» поверх участия и registry-доступа (`confidentialityGuard`), а не оговорка про журнал — разделения видимости по журналам в модели нет вовсе. Чтение логируется в read_log. Покрыто `apps/web/e2e/docflow-dsp.spec.ts`.
 
 ## 11. V2+
 Гос-ЭЦП, OCR сканов. Остальное из прежнего списка V2+ (шаблоны документов, межведомственный обмен, архивное хранение по срокам номенклатуры) переведено в трек СЭД 2.0 — см. §12.
@@ -111,13 +275,19 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 ### 12.1. Жизненный цикл и отправка
 
-Основной автомат состояний §3 сохраняется. Переходы выполняет единый `DocumentWorkflowPolicy`: контроллеры не меняют статус напрямую; любой переход проверяет право и видимость, блокирует строку документа, доказывает завершённость обязательных шагов/подписи/регистрации, пишет audit в той же транзакции и публикует событие только после commit.
+Основной автомат состояний §3 сохраняется. Единого класса-политики переходов **нет** (класса `DocumentWorkflowPolicy` в коде не существует) — правило разложено на три места, и это разложение намеренное:
 
-**Отправка — не статус документа.** `sent` не добавляется в `documents.status`; факт и канал отправки живут в отдельной сущности `document_dispatches` со своим автоматом `pending → sent | failed → pending | cancelled`. Каждая попытка — отдельная строка; успешная попытка не затирает историю неудачной.
+- **граф** — `DOCUMENT_STATUS_TRANSITIONS` и `documentTransitionAllowed` в `@cuks/shared` (`packages/shared/src/enums/index.ts`): один список допустимых ручных переходов, общий для сервера и карточки;
+- **политика действия** — чистый модуль `apps/api/src/modules/docflow/document-actions.ts` (`canEditDocument`, `documentAvailableActions`): что именно доступно **этому** вызывающему, без обращения к БД, поэтому вся матрица покрыта unit-тестами;
+- **инварианты перехода** — внутри сервисов, под row lock: проверка права и видимости, доказательство завершённости обязательных шагов/подписи/регистрации, audit **в той же транзакции**, публикация события **только после commit**.
+
+Инвариант остаётся прежним: контроллеры не меняют статус напрямую.
+
+**Отправка — не статус документа.** `sent` не добавляется в `documents.status`; факт и канал отправки живут в отдельной сущности `document_dispatches` со своим автоматом **`pending → sent | failed | cancelled`** — все три исхода **терминальны для строки** (`planDispatchDecision`, `dispatch-policy.ts`). Возврата `failed → pending` нет: повтор (`retry`) **вставляет новую строку** в `pending` с колонками `attempt_no` и `retry_of`, а израсходованная попытка остаётся как была. Каждая попытка — отдельная строка; успешная попытка не затирает историю неудачной.
 
 ### 12.2. Входящий процесс
 
-Канцелярия вводит реквизиты и файл → **атомарная регистрация** одной командой → **проект резолюции** (`resolution_proposals`) → подписант утверждает или возвращает → при наличии предварительного ознакомления резолюция открывается исполнителям **только после снятия gate**: все ознакомились (`all_acknowledged`) либо истёк таймаут (`timeout`, системная настройка, default `PT4H`). Истечение таймаута не считается ознакомлением: оставшиеся получают `expired`, исполнители — доступ. Ответственный исполнитель один, соисполнителей несколько; все решения видны в единой timeline.
+Канцелярия вводит реквизиты и файл → **атомарная регистрация** одной командой → **проект резолюции** (`resolution_proposals`) → подписант утверждает или возвращает → при наличии предварительного ознакомления резолюция открывается исполнителям **только после снятия gate**: все ознакомились (`all_acknowledged`) либо истёк таймаут (`timeout`). Окно берётся из переменной окружения **`DOCFLOW_ACQUAINTANCE_GATE_HOURS`** (default 4 ч — `ACQUAINTANCE_GATE_HOURS` в `@cuks/shared`, объявление — `apps/api/src/config/env.ts`); **runtime-хранилища системных настроек в проекте нет**, поэтому админ-экрана для этого значения тоже нет — правится развёртыванием. Подробности снятия gate — §12.11. Истечение таймаута не считается ознакомлением: оставшиеся получают `expired`, исполнители — доступ. Ответственный исполнитель один, соисполнителей несколько; все решения видны в единой timeline.
 
 **`POST /docflow/documents/register-incoming`** (право `docflow.register`) — реализовано. Одна транзакция создаёт карточку, инкрементирует счётчик журнала, проставляет `reg_number`/`reg_date`/`status='registered'`, связывает файлы и пишет audit-запись: сбой на любом шаге не оставляет черновик и **не расходует номер** (инкремент счётчика откатывается вместе с остальным). Журнал обязан существовать, быть активным и иметь `doc_class='incoming'` (`docflow.journal.not_found` / `docflow.journal.inactive` / `docflow.journal.class_mismatch`); у документа не более одного файла `main`.
 
@@ -139,9 +309,9 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 **Пресет маршрута**: руководитель подразделения → дополнительные согласующие одной параллельной группой → подпись. Руководитель адресуется **должностью**, а не подразделением: `org_unit`-шаг разворачивается во всех сотрудников и вакантный пост прошёл бы dry-run незамеченным. Шаг `register` в пресет не входит — завершение маршрута само переводит ненумерованный документ в `pending_registration` (§12.6), а канцелярское подразделение в модели ничем не помечено.
 
-**Регистрация исходящего** дополнительно проверяет: журнал того же класса и не закрыт (`docflow.journal.class_mismatch` / `docflow.journal.inactive` — раньше проверялось только для входящих), и наличие подписи, если её требует вид документа (`docflow.document.signature_required`). Требование объявляется флагом `requiresSignature` в `dictionaries.meta` записи `doc_type` — `type_code` и так разрешается по этому справочнику, и вторая таблица видов разошлась бы с первой. Подпись должна покрывать **текущую** основную версию файла: подпись под замещённым телом ничего не доказывает о том, что регистрируют. Проверка применяется только к исходящим — входящее письмо подписано контрагентом на бумаге, а внутренние документы получат своё правило вместе с этапом 7.
+**Регистрация исходящего** дополнительно проверяет: журнал того же класса и не закрыт (`docflow.journal.class_mismatch` / `docflow.journal.inactive` — раньше проверялось только для входящих), и наличие подписи, если её требует вид документа (`docflow.document.signature_required`). Требование объявляется флагом `requiresSignature` в `dictionaries.meta` записи `doc_type` — `type_code` и так разрешается по этому справочнику, и вторая таблица видов разошлась бы с первой. Подпись должна покрывать **текущую** основную версию файла: подпись под замещённым телом ничего не доказывает о том, что регистрируют. Проверка применяется к документам, которые выпускает CUKS, — **исходящим и внутренним** (приказ подписывают до присвоения номера). Входящие письма и обращения граждан исключены: они подписаны корреспондентом на бумаге, и требование нашей подписи заблокировало бы канцелярии регистрацию почты (`assertSignatureBeforeRegistration`, `apps/api/src/modules/docflow/documents.service.ts`; то же правило со стороны внутреннего процесса — §12.4).
 
-**Отправка — `document_dispatches`, не статус документа.** Каждая попытка — своя строка (`pending → sent|failed|cancelled`), поэтому «ушло 12-го» и «первая попытка вернулась 10-го» остаются истинными одновременно. Повтор (`retry`) открывает **новую** попытку рядом с израсходованной, а не оживляет её; решённую попытку повторно решить нельзя (`docflow.dispatch.not_pending`). Отправка возможна только для зарегистрированного исходящего (`docflow.dispatch.not_registered` / `docflow.dispatch.not_outgoing`); внутренние документы распространяются ознакомлением. Ручные каналы (курьер, почта, лично, иное) работают полностью; `email`/`integration` отказываются заранее (`docflow.dispatch.channel_unavailable`), пока не зарегистрирован локальный адаптер — принять отправку, которой не будет, хуже, чем отказать. Квитанция при подтверждении **переносится в системное пространство документа и прикрепляется как вложение**, то есть читается тем же антивирусным и правовым гейтом, что и тело, — второго пути к байтам не заводится. Успешная отправка закрывает документ (`completed`), если у него не осталось открытых обязательств и других попыток.
+**Отправка — `document_dispatches`, не статус документа.** Каждая попытка — своя строка (`pending → sent｜failed｜cancelled`, все три терминальны), поэтому «ушло 12-го» и «первая попытка вернулась 10-го» остаются истинными одновременно. Повтор (`retry`) открывает **новую** строку в `pending` рядом с израсходованной, а не оживляет её. Коды отказа (`dispatch-policy.ts`): решённую попытку повторно решить нельзя — `docflow.dispatch.not_pending`; повторить можно **только** `failed` или `cancelled` — на `pending` и `sent` возвращается `docflow.dispatch.not_retryable` (повторная отправка того же письма по мис-клику — не то, что должен уметь интерфейс). Отправка возможна только для зарегистрированного исходящего (`docflow.dispatch.not_registered` / `docflow.dispatch.not_outgoing`), и не из архива (`docflow.dispatch.document_archived`); внутренние документы распространяются ознакомлением. Ручные каналы (курьер, почта, лично, иное) работают полностью; `email`/`integration` отказываются заранее (`docflow.dispatch.channel_unavailable`), пока не зарегистрирован локальный адаптер — принять отправку, которой не будет, хуже, чем отказать. Квитанция при подтверждении **переносится в системное пространство документа и прикрепляется как вложение**, то есть читается тем же антивирусным и правовым гейтом, что и тело, — второго пути к байтам не заводится. Успешная отправка закрывает документ (`completed`), если у него не осталось открытых обязательств и других попыток.
 
 ### 12.4. Внутренний процесс
 
@@ -155,13 +325,32 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 **Статус ознакомления пишется одинаково всеми путями.** Маршрутный путь раньше проставлял только `acknowledged_at`, а gate — `status`, и один и тот же факт читался по-разному в зависимости от запроса; с этапа 7 оба пишут `status` (миграция 0053 выравнивает прежние строки).
 
-**Отчёт по ознакомлению** (`GET /docflow/reports/acknowledgement` + `/export`) в отличие от отчёта дисциплины **называет документы и людей**, поэтому право `docflow.reports.view` для него не гейт: каждая строка проверяется видимостью документа для вызывающего, и недоступная строка **выбрасывается, а не редактируется** — редактированная строка всё равно раскрыла бы, что ДСП-приказ существует и сколько человек в его листе, то есть сам допуск-список. Число выброшенных строк сообщается: неполный лист обязан признавать, что он неполный. `expired` считается отдельно от `acknowledged`.
+**Отчёт по ознакомлению** (`GET /docflow/reports/acknowledgement` + `/export`) в отличие от отчёта дисциплины **называет документы и людей**. Право `docflow.reports.view` стоит на обоих маршрутах (`reports.controller.ts`) и открывает эндпоинт — но **не даёт содержимого**: каждая строка дополнительно проверяется видимостью документа для вызывающего, и недоступная строка **выбрасывается, а не редактируется** — редактированная строка всё равно раскрыла бы, что ДСП-приказ существует и сколько человек в его листе, то есть сам допуск-список. Число выброшенных строк сообщается: неполный лист обязан признавать, что он неполный. `expired` считается отдельно от `acknowledged`.
 
 **Требование подписи при регистрации** распространяется и на внутренние документы: приказ подписывают до присвоения номера. Какие виды этого требуют — конфигурация (`requiresSignature` в `dictionaries.meta` записи `doc_type`), и ни один внутренний вид пока не помечен: справочник видов подтверждает заказчик.
 
 ### 12.4a. Расширения модели
 
-`documents` (+ реквизиты отправителя/адресата, `response_due_at`, `content_json`/`content_text`, архивные поля `archived_at`, `retention_until`, `legal_hold`, `disposition_status`, `search_vector`); новые `document_collaborators`, `document_templates`/`document_template_versions`, `resolution_types`, `resolution_proposals`, `acquaintance_batches`, `document_dispatches`; расширения `acquaintances` (batch, status, `notified_at`), `resolutions` (`available_at`, приёмка/возврат), `route_steps` (`activated_at`/`due_at`/`completed_at`, actor по должности/подразделению), `nomenclature` (сроки хранения). Комментарии переиспользуют общую `app.comments` с `entity_type='document'`. Полный перечень полей, ограничений и индексов — план §6.
+`documents` (+ реквизиты отправителя/адресата, `response_due_at`, `version`, `content_json`/`content_text`, `template_version_id`, `registration_key`, архивные поля `archived_at`/`archived_by`/`retention_until`/`retention_months`/`is_permanent`, legal hold `legal_hold`/`legal_hold_reason`/`legal_hold_at`/`legal_hold_by`, выбытие `disposition_status`/`disposed_at`/`disposed_by`, взвешенный `search_tsv`).
+
+Новые таблицы (`packages/db/src/schema/docflow.ts`, всего в схеме модуля 26 таблиц):
+
+- `document_collaborators` — соисполнители карточки (§12.5);
+- `document_templates` / `document_template_versions` — шаблоны документов и их неизменяемые опубликованные версии (§12.7);
+- `resolution_types` — справочник типовых формулировок резолюций (§12.11);
+- `resolution_proposals` — проекты резолюций (§12.11);
+- `acquaintance_batches` — партии ознакомления: маршрутные, предварительные (gate) и распространение (§12.4, §12.11);
+- `document_dispatches` — попытки отправки, они же строки outbox (§12.3, §12.14);
+- `archive_disposition_batches` — акты о выделении к уничтожению (§12.12);
+- `archive_disposition_items` — состав акта, построчно (§12.12);
+- `document_exchange_inbound` — входящие сообщения транспорта до превращения в документ (§12.14);
+- `document_exchange_attachments` — вложения таких сообщений (§12.14).
+
+Расширения существующих: `acquaintances` (batch, `status`, `notified_at`), `route_steps` (`activated_at`/`due_at`/`completed_at`, adressee по должности/подразделению, `acted_for`), `nomenclature` (сроки хранения).
+
+`resolutions` — `available_at` (gate предварительного ознакомления, читается очередью «Мои поручения») и колонки приёмки/возврата результата `accepted_at`/`accepted_by`/`returned_at`/`return_comment`, **зарезервированные схемой: ни сервис, ни эндпоинт, ни UI их сегодня не читают и не пишут**. Это известный пробел, а не реализованная возможность: приёмка результата исполнителя пока делается статусом резолюции (`done`) без отдельного акта приёмки.
+
+Комментарии переиспользуют общую `app.comments` с `entity_type='document'`. Полный перечень полей, ограничений и индексов — план §6 и сама схема.
 
 ### 12.5. Карточка, редактирование и соисполнители
 
@@ -173,7 +362,24 @@ WS+notify: назначение шага, резолюции, возврат н�
 
 **Соисполнители** (`document_collaborators`, роли `preparer|editor|viewer`). Автор остаётся владельцем: соисполнитель **не получает** управление доступом, регистрацию, смену статуса и запуск маршрута и никогда не обходит ДСП allow-list. Управляет составом только автор (или суперадмин). Грант мягко удаляется, поэтому снятая роль остаётся видимой в истории.
 
-**`availableActions`.** Карточка получает от сервера готовый список того, что доступно **этому** вызывающему (`edit`, `startRoute`, `register`, `changeStatus`, `manageAccess`, `manageCollaborators`), и рисует панель действий по нему, а не выводит права заново из статуса и авторства. Расхождение двух выводов — ровно тот механизм, которым появляется кнопка, отклоняемая сервером.
+**`availableActions`.** Карточка получает от сервера готовый список того, что доступно **этому** вызывающему, и рисует панель действий по нему, а не выводит права заново из статуса и авторства. Расхождение двух выводов — ровно тот механизм, которым появляется кнопка, отклоняемая сервером. Перечень — `DOCUMENT_ACTIONS` в `@cuks/shared`, вычисление — `documentAvailableActions` (`document-actions.ts`); **двенадцать** действий:
+
+| Действие | Кому и при каком состоянии |
+|---|---|
+| `edit` | автор, суперадмин или соисполнитель `preparer`/`editor`; только статусы `draft` и `rejected` |
+| `startRoute` | автор или суперадмин; статус `draft` |
+| `register` | `docflow.register` (не `docflow.control`); номер ещё не выдан; статус `draft` или `pending_registration` |
+| `changeStatus` | автор/суперадмин или registry-доступ; только если из текущего статуса вообще есть переход |
+| `manageAccess` | автор/суперадмин либо `docflow.confidential.view` у того, кто уже видит документ |
+| `manageCollaborators` | автор или суперадмин |
+| `createResponse` | `docflow.create`; **зарегистрированный** входящий или обращение граждан |
+| `dispatch` | `docflow.register`; **зарегистрированный** исходящий, не в архиве |
+| `distribute` | автор/суперадмин или registry-доступ; **зарегистрированный** внутренний, не в архиве |
+| `archive` | registry-доступ; ещё не сдан в дело; статус `registered`, `in_progress` или `completed` |
+| `restore` | registry-доступ; документ в архиве и не прошёл акт (`disposition_status ≠ executed`) |
+| `legalHold` | `docflow.archive.hold` |
+
+Соисполнитель намеренно не получает `register`, `changeStatus`, `manageAccess`, `manageCollaborators` и запуск маршрута: подготовитель пишет текст, но расширение круга читателей ДСП, выдача номера и объявление документа завершённым остаются за автором, канцелярией и допущенными.
 
 **Timeline.** `GET /docflow/documents/:id/timeline` — единая лента аудируемых бизнес-событий по карточке, новые сверху, с разрешённым именем актора. Метаданные проходят **allow-list** ключей: аудит пишут многие места, и новое из них не должно иметь возможности вывести на экран содержимое документа, ключ файла или чужой контакт просто фактом своего появления. Правка реквизитов пишет в аудит **имена** изменённых полей (`changedFields`), никогда значения.
 
@@ -212,6 +418,22 @@ WS+notify: назначение шага, резолюции, возврат н�
 **Admin-страница** — вкладка «Шаблоны документов» в настройках ДОУ: создание шаблона, составление следующей черновой версии (посев из текущей), публикация, просмотр версии только для чтения, снятие с использования, предупреждение о неподставляемых переменных.
 
 API: `GET/POST /docflow/document-templates`, `PATCH :id`, `POST :id/versions`, `POST :id/versions/:version/actions/publish`, `POST :id/actions/deactivate`, `POST :id/actions/instantiate`. Чтение — `docflow.use`, управление — `docflow.journals.manage` (шаблон определяет, что выпускает весь комитет), создание документа из шаблона — `docflow.create`.
+
+### 12.8. Замещение и действия «за»
+
+> **О нумерации §12.** В исходной редакции раздел 12.8 отсутствовал — последовательность шла 12.7 → 12.9, и ссылка на §12.8 не разрешалась. Номера **не сдвигались**: на них ссылаются около тридцати комментариев в `apps/api/src/modules/docflow/**`, и перенумерация превратила бы верные ссылки в неверные. Вместо этого пустой номер занят разделом ниже, а §12.4a оставлен на своём месте между §12.4 и §12.5 как расширение модели, а не отдельный этап.
+>
+> Одна ссылка из кода не разрешается уже сейчас и правится **отдельно, в коде**, а не здесь: `apps/api/src/modules/docflow/exchange/exchange-registry.service.ts` цитирует «docs/modules/11 §12.6» для тезиса «принять отправку, которой не будет, хуже, чем отказать», который живёт в §12.3 и §12.14, — §12.6 посвящён инвариантам маршрутов.
+
+**Замещение — это не роль и не право, а временное расширение того, чем человек действует.** Базовая спецификация — docs/05-auth-rbac.md §6; здесь описано только то, что от неё видно в ДОУ.
+
+Строка `app.substitutions` (`packages/db/src/schema/auth.ts`): `principal_id` (замещаемый), `deputy_id` (заместитель), `scope` `all｜docflow` (default `docflow`), окно `starts_at`/`ends_at` (null с любой стороны = открытая граница), ручной выключатель `is_active`, мягкое удаление. `SubstitutionsService.activePrincipalsFor` считает замещение действующим, если строка активна, не удалена и текущий момент попал в окно; по `scope` он не фильтрует — оба значения дают право действовать в ДОУ, `all` лишь шире за его пределами.
+
+**Разрешение — один раз на запрос, а не построчно.** `RoutesService.actingAssignments(userId)` собирает всё, чем вызывающий действует прямо сейчас: он сам, его должности, возглавляемые подразделения — плюс то же самое у каждого замещаемого. Результат (`ActorAssignments`) отдаётся SQL-предикату видимости (§12.13) и гейтам шагов. Так сделано потому, что правила замещения зависят от времени и построчно в SQL не выражаются: их вычисляют заранее, а запрос только сопоставляет готовый результат.
+
+**«За» фиксируется в данных, а не в тексте.** Шаг маршрута, закрытый заместителем, хранит `route_steps.acted_for`; решение по проекту резолюции — `resolution_proposals.decided_for`. Оба поля — ссылка на замещаемого, поэтому «подписал Иванов за Петрова» остаётся читаемым в истории и после того, как замещение кончилось. Сверх реквизита каждое такое действие пишет **отдельное** аудит-событие `auth.substitution.used` рядом с основным (`routes.service.ts` для шага, `signatures.service.ts` для подписи, `meta.principalId` — за кого): реквизит отвечает на вопрос «чьё это решение», аудит — на вопрос «когда замещением воспользовались». Создание и отзыв делегирования — `auth.substitution.created` / `auth.substitution.revoked` (`substitutions.service.ts`).
+
+**API и экран.** `GET` · `POST /docflow/substitutions`, `DELETE /docflow/substitutions/:id` — гейт маршрута `docflow.use`; построчное правило проверяет сервис: своими делегированиями распоряжается сам замещаемый, чужими — носитель `admin.substitutions.manage`, иначе `docflow.substitution.forbidden`. Экран — `/app/docs/substitutions` (пункт меню под `docflow.use`).
 
 ### 12.9. SLA шагов маршрута
 
@@ -277,15 +499,17 @@ API: `GET/POST /docflow/document-templates`, `PATCH :id`, `POST :id/versions`, `
 в SQL sweep'а, а не только в политике: у ночного процесса нет второго шанса.
 
 **Акт о выделении — правило двух человек.** `draft` → `pending` → `approved` → `executed`,
-и утверждает акт **не его автор** (`docflow.disposition.same_reviewer`). Отклонение
+и утверждает акт **не его автор** (`docflow.disposition.self_review`, `assertSeparateReviewer`
+в `apps/api/src/modules/docflow/archive-policy.ts`). Отклонение
 возвращает документы в обычное архивное состояние. Исполнение необратимо на уровне записи
 и требует подтверждения в интерфейсе с указанием числа документов.
 
 **Выбытие логическое.** `executed` означает «запись закрыта», а не «файл удалён»: ни один
 путь в коде не удаляет объект из хранилища. Так решено не только планом — подпись привязана
-к конкретной версии файла, и проверка на `/verify/:id` сверяет хэш, поэтому физическое
-удаление сломало бы уже выданные подписи. Включается только после утверждённой заказчиком
-retention-политики (§12.10).
+к конкретной версии файла, и проверка на `GET /verify/:signatureId` сверяет хэш, поэтому
+физическое удаление сломало бы уже выданные подписи. Физическое выбытие **не реализовано и не
+скрыто за флагом**: его включение требует сначала утверждённой заказчиком retention-политики
+(§12.10), и до тех пор `executed` означает ровно «запись закрыта».
 
 **Опись** (`GET /docflow/archive`, выгрузка `GET /docflow/archive/export`) строится по тем
 же правилам видимости, что и список документов: ДСП не появляется в описи у того, кто не
@@ -332,12 +556,22 @@ retention-политики (§12.10).
 согласующий по маршруту открывал документ по ссылке, но не находил его в реестре, а отчёт по
 ознакомлению выбрасывал строки документов, которые читатель мог открыть. Теперь есть один
 SQL-предикат `visibleDocumentsWhere`, и реестр, поиск, опись, dashboard и отчёты вызывают
-именно его. Внутри он состоит из двух независимых половин, соединённых `AND`: **участие**
-(автор, допуск-список, соисполнитель-collaborator, названный подписант проекта, адресат шага
-маршрута, автор/исполнитель/соисполнитель резолюции, назначенный на ознакомление) и **гриф**
-(допуск-список ∩ `docflow.confidential.view`). Гриф — отдельное «И», а не ветка внутри участия,
-именно для того, чтобы ни одно будущее правило участия не могло случайно открыть ДСП: ему
-придётся пройти через гриф.
+именно его. Внутри он состоит из двух независимых половин, соединённых `AND`.
+
+Первая половина — **кому положено**, и в ней **две альтернативы через `OR`**:
+
+- **участие** (`documentInvolvementWhere`): автор, допуск-список, соисполнитель-collaborator,
+  названный подписант проекта, адресат шага маршрута, автор/исполнитель/соисполнитель
+  резолюции, назначенный на ознакомление;
+- **registry-доступ**: носитель `docflow.register` или `docflow.control` матчится на **каждый
+  не-ДСП документ** (`hasRegistryAccess(user) ? ne(documents.confidentiality, 'dsp') :
+  undefined`). Это самая широкая ветка предиката, и без неё канцелярия видела бы только то,
+  в чём лично участвует, — то есть реестра бы у неё не было.
+
+Вторая половина — **гриф** (`confidentialityGuard`): допуск-список ∩
+`docflow.confidential.view`. Гриф — отдельное «И», а не ветка внутри первой половины, именно
+для того, чтобы ни одно правило первой половины — ни будущее правило участия, ни широкая
+registry-ветка — не могло случайно открыть ДСП: ему придётся пройти через гриф.
 
 Назначения по маршруту приходят **уже разрешёнными** (`RoutesService.actingAssignments`):
 правила замещения зависят от времени и не выражаются построчно, поэтому они вычисляются один
@@ -368,9 +602,14 @@ SQL-предикат `visibleDocumentsWhere`, и реестр, поиск, оп�
 `id`: без него «страница 2» реестра, где полсотни документов созданы в одну секунду, — не
 обещание, а лотерея, и строка может попасть на обе страницы или ни на одну.
 
-**Rate-limit поиска** — собственный бюджет, ключ по сессии, а не по IP: за одним офисным NAT
-IP-ведро значит, что один быстро печатающий человек запирает весь этаж, а авторизованному
-злоупотребителю достаточно сменить адрес.
+**Rate-limit поиска** — собственный бюджет (60 запросов в минуту на `/search`, 120 на
+`/search/quick` — `document-search.controller.ts`), а не общая читательская квота: поиск —
+самое дорогое чтение в продукте и единственное, которое отвечает «сколько всего». Ключей
+**два, и пройти надо оба** (`ThrottleGuard`, `apps/api/src/common/guards/throttle.guard.ts`):
+ведро по `request.ip` — потолок, единственный ключ, который вызывающий не выбирает сам, и
+ведро по сессионной cookie — сверху, ради справедливости за одним офисным NAT, где
+IP-ведро значит, что один быстро печатающий человек тратит бюджет всего этажа. Cookie
+подделывается, поэтому её ведро умеет только ужесточать лимит, но не ослаблять его.
 
 **«Требует внимания»** — восемь очередей, каждое число ведёт в список, который его породил.
 Очередь, которую вызывающему видеть не положено, **отсутствует** в ответе, а не приходит нулём:
@@ -433,6 +672,22 @@ IP-ведро значит, что один быстро печатающий ч
 **Реестр адаптеров строится из окружения при старте и больше нигде.** Ни таблицы настроек, ни
 эндпоинта, который установит транспорт: подключаемый через форму канал вывода — не то, что
 изолированная установка должна уметь.
+
+**Как включить и где смотреть.** Четыре переменные окружения (`apps/api/src/config/env.ts`):
+
+| Переменная | Default | Что делает |
+|---|---|---|
+| `DOCFLOW_EXCHANGE_DIR` | не задана | Каталог эталонного folder-адаптера. **Не задана — адаптеров нет**, и это shipped-состояние: машинные каналы отказываются с `docflow.dispatch.channel_unavailable`. |
+| `DOCFLOW_EXCHANGE_MAX_ATTACHMENT_MB` | 50 | Потолок одного вложения обмена. |
+| `DOCFLOW_EXCHANGE_POLL_SECONDS` | 60 | Как часто входящий поллер заглядывает в папку. |
+| `DOCFLOW_EXCHANGE_MAX_ATTEMPTS` | 5 | Бюджет попыток до dead-letter. |
+
+Наблюдаемость контура ровно одна: `ExchangeRegistryService.status()` опрашивает каждый адаптер
+(`probe()`), и результат попадает на админский экран здоровья — `/app/admin/health`, право
+`admin.system.monitor` (`apps/api/src/modules/monitoring/admin-health.service.ts`). Наружу
+переходит **только состояние**: ни пути, ни хоста, ни секрета. «Не настроен» — это `state: down`
+с пометкой `not-configured`, и такая пометка исключена из общего статуса: установка без
+транспорта не должна выглядеть вечно больной.
 
 **Эталонный адаптер — наблюдаемая папка** на том же сервере: `out/` для исходящих, `in/` для
 входящих, `done/` и `rejected/` для разобранных. Это не заглушка — оператор кладёт скан в `in/`,
