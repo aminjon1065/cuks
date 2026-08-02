@@ -216,13 +216,25 @@ test('routes: a registered document cannot be closed while a route step is still
   )!;
   expect(stillOpen.status, 'the approval group activated after registration').toBe('active');
 
-  // `registered → archived` IS in the transition graph — only the obligation gate stops it.
+  // `registered → completed` IS in the transition graph — only the obligation gate stops it.
+  const close = await admin.post(`/api/v1/docflow/documents/${documentId}/actions/status`, {
+    headers,
+    data: { status: 'completed' },
+  });
+  expect(close.status(), 'an open route step blocks the close').toBe(422);
+  expect((await json<ErrorBody>(close)).error?.code).toBe('docflow.document.route_open');
+
+  // `archived` is refused for a different reason and BEFORE the obligation gate is reached:
+  // it left the transition graph in этап 8, because filing into a case freezes the retention
+  // term and stamps who filed it, and a bare status change would set the word and none of the
+  // facts. Asserted here so the two refusals cannot be confused for each other — this spec
+  // used to expect `route_open` from this call and went stale when the graph changed.
   const archive = await admin.post(`/api/v1/docflow/documents/${documentId}/actions/status`, {
     headers,
     data: { status: 'archived' },
   });
-  expect(archive.status(), 'an open route step blocks the close').toBe(422);
-  expect((await json<ErrorBody>(archive)).error?.code).toBe('docflow.document.route_open');
+  expect(archive.status(), 'archiving is not a status change at all').toBe(422);
+  expect((await json<ErrorBody>(archive)).error?.code).toBe('docflow.document.use_archive_command');
 
   const doc = await json<DocumentDto>(await admin.get(`/api/v1/docflow/documents/${documentId}`));
   expect(doc.status, 'and the document keeps its real status').toBe('registered');
@@ -233,11 +245,11 @@ test('routes: a registered document cannot be closed while a route step is still
     data: {},
   });
   expect(approved.ok(), `approve ${approved.status()}`).toBeTruthy();
-  const reArchive = await admin.post(`/api/v1/docflow/documents/${documentId}/actions/status`, {
+  const reClose = await admin.post(`/api/v1/docflow/documents/${documentId}/actions/status`, {
     headers,
-    data: { status: 'archived' },
+    data: { status: 'completed' },
   });
-  expect(reArchive.ok(), `archive ${reArchive.status()}`).toBeTruthy();
+  expect(reClose.ok(), `complete ${reClose.status()}`).toBeTruthy();
 
   await admin.dispose();
 });

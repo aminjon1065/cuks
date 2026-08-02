@@ -145,5 +145,22 @@ test('docflow routes: a rejection returns the document to the author as a draft'
     (await json<DocumentDto>(await admin.get(`/api/v1/docflow/documents/${docId}`))).status,
   ).toBe('draft');
 
+  // The author has to be TOLD (AC-SED-04.3). A document quietly reappearing among the drafts is
+  // not a notification, and until this assertion existed the rejection branch sent nothing at
+  // all. Polled: the fan-out is fire-and-forget, deliberately outside the request.
+  await expect
+    .poll(
+      async () => {
+        const list = await json<{ items: { type: string; entityId: string | null }[] }>(
+          await admin.get('/api/v1/notifications?limit=50'),
+        );
+        return list.items.some(
+          (n) => n.type === 'docflow.document.route_rejected' && n.entityId === docId,
+        );
+      },
+      { timeout: 15_000, message: 'the author was never notified of the rejection' },
+    )
+    .toBe(true);
+
   await Promise.all([admin.dispose(), approver.dispose()]);
 });

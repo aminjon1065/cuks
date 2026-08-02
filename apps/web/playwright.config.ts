@@ -20,6 +20,11 @@ export default defineConfig({
   // Headroom for Vite dev's on-demand route compilation on the first authenticated
   // render (the default 5s can flake a loaded CI runner).
   expect: { timeout: 15_000 },
+  // `/auth/login` is throttled to 10 per minute per IP — correct product behaviour, and far
+  // below what a full parallel run asks for. `support/api.ts` waits the window out (up to ~35s)
+  // rather than failing tests that have nothing wrong with them, so a throttled test needs more
+  // than the default 30s. Nothing else here is slow: an unthrottled spec finishes in seconds.
+  timeout: 90_000,
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
